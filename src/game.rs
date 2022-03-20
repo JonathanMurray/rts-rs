@@ -150,10 +150,16 @@ impl Game {
     fn new(ctx: &mut Context) -> Result<Self, GameError> {
         let grid_mesh = Self::build_grid(ctx)?;
 
+        let player_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.8);
         let player_mesh = MeshBuilder::new()
             .rectangle(
                 DrawMode::fill(),
-                Rect::new(0.0, 0.0, CELL_PIXEL_SIZE.0 - 2.0, CELL_PIXEL_SIZE.1 - 2.0),
+                Rect::new(
+                    (CELL_PIXEL_SIZE.0 - player_size.0) / 2.0,
+                    (CELL_PIXEL_SIZE.1 - player_size.1) / 2.0,
+                    player_size.0,
+                    player_size.1,
+                ),
                 Color::new(0.6, 0.8, 0.5, 1.0),
             )?
             .build(ctx)?;
