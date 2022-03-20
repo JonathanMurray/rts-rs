@@ -174,7 +174,7 @@ impl Game {
                 Color::new(0.8, 0.4, 0.4, 1.0),
             )?
             .build(ctx)?;
-        let enemy_sprite_batch = images::mesh_into_image(ctx, enemy_mesh)?;
+        let enemy_sprite_batch = SpriteBatch::new(images::mesh_into_image(ctx, enemy_mesh)?);
         let mut enemy_entities = vec![];
 
         // for y in 1..GRID_DIMENSIONS.1 {

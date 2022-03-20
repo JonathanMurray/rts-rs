@@ -1,10 +1,9 @@
 use ggez::conf::NumSamples;
-use ggez::graphics::spritebatch::SpriteBatch;
-use ggez::graphics::Drawable;
 use ggez::graphics::{Canvas, Color, DrawParam, Mesh, Rect};
+use ggez::graphics::{Drawable, Image};
 use ggez::{graphics, Context, GameError};
 
-pub fn mesh_into_image(ctx: &mut Context, mesh: Mesh) -> Result<SpriteBatch, GameError> {
+pub fn mesh_into_image(ctx: &mut Context, mesh: Mesh) -> Result<Image, GameError> {
     let dimensions = mesh.dimensions(ctx).unwrap();
     let width = dimensions.x + dimensions.w;
     let height = dimensions.y + dimensions.h;
@@ -25,12 +24,11 @@ pub fn mesh_into_image(ctx: &mut Context, mesh: Mesh) -> Result<SpriteBatch, Gam
     graphics::clear(ctx, transparent_bg);
     graphics::draw(ctx, &mesh, DrawParam::default())?;
     let image = canvas.to_image(ctx)?;
-    let sprite_batch = SpriteBatch::new(image);
 
     // Change back drawing mode: draw to screen
     graphics::set_canvas(ctx, None);
     let size = graphics::drawable_size(ctx);
     graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, size.0, size.1))?;
 
-    Ok(sprite_batch)
+    Ok(image)
 }
