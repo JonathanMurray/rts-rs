@@ -31,11 +31,18 @@ pub fn run() -> Result<(), GameError> {
     ggez::event::run(ctx, event_loop, game)
 }
 
+enum MovementDirection {
+    Straight,
+    Diagonal,
+    None,
+}
+
 struct Entity {
     previous_position: [u32; 2],
     position: [u32; 2],
     movement_timer: Duration,
-    movement_cooldown: Duration,
+    straight_movement_cooldown: Duration,
+    diagonal_movement_cooldown: Duration,
 }
 
 impl Entity {
@@ -44,7 +51,8 @@ impl Entity {
             previous_position: position,
             position,
             movement_timer: Duration::ZERO,
-            movement_cooldown,
+            straight_movement_cooldown: movement_cooldown,
+            diagonal_movement_cooldown: movement_cooldown.mul_f32(2_f32.sqrt()),
         }
     }
 
@@ -62,8 +70,16 @@ impl Entity {
     fn sprite_screen_coords(&self) -> [f32; 2] {
         let prev_pos = grid_to_screen_coords(self.previous_position);
         let pos = grid_to_screen_coords(self.position);
-        let interpolation =
-            self.movement_timer.as_secs_f32() / self.movement_cooldown.as_secs_f32();
+        let interpolation = match Entity::direction(self.previous_position, self.position) {
+            MovementDirection::Straight => {
+                self.movement_timer.as_secs_f32() / self.straight_movement_cooldown.as_secs_f32()
+            }
+            MovementDirection::Diagonal => {
+                self.movement_timer.as_secs_f32() / self.diagonal_movement_cooldown.as_secs_f32()
+            }
+            MovementDirection::None => 0.0,
+        };
+
         [
             pos[0] - interpolation * (pos[0] - prev_pos[0]),
             pos[1] - interpolation * (pos[1] - prev_pos[1]),
@@ -72,8 +88,22 @@ impl Entity {
 
     fn move_to(&mut self, new_position: [u32; 2]) {
         assert!(self.movement_timer.is_zero());
+        match Entity::direction(self.position, new_position) {
+            MovementDirection::Straight => self.movement_timer = self.straight_movement_cooldown,
+            MovementDirection::Diagonal => self.movement_timer = self.diagonal_movement_cooldown,
+            MovementDirection::None => {}
+        }
         self.position = new_position;
-        self.movement_timer = self.movement_cooldown;
+    }
+
+    fn direction(from: [u32; 2], to: [u32; 2]) -> MovementDirection {
+        let dx = (from[0] as i32 - to[0] as i32).abs();
+        let dy = (from[1] as i32 - to[1] as i32).abs();
+        match (dx, dy) {
+            (0, 0) => MovementDirection::None,
+            (1, 1) => MovementDirection::Diagonal,
+            _ => MovementDirection::Straight,
+        }
     }
 }
 
@@ -202,7 +232,8 @@ impl EventHandler for Game {
         }
 
         // For now, enemies are killed when colliding with player
-        self.enemy_entities.retain(|enemy| enemy.position != self.player_entity.position);
+        self.enemy_entities
+            .retain(|enemy| enemy.position != self.player_entity.position);
 
         Ok(())
     }
@@ -240,8 +271,7 @@ impl EventHandler for Game {
             if self.player_entity.movement_timer.is_zero() {
                 let dx = (pos[0] as i32 - self.player_entity.position[0] as i32).abs();
                 let dy = (pos[1] as i32 - self.player_entity.position[1] as i32).abs();
-                // No diagonal movement for now
-                if (dx == 0 && dy == 1) || (dx == 1 && dy == 0) {
+                if dx == 1 || dy == 1 {
                     self.player_entity.move_to(pos);
                 }
             }
