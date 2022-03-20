@@ -13,9 +13,9 @@ const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 const COLOR_GRID: Color = Color::new(0.8, 0.8, 0.8, 1.0);
 
 const WINDOW_DIMENSIONS: (f32, f32) = (1600.0, 1200.0);
-const CELL_PIXEL_SIZE: (f32, f32) = (32.0, 32.0);
+const CELL_PIXEL_SIZE: (f32, f32) = (100.0, 100.0);
 const WORLD_PIXEL_OFFSET: (f32, f32) = (20.0, 20.0);
-const GRID_DIMENSIONS: (u32, u32) = (40, 32);
+const GRID_DIMENSIONS: (u32, u32) = (6, 5);
 
 const TITLE: &str = "RTS";
 
@@ -77,12 +77,43 @@ impl Entity {
     }
 }
 
+struct EnemyPlayerAi {
+    movement_dx: i32,
+}
+
+impl EnemyPlayerAi {
+    fn new() -> Self {
+        Self { movement_dx: -1 }
+    }
+
+    fn run(&mut self, entities: &mut [Entity]) {
+        // TODO Instead of mutating game state, return commands
+
+        if let Some(enemy) = entities.get_mut(0) {
+            if enemy.movement_timer.is_zero() {
+                // "Bounce" at the edges
+                if enemy.position[0] == 0 {
+                    self.movement_dx = 1;
+                } else if enemy.position[0] == GRID_DIMENSIONS.0 - 1 {
+                    self.movement_dx = -1;
+                }
+
+                enemy.move_to([
+                    (enemy.position[0] as i32 + self.movement_dx) as u32,
+                    enemy.position[1],
+                ]);
+            }
+        }
+    }
+}
+
 struct Game {
     grid_mesh: Mesh,
     player_mesh: Mesh,
     player_entity: Entity,
     enemy_sprite_batch: SpriteBatch,
     enemy_entities: Vec<Entity>,
+    enemy_player_ai: EnemyPlayerAi,
 }
 
 impl Game {
@@ -109,11 +140,16 @@ impl Game {
             .build(ctx)?;
         let enemy_sprite_batch = images::mesh_into_image(ctx, enemy_mesh)?;
         let mut enemy_entities = vec![];
-        for y in 1..GRID_DIMENSIONS.1 {
-            for x in 0..GRID_DIMENSIONS.0 {
-                enemy_entities.push(Entity::new([x, y], Duration::from_millis(400)));
-            }
-        }
+
+        // for y in 1..GRID_DIMENSIONS.1 {
+        //     for x in 0..GRID_DIMENSIONS.0 {
+        //         enemy_entities.push(Entity::new([x, y], Duration::from_millis(400)));
+        //     }
+        // }
+
+        enemy_entities.push(Entity::new([5, 2], Duration::from_millis(400)));
+        enemy_entities.push(Entity::new([3, 0], Duration::from_millis(400)));
+
         println!("Created {} enemy entities", enemy_entities.len());
 
         Ok(Self {
@@ -122,6 +158,7 @@ impl Game {
             player_entity,
             enemy_sprite_batch,
             enemy_entities,
+            enemy_player_ai: EnemyPlayerAi::new(),
         })
     }
 
@@ -154,8 +191,19 @@ impl EventHandler for Game {
     fn update(&mut self, ctx: &mut Context) -> Result<(), GameError> {
         let fps = ggez::timer::fps(ctx) as u32;
         graphics::set_window_title(ctx, &format!("{} (fps={})", TITLE, fps));
+
         let dt = ggez::timer::delta(ctx);
+
+        self.enemy_player_ai.run(&mut self.enemy_entities[..]);
+
         self.player_entity.update(dt);
+        for enemy_entity in &mut self.enemy_entities {
+            enemy_entity.update(dt);
+        }
+
+        // For now, enemies are killed when colliding with player
+        self.enemy_entities.retain(|enemy| enemy.position != self.player_entity.position);
+
         Ok(())
     }
 
