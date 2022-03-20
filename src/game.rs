@@ -7,14 +7,15 @@ use ggez::input::mouse::MouseButton;
 use ggez::{graphics, Context, ContextBuilder, GameError};
 use std::time::Duration;
 
+use crate::entities::{Entity, MovementComponent};
 use crate::images;
 
 const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 const COLOR_GRID: Color = Color::new(0.8, 0.8, 0.8, 1.0);
 
 const WINDOW_DIMENSIONS: (f32, f32) = (1600.0, 1200.0);
-const CELL_PIXEL_SIZE: (f32, f32) = (100.0, 100.0);
-const WORLD_PIXEL_OFFSET: (f32, f32) = (20.0, 20.0);
+pub const CELL_PIXEL_SIZE: (f32, f32) = (100.0, 100.0);
+pub const WORLD_PIXEL_OFFSET: (f32, f32) = (20.0, 20.0);
 const GRID_DIMENSIONS: (u32, u32) = (6, 5);
 
 const TITLE: &str = "RTS";
@@ -31,82 +32,6 @@ pub fn run() -> Result<(), GameError> {
     ggez::event::run(ctx, event_loop, game)
 }
 
-enum MovementDirection {
-    Straight,
-    Diagonal,
-    None,
-}
-
-struct Entity {
-    previous_position: [u32; 2],
-    position: [u32; 2],
-    movement_timer: Duration,
-    straight_movement_cooldown: Duration,
-    diagonal_movement_cooldown: Duration,
-}
-
-impl Entity {
-    fn new(position: [u32; 2], movement_cooldown: Duration) -> Self {
-        Self {
-            previous_position: position,
-            position,
-            movement_timer: Duration::ZERO,
-            straight_movement_cooldown: movement_cooldown,
-            diagonal_movement_cooldown: movement_cooldown.mul_f32(2_f32.sqrt()),
-        }
-    }
-
-    fn update(&mut self, dt: Duration) {
-        if self.movement_timer < dt {
-            self.movement_timer = Duration::ZERO;
-        } else {
-            self.movement_timer -= dt;
-        }
-        if self.movement_timer.is_zero() {
-            self.previous_position = self.position;
-        }
-    }
-
-    fn sprite_screen_coords(&self) -> [f32; 2] {
-        let prev_pos = grid_to_screen_coords(self.previous_position);
-        let pos = grid_to_screen_coords(self.position);
-        let interpolation = match Entity::direction(self.previous_position, self.position) {
-            MovementDirection::Straight => {
-                self.movement_timer.as_secs_f32() / self.straight_movement_cooldown.as_secs_f32()
-            }
-            MovementDirection::Diagonal => {
-                self.movement_timer.as_secs_f32() / self.diagonal_movement_cooldown.as_secs_f32()
-            }
-            MovementDirection::None => 0.0,
-        };
-
-        [
-            pos[0] - interpolation * (pos[0] - prev_pos[0]),
-            pos[1] - interpolation * (pos[1] - prev_pos[1]),
-        ]
-    }
-
-    fn move_to(&mut self, new_position: [u32; 2]) {
-        assert!(self.movement_timer.is_zero());
-        match Entity::direction(self.position, new_position) {
-            MovementDirection::Straight => self.movement_timer = self.straight_movement_cooldown,
-            MovementDirection::Diagonal => self.movement_timer = self.diagonal_movement_cooldown,
-            MovementDirection::None => {}
-        }
-        self.position = new_position;
-    }
-
-    fn direction(from: [u32; 2], to: [u32; 2]) -> MovementDirection {
-        let dx = (from[0] as i32 - to[0] as i32).abs();
-        let dy = (from[1] as i32 - to[1] as i32).abs();
-        match (dx, dy) {
-            (0, 0) => MovementDirection::None,
-            (1, 1) => MovementDirection::Diagonal,
-            _ => MovementDirection::Straight,
-        }
-    }
-}
-
 struct EnemyPlayerAi {
     movement_dx: i32,
 }
@@ -116,22 +41,20 @@ impl EnemyPlayerAi {
         Self { movement_dx: -1 }
     }
 
-    fn run(&mut self, entities: &mut [Entity]) {
+    fn run(&mut self, entities: &mut [MovementComponent]) {
         // TODO Instead of mutating game state, return commands
 
         if let Some(enemy) = entities.get_mut(0) {
             if enemy.movement_timer.is_zero() {
                 // "Bounce" at the edges
-                if enemy.position[0] == 0 {
+                let pos = enemy.position();
+                if pos[0] == 0 {
                     self.movement_dx = 1;
-                } else if enemy.position[0] == GRID_DIMENSIONS.0 - 1 {
+                } else if pos[0] == GRID_DIMENSIONS.0 - 1 {
                     self.movement_dx = -1;
                 }
 
-                enemy.move_to([
-                    (enemy.position[0] as i32 + self.movement_dx) as u32,
-                    enemy.position[1],
-                ]);
+                enemy.move_to([(pos[0] as i32 + self.movement_dx) as u32, pos[1]]);
             }
         }
     }
@@ -142,7 +65,7 @@ struct Game {
     player_mesh: Mesh,
     player_entity: Entity,
     enemy_sprite_batch: SpriteBatch,
-    enemy_entities: Vec<Entity>,
+    enemy_entities: Vec<MovementComponent>,
     enemy_player_ai: EnemyPlayerAi,
 }
 
@@ -163,7 +86,8 @@ impl Game {
                 Color::new(0.6, 0.8, 0.5, 1.0),
             )?
             .build(ctx)?;
-        let player_entity = Entity::new([0, 0], Duration::from_millis(400));
+        let player_movement_component = MovementComponent::new([0, 0], Duration::from_millis(400));
+        let player_entity = Entity::new(player_movement_component);
 
         let enemy_mesh = MeshBuilder::new()
             .circle(
@@ -183,8 +107,8 @@ impl Game {
         //     }
         // }
 
-        enemy_entities.push(Entity::new([5, 2], Duration::from_millis(400)));
-        enemy_entities.push(Entity::new([3, 0], Duration::from_millis(400)));
+        enemy_entities.push(MovementComponent::new([5, 2], Duration::from_millis(400)));
+        enemy_entities.push(MovementComponent::new([3, 0], Duration::from_millis(400)));
 
         println!("Created {} enemy entities", enemy_entities.len());
 
@@ -232,14 +156,16 @@ impl EventHandler for Game {
 
         self.enemy_player_ai.run(&mut self.enemy_entities[..]);
 
-        self.player_entity.update(dt);
+        self.player_entity.update();
+
+        self.player_entity.movement_component.update(dt);
         for enemy_entity in &mut self.enemy_entities {
             enemy_entity.update(dt);
         }
 
         // For now, enemies are killed when colliding with player
         self.enemy_entities
-            .retain(|enemy| enemy.position != self.player_entity.position);
+            .retain(|enemy| enemy.position() != self.player_entity.movement_component.position());
 
         Ok(())
     }
@@ -252,11 +178,11 @@ impl EventHandler for Game {
         graphics::draw(
             ctx,
             &self.player_mesh,
-            DrawParam::new().dest(self.player_entity.sprite_screen_coords()),
+            DrawParam::new().dest(self.player_entity.movement_component.screen_coords()),
         )?;
 
         for enemy_entity in &self.enemy_entities {
-            let draw_param = DrawParam::new().dest(enemy_entity.sprite_screen_coords());
+            let draw_param = DrawParam::new().dest(enemy_entity.screen_coords());
             self.enemy_sprite_batch.add(draw_param);
         }
         graphics::draw(ctx, &self.enemy_sprite_batch, DrawParam::default())?;
@@ -273,23 +199,10 @@ impl EventHandler for Game {
         x: f32,
         y: f32,
     ) {
-        if let Some(pos) = screen_to_grid_coordinates([x, y]) {
-            if self.player_entity.movement_timer.is_zero() {
-                let dx = (pos[0] as i32 - self.player_entity.position[0] as i32).abs();
-                let dy = (pos[1] as i32 - self.player_entity.position[1] as i32).abs();
-                if dx == 1 || dy == 1 {
-                    self.player_entity.move_to(pos);
-                }
-            }
+        if let Some(clicked_pos) = screen_to_grid_coordinates([x, y]) {
+            self.player_entity.set_destination(clicked_pos);
         }
     }
-}
-
-fn grid_to_screen_coords(coordinates: [u32; 2]) -> [f32; 2] {
-    [
-        WORLD_PIXEL_OFFSET.0 + CELL_PIXEL_SIZE.0 * coordinates[0] as f32,
-        WORLD_PIXEL_OFFSET.1 + CELL_PIXEL_SIZE.1 * coordinates[1] as f32,
-    ]
 }
 
 fn screen_to_grid_coordinates(coordinates: [f32; 2]) -> Option<[u32; 2]> {
@@ -304,4 +217,11 @@ fn screen_to_grid_coordinates(coordinates: [f32; 2]) -> Option<[u32; 2]> {
     } else {
         None
     }
+}
+
+pub fn grid_to_screen_coords(coordinates: [u32; 2]) -> [f32; 2] {
+    [
+        WORLD_PIXEL_OFFSET.0 + CELL_PIXEL_SIZE.0 * coordinates[0] as f32,
+        WORLD_PIXEL_OFFSET.1 + CELL_PIXEL_SIZE.1 * coordinates[1] as f32,
+    ]
 }
