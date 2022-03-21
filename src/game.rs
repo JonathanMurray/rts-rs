@@ -7,9 +7,8 @@ use ggez::input::mouse::MouseButton;
 use ggez::{graphics, Context, ContextBuilder, GameError};
 
 use rand::rngs::ThreadRng;
-use rand::Rng;
-use std::time::Duration;
 
+use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{Entity, Team};
 use crate::images;
 use crate::maps::{Map, MapType};
@@ -35,36 +34,6 @@ pub fn run(map_type: MapType) -> Result<(), GameError> {
     ggez::event::run(ctx, event_loop, game)
 }
 
-struct EnemyPlayerAi {
-    timer_s: f32,
-    map_dimensions: (u32, u32),
-}
-
-impl EnemyPlayerAi {
-    fn new(map_dimensions: (u32, u32)) -> Self {
-        Self {
-            timer_s: 0.0,
-            map_dimensions,
-        }
-    }
-
-    fn run(&mut self, dt: Duration, entities: &mut [Entity], rng: &mut ThreadRng) {
-        self.timer_s -= dt.as_secs_f32();
-
-        // TODO Instead of mutating game state, return commands
-        if self.timer_s <= 0.0 {
-            self.timer_s = 2.0;
-            for enemy in entities {
-                if enemy.team == Team::Ai && rng.gen_bool(0.7) {
-                    let x: u32 = rng.gen_range(0..self.map_dimensions.0);
-                    let y: u32 = rng.gen_range(0..self.map_dimensions.1);
-                    enemy.set_destination([x, y]);
-                }
-            }
-        }
-    }
-}
-
 struct EntityGrid {
     grid: Vec<bool>,
     map_dimensions: (u32, u32),
@@ -79,16 +48,16 @@ impl EntityGrid {
         }
     }
 
-    fn set(&mut self, position: [u32; 2], occupied: bool) {
+    fn set(&mut self, position: &[u32; 2], occupied: bool) {
         let i = self.index(position);
         self.grid[i] = occupied;
     }
 
-    fn get(&self, position: [u32; 2]) -> bool {
+    fn get(&self, position: &[u32; 2]) -> bool {
         self.grid[self.index(position)]
     }
 
-    fn index(&self, position: [u32; 2]) -> usize {
+    fn index(&self, position: &[u32; 2]) -> usize {
         let [x, y] = position;
         (y * self.map_dimensions.0 + x) as usize
     }
@@ -144,8 +113,10 @@ impl Game {
 
         let mut entity_grid = EntityGrid::new(map_dimensions);
         for entity in &entities {
-            entity_grid.set(entity.movement_component.position(), true);
+            entity_grid.set(&entity.movement_component.position(), true);
         }
+
+        let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
 
         Ok(Self {
             grid_mesh,
@@ -153,7 +124,7 @@ impl Game {
             enemy_sprite_batch,
             entities,
             entity_grid,
-            enemy_player_ai: EnemyPlayerAi::new(map_dimensions),
+            enemy_player_ai,
             rng,
         })
     }
@@ -209,16 +180,15 @@ impl EventHandler for Game {
             .run(dt, &mut self.entities[..], &mut self.rng);
 
         for entity in &mut self.entities {
-            if entity.movement_component.movement_timer.is_zero() {
-                if let Some(target_pos) = entity.movement_plan.pop() {
-                    let occupied = self.entity_grid.get(target_pos);
-                    if occupied {
-                        entity.movement_plan.push(target_pos);
-                    } else {
+            if entity.movement_component.is_ready() {
+                if let Some(next_pos) = entity.pathfind_component.peek_path() {
+                    let occupied = self.entity_grid.get(next_pos);
+                    if !occupied {
+                        let new_pos = entity.pathfind_component.advance_path();
                         self.entity_grid
-                            .set(entity.movement_component.position(), false);
-                        entity.movement_component.move_to(target_pos);
-                        self.entity_grid.set(target_pos, true);
+                            .set(&entity.movement_component.position(), false);
+                        entity.movement_component.move_to(new_pos);
+                        self.entity_grid.set(&new_pos, true);
                     }
                 }
             }
@@ -268,7 +238,10 @@ impl EventHandler for Game {
                 .iter_mut()
                 .find(|e| e.team == Team::Player)
                 .expect("player entity");
-            player_entity.set_destination(clicked_pos);
+            let current_pos = &player_entity.movement_component.position();
+            player_entity
+                .pathfind_component
+                .find_path(current_pos, clicked_pos);
         }
     }
 }

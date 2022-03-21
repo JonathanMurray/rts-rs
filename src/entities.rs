@@ -8,7 +8,7 @@ pub struct Entity {
     pub movement_component: MovementComponent,
     pub team: Team,
     pub sprite: EntitySprite,
-    pub movement_plan: Vec<[u32; 2]>,
+    pub pathfind_component: PathfindComponent,
 }
 
 impl Entity {
@@ -17,12 +17,37 @@ impl Entity {
             movement_component,
             team,
             sprite,
+            pathfind_component: PathfindComponent::new(),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Team {
+    Player,
+    Ai,
+}
+
+#[derive(Debug)]
+pub enum EntitySprite {
+    Player,
+    Enemy,
+}
+
+#[derive(Debug)]
+pub struct PathfindComponent {
+    movement_plan: Vec<[u32; 2]>,
+}
+
+impl PathfindComponent {
+    pub fn new() -> Self {
+        Self {
             movement_plan: Default::default(),
         }
     }
 
-    pub fn set_destination(&mut self, destination: [u32; 2]) {
-        let [mut x, mut y] = self.movement_component.position();
+    pub fn find_path(&mut self, current_pos: &[u32; 2], destination: [u32; 2]) {
+        let [mut x, mut y] = current_pos;
         let mut plan = Vec::new();
         while [x, y] != destination {
             match destination[0].cmp(&x) {
@@ -40,25 +65,21 @@ impl Entity {
         plan.reverse();
         self.movement_plan = plan;
     }
-}
 
-#[derive(Debug, PartialEq)]
-pub enum Team {
-    Player,
-    Ai,
-}
+    pub fn peek_path(&self) -> Option<&[u32; 2]> {
+        self.movement_plan.last()
+    }
 
-#[derive(Debug)]
-pub enum EntitySprite {
-    Player,
-    Enemy,
+    pub fn advance_path(&mut self) -> [u32; 2] {
+        self.movement_plan.pop().expect("Can't advance empty path")
+    }
 }
 
 #[derive(Debug)]
 pub struct MovementComponent {
     previous_position: [u32; 2],
     position: [u32; 2],
-    pub movement_timer: Duration, //TODO
+    movement_timer: Duration,
     straight_movement_cooldown: Duration,
     diagonal_movement_cooldown: Duration,
 }
@@ -105,6 +126,10 @@ impl MovementComponent {
             pos[0] - interpolation * (pos[0] - prev_pos[0]),
             pos[1] - interpolation * (pos[1] - prev_pos[1]),
         ]
+    }
+
+    pub fn is_ready(&self) -> bool {
+        self.movement_timer.is_zero()
     }
 
     pub fn move_to(&mut self, new_position: [u32; 2]) {
