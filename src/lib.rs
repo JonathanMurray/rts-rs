@@ -1,6 +1,8 @@
 extern crate ggez;
 extern crate rand;
 
-mod entities;
 pub mod game;
-pub mod images;
+pub mod maps;
+
+mod entities;
+mod images;
