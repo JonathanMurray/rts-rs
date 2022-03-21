@@ -6,12 +6,12 @@ use ggez::graphics::{Color, DrawMode, DrawParam, Mesh, MeshBuilder, Rect};
 use ggez::input::mouse::MouseButton;
 use ggez::{graphics, Context, ContextBuilder, GameError};
 
+use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::time::Duration;
 
-use crate::entities::{Entity, MovementComponent};
+use crate::entities::{Entity, EntitySprite, MovementComponent, Team};
 use crate::images;
-use rand::rngs::ThreadRng;
 
 const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
@@ -51,7 +51,7 @@ impl EnemyPlayerAi {
         if self.timer_s <= 0.0 {
             self.timer_s = 2.0;
             for enemy in entities {
-                if rng.gen_bool(0.7) {
+                if enemy.team == Team::Ai && rng.gen_bool(0.7) {
                     let x: u32 = rng.gen_range(0..GRID_DIMENSIONS.0);
                     let y: u32 = rng.gen_range(0..GRID_DIMENSIONS.1);
                     enemy.set_destination([x, y]);
@@ -61,12 +61,36 @@ impl EnemyPlayerAi {
     }
 }
 
+struct EntityGrid(Vec<bool>);
+
+impl EntityGrid {
+    fn new() -> Self {
+        Self(vec![
+            false;
+            (GRID_DIMENSIONS.0 * GRID_DIMENSIONS.1) as usize
+        ])
+    }
+
+    fn set(&mut self, position: [u32; 2], occupied: bool) {
+        self.0[EntityGrid::index(position)] = occupied;
+    }
+
+    fn get(&self, position: [u32; 2]) -> bool {
+        self.0[EntityGrid::index(position)]
+    }
+
+    fn index(position: [u32; 2]) -> usize {
+        let [x, y] = position;
+        (y * GRID_DIMENSIONS.0 + x) as usize
+    }
+}
+
 struct Game {
     grid_mesh: Mesh,
     player_mesh: Mesh,
-    player_entity: Entity,
     enemy_sprite_batch: SpriteBatch,
-    enemy_entities: Vec<Entity>,
+    entities: Vec<Entity>,
+    entity_grid: EntityGrid,
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
 }
@@ -88,8 +112,12 @@ impl Game {
                 Color::new(0.6, 0.8, 0.5, 1.0),
             )?
             .build(ctx)?;
-        let player_movement_component = MovementComponent::new([0, 0], Duration::from_millis(400));
-        let player_entity = Entity::new(player_movement_component);
+        let player_entity = Entity::new(
+            MovementComponent::new([0, 0], Duration::from_millis(400)),
+            Team::Player,
+            EntitySprite::Player,
+        );
+        let mut entities = vec![player_entity];
 
         let enemy_mesh = MeshBuilder::new()
             .circle(
@@ -101,33 +129,41 @@ impl Game {
             )?
             .build(ctx)?;
         let enemy_sprite_batch = SpriteBatch::new(images::mesh_into_image(ctx, enemy_mesh)?);
-        let mut enemy_entities = vec![];
 
         fn enemy_entity(position: [u32; 2]) -> Entity {
-            Entity::new(MovementComponent::new(position, Duration::from_millis(800)))
+            Entity::new(
+                MovementComponent::new(position, Duration::from_millis(800)),
+                Team::Ai,
+                EntitySprite::Enemy,
+            )
         }
 
         // for y in 1..GRID_DIMENSIONS.1 {
         //     for x in 0..GRID_DIMENSIONS.0 {
-        //         enemy_entities.push(enemy_entity([x, y]));
+        //         entities.push(enemy_entity([x, y]));
         //     }
         // }
 
-        enemy_entities.push(enemy_entity([5, 2]));
-        enemy_entities.push(enemy_entity([3, 0]));
-        enemy_entities.push(enemy_entity([0, 4]));
-        enemy_entities.push(enemy_entity([3, 4]));
+        entities.push(enemy_entity([5, 2]));
+        entities.push(enemy_entity([3, 0]));
+        entities.push(enemy_entity([0, 4]));
+        entities.push(enemy_entity([3, 4]));
 
-        println!("Created {} enemy entities", enemy_entities.len());
+        println!("Created {} entities", entities.len());
 
         let rng = rand::thread_rng();
+
+        let mut entity_grid = EntityGrid::new();
+        for entity in &entities {
+            entity_grid.set(entity.movement_component.position(), true);
+        }
 
         Ok(Self {
             grid_mesh,
             player_mesh,
-            player_entity,
             enemy_sprite_batch,
-            enemy_entities,
+            entities,
+            entity_grid,
             enemy_player_ai: EnemyPlayerAi::new(),
             rng,
         })
@@ -166,23 +202,27 @@ impl EventHandler for Game {
         let dt = ggez::timer::delta(ctx);
 
         self.enemy_player_ai
-            .run(dt, &mut self.enemy_entities[..], &mut self.rng);
+            .run(dt, &mut self.entities[..], &mut self.rng);
 
-        self.player_entity.update();
-        for enemy_entity in &mut self.enemy_entities {
-            enemy_entity.update();
+        for entity in &mut self.entities {
+            if entity.movement_component.movement_timer.is_zero() {
+                if let Some(target_pos) = entity.movement_plan.pop() {
+                    let occupied = self.entity_grid.get(target_pos);
+                    if occupied {
+                        entity.movement_plan.push(target_pos);
+                    } else {
+                        self.entity_grid
+                            .set(entity.movement_component.position(), false);
+                        entity.movement_component.move_to(target_pos);
+                        self.entity_grid.set(target_pos, true);
+                    }
+                }
+            }
         }
 
-        self.player_entity.movement_component.update(dt);
-        for enemy_entity in &mut self.enemy_entities {
-            // TODO: collision-checking
-            enemy_entity.movement_component.update(dt);
+        for entity in &mut self.entities {
+            entity.movement_component.update(dt);
         }
-
-        // For now, enemies are killed when colliding with player
-        self.enemy_entities.retain(|enemy| {
-            enemy.movement_component.position() != self.player_entity.movement_component.position()
-        });
 
         Ok(())
     }
@@ -192,15 +232,17 @@ impl EventHandler for Game {
 
         graphics::draw(ctx, &self.grid_mesh, DrawParam::new())?;
 
-        graphics::draw(
-            ctx,
-            &self.player_mesh,
-            DrawParam::new().dest(self.player_entity.movement_component.screen_coords()),
-        )?;
-
-        for enemy_entity in &self.enemy_entities {
-            let draw_param = DrawParam::new().dest(enemy_entity.movement_component.screen_coords());
-            self.enemy_sprite_batch.add(draw_param);
+        for entity in &self.entities {
+            let screen_coords = entity.movement_component.screen_coords();
+            match &entity.team {
+                Team::Player => {
+                    graphics::draw(ctx, &self.player_mesh, DrawParam::new().dest(screen_coords))?;
+                }
+                Team::Ai => {
+                    self.enemy_sprite_batch
+                        .add(DrawParam::new().dest(screen_coords));
+                }
+            }
         }
         graphics::draw(ctx, &self.enemy_sprite_batch, DrawParam::default())?;
         self.enemy_sprite_batch.clear();
@@ -217,7 +259,13 @@ impl EventHandler for Game {
         y: f32,
     ) {
         if let Some(clicked_pos) = screen_to_grid_coordinates([x, y]) {
-            self.player_entity.set_destination(clicked_pos);
+            let player_entity = self
+                .entities
+                .iter_mut()
+                .filter(|e| e.team == Team::Player)
+                .next()
+                .expect("player entity");
+            player_entity.set_destination(clicked_pos);
         }
     }
 }

@@ -3,15 +3,20 @@ use std::time::Duration;
 use crate::game;
 use std::cmp::Ordering;
 
+#[derive(Debug)]
 pub struct Entity {
     pub movement_component: MovementComponent,
-    movement_plan: Vec<[u32; 2]>,
+    pub team: Team,
+    pub sprite: EntitySprite,
+    pub movement_plan: Vec<[u32; 2]>,
 }
 
 impl Entity {
-    pub fn new(movement_component: MovementComponent) -> Self {
+    pub fn new(movement_component: MovementComponent, team: Team, sprite: EntitySprite) -> Self {
         Self {
             movement_component,
+            team,
+            sprite,
             movement_plan: Default::default(),
         }
     }
@@ -35,16 +40,21 @@ impl Entity {
         plan.reverse();
         self.movement_plan = plan;
     }
-
-    pub fn update(&mut self) {
-        if self.movement_component.movement_timer.is_zero() {
-            if let Some(next_move) = self.movement_plan.pop() {
-                self.movement_component.move_to(next_move);
-            }
-        }
-    }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum Team {
+    Player,
+    Ai,
+}
+
+#[derive(Debug)]
+pub enum EntitySprite {
+    Player,
+    Enemy,
+}
+
+#[derive(Debug)]
 pub struct MovementComponent {
     previous_position: [u32; 2],
     position: [u32; 2],
