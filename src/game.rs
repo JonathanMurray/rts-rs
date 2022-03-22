@@ -180,14 +180,14 @@ impl EventHandler for Game {
 
         for entity in &mut self.entities {
             if let Some(movement) = &mut entity.movement {
-                if movement.is_ready() {
-                    if let Some(next_pos) = entity.pathfind.peek_path() {
+                if movement.sub_cell_movement.is_ready() {
+                    if let Some(next_pos) = movement.pathfinder.peek_path() {
                         let occupied = self.entity_grid.get(next_pos);
                         if !occupied {
                             let old_pos = entity.position;
-                            let new_pos = entity.pathfind.advance_path();
+                            let new_pos = movement.pathfinder.advance_path();
                             self.entity_grid.set(&old_pos, false);
-                            movement.set_moving(old_pos, new_pos);
+                            movement.sub_cell_movement.set_moving(old_pos, new_pos);
                             entity.position = new_pos;
                             self.entity_grid.set(&new_pos, true);
                         }
@@ -198,7 +198,7 @@ impl EventHandler for Game {
 
         for entity in &mut self.entities {
             if let Some(movement) = entity.movement.as_mut() {
-                movement.update(dt, entity.position);
+                movement.sub_cell_movement.update(dt, entity.position);
             }
         }
 
@@ -214,7 +214,7 @@ impl EventHandler for Game {
             let screen_coords = entity
                 .movement
                 .as_ref()
-                .map(|movement| movement.screen_coords(entity.position))
+                .map(|movement| movement.sub_cell_movement.screen_coords(entity.position))
                 .unwrap_or_else(|| grid_to_screen_coords(entity.position));
 
             if self.player_state.selected_entity.as_ref() == Some(&entity.id) {
@@ -258,7 +258,10 @@ impl EventHandler for Game {
                                 .find(|e| &e.id == selected_entity)
                                 .expect("selected entity must exist");
                             player_entity
-                                .pathfind
+                                .movement
+                                .as_mut()
+                                .expect("selected player entity must be mobile")
+                                .pathfinder
                                 .find_path(&player_entity.position, clicked_pos);
                         } else {
                             println!("No entity is selected");

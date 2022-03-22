@@ -27,7 +27,12 @@ impl EnemyPlayerAi {
                 if enemy.team == Team::Enemy && rng.gen_bool(0.7) {
                     let x: u32 = rng.gen_range(0..self.map_dimensions.0);
                     let y: u32 = rng.gen_range(0..self.map_dimensions.1);
-                    enemy.pathfind.find_path(&enemy.position, [x, y]);
+                    enemy
+                        .movement
+                        .as_mut()
+                        .expect("Enemy must be mobile")
+                        .pathfinder
+                        .find_path(&enemy.position, [x, y]);
                 }
             }
         }
