@@ -1,10 +1,17 @@
+use std::cmp::Ordering;
+use std::sync::atomic::{self, AtomicUsize};
 use std::time::Duration;
 
 use crate::game;
-use std::cmp::Ordering;
+
+static NEXT_ENTITY_ID: AtomicUsize = AtomicUsize::new(1);
+
+#[derive(Debug, PartialEq, Copy, Clone)]
+pub struct EntityId(usize);
 
 #[derive(Debug)]
 pub struct Entity {
+    pub id: EntityId,
     pub position: [u32; 2],
     pub is_solid: bool,
     pub movement: Option<MovementComponent>,
@@ -23,7 +30,10 @@ impl Entity {
         sprite: EntitySprite,
         health: Option<HealthComponent>,
     ) -> Self {
+        // Make sure all entities have unique IDs
+        let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
         Self {
+            id,
             position,
             is_solid,
             movement: movement_cooldown.map(|cooldown| MovementComponent::new(position, cooldown)),

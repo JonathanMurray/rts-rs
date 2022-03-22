@@ -2,14 +2,14 @@ use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event::EventHandler;
 use ggez::graphics::spritebatch::SpriteBatch;
-use ggez::graphics::{Color, DrawMode, DrawParam, Mesh, MeshBuilder, Rect};
+use ggez::graphics::{Color, DrawMode, DrawParam, Font, Mesh, MeshBuilder, Rect, Text};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError};
 
 use crate::enemy_ai::EnemyPlayerAi;
 
-use crate::entities::{Entity, EntitySprite, Team};
+use crate::entities::{Entity, EntityId, EntitySprite, Team};
 use crate::images;
 use crate::maps::{Map, MapType};
 use rand::rngs::ThreadRng;
@@ -27,7 +27,7 @@ pub fn run(map_type: MapType) -> Result<(), GameError> {
     let (mut ctx, event_loop) = ContextBuilder::new("rts", "jm")
         .window_setup(WindowSetup::default().title(TITLE))
         .window_mode(WindowMode::default().dimensions(WINDOW_DIMENSIONS.0, WINDOW_DIMENSIONS.1))
-        //.add_resource_path("resources")
+        .add_resource_path("resources")
         .build()
         .expect("Creating ggez context");
 
@@ -70,12 +70,13 @@ enum MouseState {
 }
 
 struct Game {
+    font: Font,
     grid_mesh: Mesh,
     player_mesh: Mesh,
     selection_mesh: Mesh,
     neutral_mesh: Mesh,
     enemy_sprite_batch: SpriteBatch,
-    selected_entity_index: Option<usize>,
+    selected_entity: Option<EntityId>,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
     enemy_player_ai: EnemyPlayerAi,
@@ -152,14 +153,16 @@ impl Game {
         let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
         let mouse_state = MouseState::Default;
 
-        let selected_entity_index = None;
+        let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
+
         Ok(Self {
+            font,
             grid_mesh,
             player_mesh,
             selection_mesh,
             neutral_mesh,
             enemy_sprite_batch,
-            selected_entity_index,
+            selected_entity: None,
             entities,
             entity_grid,
             enemy_player_ai,
@@ -263,14 +266,14 @@ impl EventHandler for Game {
 
         graphics::draw(ctx, &self.grid_mesh, DrawParam::new())?;
 
-        for (entity_index, entity) in self.entities.iter().enumerate() {
+        for entity in &self.entities {
             let screen_coords = entity
                 .movement
                 .as_ref()
                 .map(|movement| movement.screen_coords(entity.position))
                 .unwrap_or_else(|| grid_to_screen_coords(entity.position));
 
-            if self.selected_entity_index == Some(entity_index) {
+            if self.selected_entity.as_ref() == Some(&entity.id) {
                 graphics::draw(
                     ctx,
                     &self.selection_mesh,
@@ -298,6 +301,8 @@ impl EventHandler for Game {
         graphics::draw(ctx, &self.enemy_sprite_batch, DrawParam::default())?;
         self.enemy_sprite_batch.clear();
 
+        self.draw_debug_ui(ctx)?;
+
         graphics::present(ctx)?;
         Ok(())
     }
@@ -307,14 +312,19 @@ impl EventHandler for Game {
             match self.mouse_state {
                 MouseState::Default => {
                     if button == MouseButton::Left {
-                        self.selected_entity_index = self
+                        self.selected_entity = self
                             .entities
                             .iter()
-                            .position(|e| e.team == Team::Player && e.position == clicked_pos);
-                        println!("Selected entity index: {:?}", self.selected_entity_index);
+                            .find(|e| e.team == Team::Player && e.position == clicked_pos)
+                            .map(|e| e.id);
+                        println!("Selected entity index: {:?}", self.selected_entity);
                     } else {
-                        if let Some(selected_entity_index) = self.selected_entity_index {
-                            let player_entity = &mut self.entities[selected_entity_index];
+                        if let Some(selected_entity) = &self.selected_entity {
+                            let player_entity = self
+                                .entities
+                                .iter_mut()
+                                .find(|e| &e.id == selected_entity)
+                                .expect("selected entity must exist");
                             player_entity
                                 .pathfind
                                 .find_path(&player_entity.position, clicked_pos);
@@ -363,4 +373,23 @@ pub fn grid_to_screen_coords(coordinates: [u32; 2]) -> [f32; 2] {
         WORLD_PIXEL_OFFSET.0 + CELL_PIXEL_SIZE.0 * coordinates[0] as f32,
         WORLD_PIXEL_OFFSET.1 + CELL_PIXEL_SIZE.1 * coordinates[1] as f32,
     ]
+}
+
+impl Game {
+    fn draw_debug_ui(&self, ctx: &mut Context) -> Result<(), GameError> {
+        let mut lines = vec![];
+        lines.push(format!("Selected: {:?}", self.selected_entity));
+        lines.push(format!("Total entities: {:?}", self.entities.len()));
+
+        let x = WORLD_PIXEL_OFFSET.0
+            + self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
+            + 40.0;
+        let mut y = 25.0;
+        for line in lines {
+            let text = Text::new((line, self.font, 25.0));
+            graphics::draw(ctx, &text, DrawParam::new().dest([x, y]))?;
+            y += 25.0;
+        }
+        Ok(())
+    }
 }
