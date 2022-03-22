@@ -67,15 +67,19 @@ enum MouseState {
     DealingDamage,
 }
 
+struct PlayerState {
+    selected_entity: Option<EntityId>,
+    mouse_state: MouseState,
+}
+
 struct Game {
     font: Font,
     assets: Assets,
-    selected_entity: Option<EntityId>,
+    player_state: PlayerState,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
-    mouse_state: MouseState,
 }
 
 impl Game {
@@ -99,19 +103,22 @@ impl Game {
         }
 
         let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
-        let mouse_state = MouseState::Default;
 
         let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
+
+        let player_state = PlayerState {
+            selected_entity: None,
+            mouse_state: MouseState::Default,
+        };
 
         Ok(Self {
             font,
             assets,
-            selected_entity: None,
+            player_state,
             entities,
             entity_grid,
             enemy_player_ai,
             rng,
-            mouse_state,
         })
     }
 
@@ -132,7 +139,7 @@ impl Game {
 
     fn draw_debug_ui(&self, ctx: &mut Context) -> GameResult {
         let mut lines = vec![];
-        lines.push(format!("Selected: {:?}", self.selected_entity));
+        lines.push(format!("Selected: {:?}", self.player_state.selected_entity));
         lines.push(format!("Total entities: {:?}", self.entities.len()));
 
         let x = WORLD_PIXEL_OFFSET.0
@@ -210,7 +217,7 @@ impl EventHandler for Game {
                 .map(|movement| movement.screen_coords(entity.position))
                 .unwrap_or_else(|| grid_to_screen_coords(entity.position));
 
-            if self.selected_entity.as_ref() == Some(&entity.id) {
+            if self.player_state.selected_entity.as_ref() == Some(&entity.id) {
                 graphics::draw(
                     ctx,
                     &self.assets.selection,
@@ -231,17 +238,20 @@ impl EventHandler for Game {
 
     fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
         if let Some(clicked_pos) = self.screen_to_grid_coordinates([x, y]) {
-            match self.mouse_state {
+            match self.player_state.mouse_state {
                 MouseState::Default => {
                     if button == MouseButton::Left {
-                        self.selected_entity = self
+                        self.player_state.selected_entity = self
                             .entities
                             .iter()
                             .find(|e| e.team == Team::Player && e.position == clicked_pos)
                             .map(|e| e.id);
-                        println!("Selected entity index: {:?}", self.selected_entity);
+                        println!(
+                            "Selected entity index: {:?}",
+                            self.player_state.selected_entity
+                        );
                     } else {
-                        if let Some(selected_entity) = &self.selected_entity {
+                        if let Some(selected_entity) = &self.player_state.selected_entity {
                             let player_entity = self
                                 .entities
                                 .iter_mut()
@@ -267,7 +277,7 @@ impl EventHandler for Game {
                         health.current -= 1;
                         println!("Reduced health down to {}/{}", health.current, health.max)
                     }
-                    self.mouse_state = MouseState::Default;
+                    self.player_state.mouse_state = MouseState::Default;
                     mouse::set_cursor_type(ctx, CursorIcon::Default);
                 }
             }
@@ -284,7 +294,7 @@ impl EventHandler for Game {
         if keycode == KeyCode::Escape {
             ggez::event::quit(ctx);
         } else {
-            self.mouse_state = MouseState::DealingDamage;
+            self.player_state.mouse_state = MouseState::DealingDamage;
             mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
         }
     }

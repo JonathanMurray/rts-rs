@@ -31,7 +31,7 @@ impl Assets {
             EntitySprite::Neutral => self.neutral_entity.draw(ctx, param)?,
             EntitySprite::Enemy => {
                 self.enemy_entity_batch.add(param);
-            },
+            }
         };
         Ok(())
     }
