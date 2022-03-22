@@ -72,8 +72,10 @@ enum MouseState {
 struct Game {
     grid_mesh: Mesh,
     player_mesh: Mesh,
+    selection_mesh: Mesh,
     neutral_mesh: Mesh,
     enemy_sprite_batch: SpriteBatch,
+    selected_entity_index: Option<usize>,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
     enemy_player_ai: EnemyPlayerAi,
@@ -101,6 +103,13 @@ impl Game {
                     player_size.1,
                 ),
                 Color::new(0.6, 0.8, 0.5, 1.0),
+            )?
+            .build(ctx)?;
+        let selection_mesh = MeshBuilder::new()
+            .rectangle(
+                DrawMode::stroke(2.0),
+                Rect::new(-1.0, -1.0, CELL_PIXEL_SIZE.0 + 2.0, CELL_PIXEL_SIZE.1 + 2.0),
+                Color::new(0.6, 0.9, 0.6, 1.0),
             )?
             .build(ctx)?;
 
@@ -143,11 +152,14 @@ impl Game {
         let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
         let mouse_state = MouseState::Default;
 
+        let selected_entity_index = None;
         Ok(Self {
             grid_mesh,
             player_mesh,
+            selection_mesh,
             neutral_mesh,
             enemy_sprite_batch,
+            selected_entity_index,
             entities,
             entity_grid,
             enemy_player_ai,
@@ -251,12 +263,20 @@ impl EventHandler for Game {
 
         graphics::draw(ctx, &self.grid_mesh, DrawParam::new())?;
 
-        for entity in &self.entities {
+        for (entity_index, entity) in self.entities.iter().enumerate() {
             let screen_coords = entity
                 .movement
                 .as_ref()
                 .map(|movement| movement.screen_coords(entity.position))
                 .unwrap_or_else(|| grid_to_screen_coords(entity.position));
+
+            if self.selected_entity_index == Some(entity_index) {
+                graphics::draw(
+                    ctx,
+                    &self.selection_mesh,
+                    DrawParam::new().dest(screen_coords),
+                )?;
+            }
 
             match &entity.sprite {
                 EntitySprite::Player => {
@@ -282,18 +302,26 @@ impl EventHandler for Game {
         Ok(())
     }
 
-    fn mouse_button_down_event(&mut self, ctx: &mut Context, _button: MouseButton, x: f32, y: f32) {
+    fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
         if let Some(clicked_pos) = self.screen_to_grid_coordinates([x, y]) {
             match self.mouse_state {
                 MouseState::Default => {
-                    let player_entity = self
-                        .entities
-                        .iter_mut()
-                        .find(|e| e.team == Team::Player)
-                        .expect("player entity");
-                    player_entity
-                        .pathfind
-                        .find_path(&player_entity.position, clicked_pos);
+                    if button == MouseButton::Left {
+                        self.selected_entity_index = self
+                            .entities
+                            .iter()
+                            .position(|e| e.team == Team::Player && e.position == clicked_pos);
+                        println!("Selected entity index: {:?}", self.selected_entity_index);
+                    } else {
+                        if let Some(selected_entity_index) = self.selected_entity_index {
+                            let player_entity = &mut self.entities[selected_entity_index];
+                            player_entity
+                                .pathfind
+                                .find_path(&player_entity.position, clicked_pos);
+                        } else {
+                            println!("No entity is selected");
+                        }
+                    }
                 }
                 MouseState::DealingDamage => {
                     // TODO

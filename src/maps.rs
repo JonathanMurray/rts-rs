@@ -17,8 +17,16 @@ pub struct Map {
 
 impl Map {
     pub fn new(map_type: MapType) -> Self {
-        let player_entity = Entity::new(
+        let player_entity_1 = Entity::new(
             [0, 0],
+            true,
+            Some(Duration::from_millis(400)),
+            Team::Player,
+            EntitySprite::Player,
+            None,
+        );
+        let player_entity_2 = Entity::new(
+            [1, 0],
             true,
             Some(Duration::from_millis(400)),
             Team::Player,
@@ -40,7 +48,8 @@ impl Map {
             entities.push(neutral_entity);
         }
 
-        entities.push(player_entity);
+        entities.push(player_entity_1);
+        entities.push(player_entity_2);
 
         match map_type {
             MapType::Empty => {
