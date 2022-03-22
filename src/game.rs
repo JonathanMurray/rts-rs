@@ -1,21 +1,19 @@
 use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event::EventHandler;
-use ggez::graphics::spritebatch::SpriteBatch;
-use ggez::graphics::{Color, DrawMode, DrawParam, Font, Mesh, MeshBuilder, Rect, Text};
+use ggez::graphics::{Color, DrawParam, Font, Text};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
-use ggez::{graphics, Context, ContextBuilder, GameError};
+use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
 
-use crate::enemy_ai::EnemyPlayerAi;
-
-use crate::entities::{Entity, EntityId, EntitySprite, Team};
-use crate::images;
-use crate::maps::{Map, MapType};
 use rand::rngs::ThreadRng;
 
+use crate::assets::{self, Assets};
+use crate::enemy_ai::EnemyPlayerAi;
+use crate::entities::{Entity, EntityId, Team};
+use crate::maps::{Map, MapType};
+
 const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
-const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 
 const WINDOW_DIMENSIONS: (f32, f32) = (1600.0, 1200.0);
 pub const CELL_PIXEL_SIZE: (f32, f32) = (50.0, 50.0);
@@ -23,7 +21,7 @@ pub const WORLD_PIXEL_OFFSET: (f32, f32) = (20.0, 20.0);
 
 const TITLE: &str = "RTS";
 
-pub fn run(map_type: MapType) -> Result<(), GameError> {
+pub fn run(map_type: MapType) -> GameResult {
     let (mut ctx, event_loop) = ContextBuilder::new("rts", "jm")
         .window_setup(WindowSetup::default().title(TITLE))
         .window_mode(WindowMode::default().dimensions(WINDOW_DIMENSIONS.0, WINDOW_DIMENSIONS.1))
@@ -71,11 +69,7 @@ enum MouseState {
 
 struct Game {
     font: Font,
-    grid_mesh: Mesh,
-    player_mesh: Mesh,
-    selection_mesh: Mesh,
-    neutral_mesh: Mesh,
-    enemy_sprite_batch: SpriteBatch,
+    assets: Assets,
     selected_entity: Option<EntityId>,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
@@ -91,55 +85,9 @@ impl Game {
             entities,
         } = Map::new(map_type);
 
-        let grid_mesh = Self::build_grid(ctx, map_dimensions)?;
-
-        let player_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.8);
-        let player_mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    (CELL_PIXEL_SIZE.0 - player_size.0) / 2.0,
-                    (CELL_PIXEL_SIZE.1 - player_size.1) / 2.0,
-                    player_size.0,
-                    player_size.1,
-                ),
-                Color::new(0.6, 0.8, 0.5, 1.0),
-            )?
-            .build(ctx)?;
-        let selection_mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::stroke(2.0),
-                Rect::new(-1.0, -1.0, CELL_PIXEL_SIZE.0 + 2.0, CELL_PIXEL_SIZE.1 + 2.0),
-                Color::new(0.6, 0.9, 0.6, 1.0),
-            )?
-            .build(ctx)?;
-
-        let neutral_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.6);
-        let neutral_mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    (CELL_PIXEL_SIZE.0 - player_size.0) / 2.0,
-                    (CELL_PIXEL_SIZE.1 - player_size.1) / 2.0,
-                    neutral_size.0,
-                    neutral_size.1,
-                ),
-                Color::new(0.8, 0.6, 0.2, 1.0),
-            )?
-            .build(ctx)?;
-
-        let enemy_mesh = MeshBuilder::new()
-            .circle(
-                DrawMode::fill(),
-                [CELL_PIXEL_SIZE.0 / 2.0, CELL_PIXEL_SIZE.1 / 2.0],
-                CELL_PIXEL_SIZE.0 * 0.25,
-                0.05,
-                Color::new(0.8, 0.4, 0.4, 1.0),
-            )?
-            .build(ctx)?;
-        let enemy_sprite_batch = SpriteBatch::new(images::mesh_into_image(ctx, enemy_mesh)?);
-
         println!("Created {} entities", entities.len());
+
+        let assets = assets::create_assets(ctx, map_dimensions)?;
 
         let rng = rand::thread_rng();
 
@@ -157,11 +105,7 @@ impl Game {
 
         Ok(Self {
             font,
-            grid_mesh,
-            player_mesh,
-            selection_mesh,
-            neutral_mesh,
-            enemy_sprite_batch,
+            assets,
             selected_entity: None,
             entities,
             entity_grid,
@@ -169,30 +113,6 @@ impl Game {
             rng,
             mouse_state,
         })
-    }
-
-    fn build_grid(ctx: &mut Context, map_dimensions: (u32, u32)) -> Result<Mesh, GameError> {
-        let mut builder = MeshBuilder::new();
-        const LINE_WIDTH: f32 = 2.0;
-
-        let x0 = WORLD_PIXEL_OFFSET.0;
-        let x1 = x0 + map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0;
-        let y0 = WORLD_PIXEL_OFFSET.1;
-        let y1 = y0 + map_dimensions.1 as f32 * CELL_PIXEL_SIZE.1;
-
-        // Horizontal lines
-        for i in 0..map_dimensions.1 + 1 {
-            let y = y0 + i as f32 * CELL_PIXEL_SIZE.1;
-            builder.line(&[[x0, y], [x1, y]], LINE_WIDTH, COLOR_GRID)?;
-        }
-
-        // Vertical lines
-        for i in 0..map_dimensions.0 + 1 {
-            let x = x0 + i as f32 * CELL_PIXEL_SIZE.0;
-            builder.line(&[[x, y0], [x, y1]], LINE_WIDTH, COLOR_GRID)?;
-        }
-
-        builder.build(ctx)
     }
 
     fn screen_to_grid_coordinates(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
@@ -209,10 +129,27 @@ impl Game {
             None
         }
     }
+
+    fn draw_debug_ui(&self, ctx: &mut Context) -> GameResult {
+        let mut lines = vec![];
+        lines.push(format!("Selected: {:?}", self.selected_entity));
+        lines.push(format!("Total entities: {:?}", self.entities.len()));
+
+        let x = WORLD_PIXEL_OFFSET.0
+            + self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
+            + 40.0;
+        let mut y = 25.0;
+        for line in lines {
+            let text = Text::new((line, self.font, 25.0));
+            graphics::draw(ctx, &text, DrawParam::new().dest([x, y]))?;
+            y += 25.0;
+        }
+        Ok(())
+    }
 }
 
 impl EventHandler for Game {
-    fn update(&mut self, ctx: &mut Context) -> Result<(), GameError> {
+    fn update(&mut self, ctx: &mut Context) -> GameResult {
         let fps = ggez::timer::fps(ctx) as u32;
         graphics::set_window_title(ctx, &format!("{} (fps={})", TITLE, fps));
 
@@ -261,10 +198,10 @@ impl EventHandler for Game {
         Ok(())
     }
 
-    fn draw(&mut self, ctx: &mut Context) -> Result<(), GameError> {
+    fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, COLOR_BG);
 
-        graphics::draw(ctx, &self.grid_mesh, DrawParam::new())?;
+        graphics::draw(ctx, &self.assets.grid_mesh, DrawParam::new())?;
 
         for entity in &self.entities {
             let screen_coords = entity
@@ -276,30 +213,15 @@ impl EventHandler for Game {
             if self.selected_entity.as_ref() == Some(&entity.id) {
                 graphics::draw(
                     ctx,
-                    &self.selection_mesh,
+                    &self.assets.selection_mesh,
                     DrawParam::new().dest(screen_coords),
                 )?;
             }
 
-            match &entity.sprite {
-                EntitySprite::Player => {
-                    graphics::draw(ctx, &self.player_mesh, DrawParam::new().dest(screen_coords))?;
-                }
-                EntitySprite::Enemy => {
-                    self.enemy_sprite_batch
-                        .add(DrawParam::new().dest(screen_coords));
-                }
-                EntitySprite::Neutral => {
-                    graphics::draw(
-                        ctx,
-                        &self.neutral_mesh,
-                        DrawParam::new().dest(screen_coords),
-                    )?;
-                }
-            }
+            self.assets
+                .draw_entity(ctx, &entity.sprite, screen_coords)?;
         }
-        graphics::draw(ctx, &self.enemy_sprite_batch, DrawParam::default())?;
-        self.enemy_sprite_batch.clear();
+        self.assets.flush_entity_sprite_batch(ctx)?;
 
         self.draw_debug_ui(ctx)?;
 
@@ -373,23 +295,4 @@ pub fn grid_to_screen_coords(coordinates: [u32; 2]) -> [f32; 2] {
         WORLD_PIXEL_OFFSET.0 + CELL_PIXEL_SIZE.0 * coordinates[0] as f32,
         WORLD_PIXEL_OFFSET.1 + CELL_PIXEL_SIZE.1 * coordinates[1] as f32,
     ]
-}
-
-impl Game {
-    fn draw_debug_ui(&self, ctx: &mut Context) -> Result<(), GameError> {
-        let mut lines = vec![];
-        lines.push(format!("Selected: {:?}", self.selected_entity));
-        lines.push(format!("Total entities: {:?}", self.entities.len()));
-
-        let x = WORLD_PIXEL_OFFSET.0
-            + self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
-            + 40.0;
-        let mut y = 25.0;
-        for line in lines {
-            let text = Text::new((line, self.font, 25.0));
-            graphics::draw(ctx, &text, DrawParam::new().dest([x, y]))?;
-            y += 25.0;
-        }
-        Ok(())
-    }
 }
