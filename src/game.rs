@@ -113,7 +113,7 @@ impl Game {
 
         let mut entity_grid = EntityGrid::new(map_dimensions);
         for entity in &entities {
-            entity_grid.set(&entity.movement_component.position(), true);
+            entity_grid.set(&entity.physics.position(), true);
         }
 
         let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
@@ -180,14 +180,13 @@ impl EventHandler for Game {
             .run(dt, &mut self.entities[..], &mut self.rng);
 
         for entity in &mut self.entities {
-            if entity.movement_component.is_ready() {
-                if let Some(next_pos) = entity.pathfind_component.peek_path() {
+            if entity.physics.is_ready_for_movement() {
+                if let Some(next_pos) = entity.pathfind.peek_path() {
                     let occupied = self.entity_grid.get(next_pos);
                     if !occupied {
-                        let new_pos = entity.pathfind_component.advance_path();
-                        self.entity_grid
-                            .set(&entity.movement_component.position(), false);
-                        entity.movement_component.move_to(new_pos);
+                        let new_pos = entity.pathfind.advance_path();
+                        self.entity_grid.set(&entity.physics.position(), false);
+                        entity.physics.move_to(new_pos);
                         self.entity_grid.set(&new_pos, true);
                     }
                 }
@@ -195,7 +194,7 @@ impl EventHandler for Game {
         }
 
         for entity in &mut self.entities {
-            entity.movement_component.update(dt);
+            entity.physics.update(dt);
         }
 
         Ok(())
@@ -207,7 +206,7 @@ impl EventHandler for Game {
         graphics::draw(ctx, &self.grid_mesh, DrawParam::new())?;
 
         for entity in &self.entities {
-            let screen_coords = entity.movement_component.screen_coords();
+            let screen_coords = entity.physics.screen_coords();
             match &entity.team {
                 Team::Player => {
                     graphics::draw(ctx, &self.player_mesh, DrawParam::new().dest(screen_coords))?;
@@ -238,10 +237,8 @@ impl EventHandler for Game {
                 .iter_mut()
                 .find(|e| e.team == Team::Player)
                 .expect("player entity");
-            let current_pos = &player_entity.movement_component.position();
-            player_entity
-                .pathfind_component
-                .find_path(current_pos, clicked_pos);
+            let current_pos = &player_entity.physics.position();
+            player_entity.pathfind.find_path(current_pos, clicked_pos);
         }
     }
 }

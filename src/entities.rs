@@ -5,19 +5,19 @@ use std::cmp::Ordering;
 
 #[derive(Debug)]
 pub struct Entity {
-    pub movement_component: MovementComponent,
+    pub physics: PhysicsComponent,
     pub team: Team,
     pub sprite: EntitySprite,
-    pub pathfind_component: PathfindComponent,
+    pub pathfind: PathfindComponent,
 }
 
 impl Entity {
-    pub fn new(movement_component: MovementComponent, team: Team, sprite: EntitySprite) -> Self {
+    pub fn new(movement_component: PhysicsComponent, team: Team, sprite: EntitySprite) -> Self {
         Self {
-            movement_component,
+            physics: movement_component,
             team,
             sprite,
-            pathfind_component: PathfindComponent::new(),
+            pathfind: PathfindComponent::new(),
         }
     }
 }
@@ -76,7 +76,7 @@ impl PathfindComponent {
 }
 
 #[derive(Debug)]
-pub struct MovementComponent {
+pub struct PhysicsComponent {
     previous_position: [u32; 2],
     position: [u32; 2],
     movement_timer: Duration,
@@ -84,7 +84,7 @@ pub struct MovementComponent {
     diagonal_movement_cooldown: Duration,
 }
 
-impl MovementComponent {
+impl PhysicsComponent {
     pub fn new(position: [u32; 2], movement_cooldown: Duration) -> Self {
         Self {
             previous_position: position,
@@ -109,18 +109,16 @@ impl MovementComponent {
     pub fn screen_coords(&self) -> [f32; 2] {
         let prev_pos = game::grid_to_screen_coords(self.previous_position);
         let pos = game::grid_to_screen_coords(self.position);
-        let interpolation =
-            match MovementComponent::direction(self.previous_position, self.position) {
-                MovementDirection::Straight => {
-                    self.movement_timer.as_secs_f32()
-                        / self.straight_movement_cooldown.as_secs_f32()
-                }
-                MovementDirection::Diagonal => {
-                    self.movement_timer.as_secs_f32()
-                        / self.diagonal_movement_cooldown.as_secs_f32()
-                }
-                MovementDirection::None => 0.0,
-            };
+        let interpolation = match PhysicsComponent::direction(self.previous_position, self.position)
+        {
+            MovementDirection::Straight => {
+                self.movement_timer.as_secs_f32() / self.straight_movement_cooldown.as_secs_f32()
+            }
+            MovementDirection::Diagonal => {
+                self.movement_timer.as_secs_f32() / self.diagonal_movement_cooldown.as_secs_f32()
+            }
+            MovementDirection::None => 0.0,
+        };
 
         [
             pos[0] - interpolation * (pos[0] - prev_pos[0]),
@@ -128,13 +126,13 @@ impl MovementComponent {
         ]
     }
 
-    pub fn is_ready(&self) -> bool {
+    pub fn is_ready_for_movement(&self) -> bool {
         self.movement_timer.is_zero()
     }
 
     pub fn move_to(&mut self, new_position: [u32; 2]) {
         assert!(self.movement_timer.is_zero());
-        match MovementComponent::direction(self.position, new_position) {
+        match PhysicsComponent::direction(self.position, new_position) {
             MovementDirection::Straight => self.movement_timer = self.straight_movement_cooldown,
             MovementDirection::Diagonal => self.movement_timer = self.diagonal_movement_cooldown,
             MovementDirection::None => {}

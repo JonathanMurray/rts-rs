@@ -27,8 +27,8 @@ impl EnemyPlayerAi {
                 if enemy.team == Team::Ai && rng.gen_bool(0.7) {
                     let x: u32 = rng.gen_range(0..self.map_dimensions.0);
                     let y: u32 = rng.gen_range(0..self.map_dimensions.1);
-                    let current_pos = &enemy.movement_component.position();
-                    enemy.pathfind_component.find_path(current_pos, [x, y]);
+                    let current_pos = &enemy.physics.position();
+                    enemy.pathfind.find_path(current_pos, [x, y]);
                 }
             }
         }

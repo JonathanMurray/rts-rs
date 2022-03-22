@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::entities::{Entity, EntitySprite, MovementComponent, Team};
+use crate::entities::{Entity, EntitySprite, PhysicsComponent, Team};
 use rand::Rng;
 
 #[derive(Debug)]
@@ -17,7 +17,7 @@ pub struct Map {
 impl Map {
     pub fn new(map_type: MapType) -> Self {
         let player_entity = Entity::new(
-            MovementComponent::new([0, 0], Duration::from_millis(400)),
+            PhysicsComponent::new([0, 0], Duration::from_millis(400)),
             Team::Player,
             EntitySprite::Player,
         );
@@ -56,7 +56,7 @@ impl Map {
 
 fn enemy_entity(position: [u32; 2]) -> Entity {
     Entity::new(
-        MovementComponent::new(position, Duration::from_millis(800)),
+        PhysicsComponent::new(position, Duration::from_millis(800)),
         Team::Ai,
         EntitySprite::Enemy,
     )
