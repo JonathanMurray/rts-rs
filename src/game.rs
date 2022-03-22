@@ -1,18 +1,18 @@
 use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
-use ggez::event::{EventHandler};
+use ggez::event::EventHandler;
 use ggez::graphics::spritebatch::SpriteBatch;
 use ggez::graphics::{Color, DrawMode, DrawParam, Mesh, MeshBuilder, Rect};
+use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
-use ggez::input::keyboard::{KeyMods, KeyCode};
 use ggez::{graphics, Context, ContextBuilder, GameError};
 
 use crate::enemy_ai::EnemyPlayerAi;
 
-use rand::rngs::ThreadRng;
 use crate::entities::{Entity, EntitySprite, Team};
 use crate::images;
 use crate::maps::{Map, MapType};
+use rand::rngs::ThreadRng;
 
 const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
@@ -135,7 +135,9 @@ impl Game {
 
         let mut entity_grid = EntityGrid::new(map_dimensions);
         for entity in &entities {
-            entity_grid.set(&entity.physics.position(), true);
+            if entity.is_solid {
+                entity_grid.set(&entity.position, true);
+            }
         }
 
         let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
@@ -211,28 +213,34 @@ impl EventHandler for Game {
                 .as_ref()
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
-            if is_dead {
-                self.entity_grid.set(&e.physics.position(), false);
+            if is_dead && e.is_solid {
+                self.entity_grid.set(&e.position, false);
             }
             !is_dead
         });
 
         for entity in &mut self.entities {
-            if entity.physics.is_ready_for_movement() {
-                if let Some(next_pos) = entity.pathfind.peek_path() {
-                    let occupied = self.entity_grid.get(next_pos);
-                    if !occupied {
-                        let new_pos = entity.pathfind.advance_path();
-                        self.entity_grid.set(&entity.physics.position(), false);
-                        entity.physics.move_to(new_pos);
-                        self.entity_grid.set(&new_pos, true);
+            if let Some(movement) = &mut entity.movement {
+                if movement.is_ready() {
+                    if let Some(next_pos) = entity.pathfind.peek_path() {
+                        let occupied = self.entity_grid.get(next_pos);
+                        if !occupied {
+                            let old_pos = entity.position;
+                            let new_pos = entity.pathfind.advance_path();
+                            self.entity_grid.set(&old_pos, false);
+                            movement.set_moving(old_pos, new_pos);
+                            entity.position = new_pos;
+                            self.entity_grid.set(&new_pos, true);
+                        }
                     }
                 }
             }
         }
 
         for entity in &mut self.entities {
-            entity.physics.update(dt);
+            if let Some(movement) = entity.movement.as_mut() {
+                movement.update(dt, entity.position);
+            }
         }
 
         Ok(())
@@ -244,7 +252,12 @@ impl EventHandler for Game {
         graphics::draw(ctx, &self.grid_mesh, DrawParam::new())?;
 
         for entity in &self.entities {
-            let screen_coords = entity.physics.screen_coords();
+            let screen_coords = entity
+                .movement
+                .as_ref()
+                .map(|movement| movement.screen_coords(entity.position))
+                .unwrap_or_else(|| grid_to_screen_coords(entity.position));
+
             match &entity.sprite {
                 EntitySprite::Player => {
                     graphics::draw(ctx, &self.player_mesh, DrawParam::new().dest(screen_coords))?;
@@ -271,7 +284,6 @@ impl EventHandler for Game {
 
     fn mouse_button_down_event(&mut self, ctx: &mut Context, _button: MouseButton, x: f32, y: f32) {
         if let Some(clicked_pos) = self.screen_to_grid_coordinates([x, y]) {
-
             match self.mouse_state {
                 MouseState::Default => {
                     let player_entity = self
@@ -279,15 +291,16 @@ impl EventHandler for Game {
                         .iter_mut()
                         .find(|e| e.team == Team::Player)
                         .expect("player entity");
-                    let current_pos = &player_entity.physics.position();
-                    player_entity.pathfind.find_path(current_pos, clicked_pos);
+                    player_entity
+                        .pathfind
+                        .find_path(&player_entity.position, clicked_pos);
                 }
                 MouseState::DealingDamage => {
                     // TODO
                     if let Some(mut health) = self
                         .entities
                         .iter_mut()
-                        .filter(|e| e.physics.position() == clicked_pos)
+                        .filter(|e| e.position == clicked_pos)
                         .filter_map(|e| e.health.as_mut())
                         .next()
                     {

@@ -1,10 +1,11 @@
 use std::time::Duration;
 
-use crate::entities::{Entity, EntitySprite, HealthComponent, PhysicsComponent, Team};
+use crate::entities::{Entity, EntitySprite, HealthComponent, Team};
 use rand::Rng;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum MapType {
+    Empty,
     Small,
     LoadTest,
 }
@@ -17,22 +18,38 @@ pub struct Map {
 impl Map {
     pub fn new(map_type: MapType) -> Self {
         let player_entity = Entity::new(
-            PhysicsComponent::new([0, 0], Duration::from_millis(400)),
+            [0, 0],
+            true,
+            Some(Duration::from_millis(400)),
             Team::Player,
             EntitySprite::Player,
             None,
         );
 
-        let neutral_entity = Entity::new(
-            PhysicsComponent::new([2, 0], Duration::from_millis(1000)),
-            Team::Neutral,
-            EntitySprite::Neutral,
-            Some(HealthComponent::new(5)),
-        );
+        let mut entities = vec![];
 
-        let mut entities = vec![player_entity, neutral_entity];
+        if map_type != MapType::Empty {
+            let neutral_entity = Entity::new(
+                [2, 0],
+                false,
+                None,
+                Team::Neutral,
+                EntitySprite::Neutral,
+                Some(HealthComponent::new(5)),
+            );
+            entities.push(neutral_entity);
+        }
+
+        entities.push(player_entity);
 
         match map_type {
+            MapType::Empty => {
+                let dimensions = (8, 8);
+                Self {
+                    dimensions,
+                    entities,
+                }
+            }
             MapType::Small => {
                 let dimensions = (8, 8);
                 entities.push(enemy_entity([5, 2]));
@@ -65,7 +82,9 @@ impl Map {
 
 fn enemy_entity(position: [u32; 2]) -> Entity {
     Entity::new(
-        PhysicsComponent::new(position, Duration::from_millis(800)),
+        position,
+        true,
+        Some(Duration::from_millis(800)),
         Team::Enemy,
         EntitySprite::Enemy,
         None,

@@ -5,22 +5,28 @@ use std::cmp::Ordering;
 
 #[derive(Debug)]
 pub struct Entity {
-    pub physics: PhysicsComponent,
+    pub position: [u32; 2],
+    pub is_solid: bool,
+    pub movement: Option<MovementComponent>,
     pub team: Team,
     pub sprite: EntitySprite,
-    pub pathfind: PathfindComponent,
+    pub pathfind: PathfindComponent, //TODO
     pub health: Option<HealthComponent>,
 }
 
 impl Entity {
     pub fn new(
-        movement_component: PhysicsComponent,
+        position: [u32; 2],
+        is_solid: bool,
+        movement_cooldown: Option<Duration>,
         team: Team,
         sprite: EntitySprite,
         health: Option<HealthComponent>,
     ) -> Self {
         Self {
-            physics: movement_component,
+            position,
+            is_solid,
+            movement: movement_cooldown.map(|cooldown| MovementComponent::new(position, cooldown)),
             team,
             sprite,
             pathfind: PathfindComponent::new(),
@@ -64,6 +70,7 @@ pub struct PathfindComponent {
 }
 
 impl PathfindComponent {
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
             movement_plan: Default::default(),
@@ -100,72 +107,64 @@ impl PathfindComponent {
 }
 
 #[derive(Debug)]
-pub struct PhysicsComponent {
+pub struct MovementComponent {
     previous_position: [u32; 2],
-    position: [u32; 2],
-    movement_timer: Duration,
+    remaining: Duration,
     straight_movement_cooldown: Duration,
     diagonal_movement_cooldown: Duration,
 }
 
-impl PhysicsComponent {
+impl MovementComponent {
     pub fn new(position: [u32; 2], movement_cooldown: Duration) -> Self {
         Self {
             previous_position: position,
-            position,
-            movement_timer: Duration::ZERO,
+            remaining: Duration::ZERO,
             straight_movement_cooldown: movement_cooldown,
             diagonal_movement_cooldown: movement_cooldown.mul_f32(2_f32.sqrt()),
         }
     }
 
-    pub fn update(&mut self, dt: Duration) {
-        if self.movement_timer < dt {
-            self.movement_timer = Duration::ZERO;
+    pub fn update(&mut self, dt: Duration, position: [u32; 2]) {
+        if self.remaining < dt {
+            self.remaining = Duration::ZERO;
         } else {
-            self.movement_timer -= dt;
+            self.remaining -= dt;
         }
-        if self.movement_timer.is_zero() {
-            self.previous_position = self.position;
+        if self.remaining.is_zero() {
+            self.previous_position = position;
         }
     }
 
-    pub fn screen_coords(&self) -> [f32; 2] {
+    pub fn screen_coords(&self, position: [u32; 2]) -> [f32; 2] {
         let prev_pos = game::grid_to_screen_coords(self.previous_position);
-        let pos = game::grid_to_screen_coords(self.position);
-        let interpolation = match PhysicsComponent::direction(self.previous_position, self.position)
-        {
+        let pos = game::grid_to_screen_coords(position);
+        let progress = match MovementComponent::direction(self.previous_position, position) {
             MovementDirection::Straight => {
-                self.movement_timer.as_secs_f32() / self.straight_movement_cooldown.as_secs_f32()
+                self.remaining.as_secs_f32() / self.straight_movement_cooldown.as_secs_f32()
             }
             MovementDirection::Diagonal => {
-                self.movement_timer.as_secs_f32() / self.diagonal_movement_cooldown.as_secs_f32()
+                self.remaining.as_secs_f32() / self.diagonal_movement_cooldown.as_secs_f32()
             }
             MovementDirection::None => 0.0,
         };
 
         [
-            pos[0] - interpolation * (pos[0] - prev_pos[0]),
-            pos[1] - interpolation * (pos[1] - prev_pos[1]),
+            pos[0] - progress * (pos[0] - prev_pos[0]),
+            pos[1] - progress * (pos[1] - prev_pos[1]),
         ]
     }
 
-    pub fn is_ready_for_movement(&self) -> bool {
-        self.movement_timer.is_zero()
+    pub fn is_ready(&self) -> bool {
+        self.remaining.is_zero()
     }
 
-    pub fn move_to(&mut self, new_position: [u32; 2]) {
-        assert!(self.movement_timer.is_zero());
-        match PhysicsComponent::direction(self.position, new_position) {
-            MovementDirection::Straight => self.movement_timer = self.straight_movement_cooldown,
-            MovementDirection::Diagonal => self.movement_timer = self.diagonal_movement_cooldown,
+    pub fn set_moving(&mut self, old_position: [u32; 2], new_position: [u32; 2]) {
+        assert!(self.remaining.is_zero());
+        match MovementComponent::direction(old_position, new_position) {
+            MovementDirection::Straight => self.remaining = self.straight_movement_cooldown,
+            MovementDirection::Diagonal => self.remaining = self.diagonal_movement_cooldown,
             MovementDirection::None => {}
         }
-        self.position = new_position;
-    }
-
-    pub fn position(&self) -> [u32; 2] {
-        self.position
     }
 
     fn direction(from: [u32; 2], to: [u32; 2]) -> MovementDirection {

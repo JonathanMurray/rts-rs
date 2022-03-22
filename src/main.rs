@@ -8,6 +8,8 @@ fn main() {
     let args: Vec<String> = args.collect();
     let map_type = if args.get(1).map(String::as_str) == Some("loadtest") {
         MapType::LoadTest
+    } else if args.get(1).map(String::as_str) == Some("empty") {
+        MapType::Empty
     } else {
         MapType::Small
     };
