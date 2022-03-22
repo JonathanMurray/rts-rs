@@ -20,7 +20,7 @@ impl Map {
         let player_entity_1 = Entity::new(
             [0, 0],
             true,
-            Some(Duration::from_millis(400)),
+            Some(Duration::from_millis(600)),
             Team::Player,
             EntitySprite::Player,
             None,
@@ -30,7 +30,7 @@ impl Map {
             true,
             Some(Duration::from_millis(400)),
             Team::Player,
-            EntitySprite::Player,
+            EntitySprite::Player2,
             None,
         );
 

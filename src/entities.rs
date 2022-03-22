@@ -70,6 +70,7 @@ pub enum Team {
 #[derive(Debug)]
 pub enum EntitySprite {
     Player,
+    Player2,
     Enemy,
     Neutral,
 }

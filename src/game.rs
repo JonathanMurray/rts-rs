@@ -201,7 +201,7 @@ impl EventHandler for Game {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, COLOR_BG);
 
-        graphics::draw(ctx, &self.assets.grid_mesh, DrawParam::new())?;
+        graphics::draw(ctx, &self.assets.grid, DrawParam::new())?;
 
         for entity in &self.entities {
             let screen_coords = entity
@@ -213,7 +213,7 @@ impl EventHandler for Game {
             if self.selected_entity.as_ref() == Some(&entity.id) {
                 graphics::draw(
                     ctx,
-                    &self.assets.selection_mesh,
+                    &self.assets.selection,
                     DrawParam::new().dest(screen_coords),
                 )?;
             }

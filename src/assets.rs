@@ -9,11 +9,12 @@ use crate::images;
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 
 pub struct Assets {
-    pub grid_mesh: Mesh,
-    player_mesh: Mesh,
-    pub selection_mesh: Mesh,
-    neutral_mesh: Mesh,
-    enemy_sprite_batch: SpriteBatch,
+    pub grid: Mesh,
+    player_entity: Mesh,
+    player_entity_2: Mesh,
+    pub selection: Mesh,
+    neutral_entity: Mesh,
+    enemy_entity_batch: SpriteBatch,
 }
 
 impl Assets {
@@ -23,35 +24,30 @@ impl Assets {
         sprite: &EntitySprite,
         screen_coords: [f32; 2],
     ) -> GameResult {
+        let param = DrawParam::new().dest(screen_coords);
         match sprite {
-            EntitySprite::Player => {
-                self.player_mesh
-                    .draw(ctx, DrawParam::new().dest(screen_coords))?;
-            }
-            EntitySprite::Neutral => {
-                self.neutral_mesh
-                    .draw(ctx, DrawParam::new().dest(screen_coords))?;
-            }
+            EntitySprite::Player => self.player_entity.draw(ctx, param)?,
+            EntitySprite::Player2 => self.player_entity_2.draw(ctx, param)?,
+            EntitySprite::Neutral => self.neutral_entity.draw(ctx, param)?,
             EntitySprite::Enemy => {
-                self.enemy_sprite_batch
-                    .add(DrawParam::new().dest(screen_coords));
-            }
+                self.enemy_entity_batch.add(param);
+            },
         };
         Ok(())
     }
 
     pub fn flush_entity_sprite_batch(&mut self, ctx: &mut Context) -> GameResult {
-        self.enemy_sprite_batch.draw(ctx, DrawParam::default())?;
-        self.enemy_sprite_batch.clear();
+        self.enemy_entity_batch.draw(ctx, DrawParam::default())?;
+        self.enemy_entity_batch.clear();
         Ok(())
     }
 }
 
 pub fn create_assets(ctx: &mut Context, map_dimensions: (u32, u32)) -> Result<Assets, GameError> {
-    let grid_mesh = build_grid(ctx, map_dimensions)?;
+    let grid = build_grid(ctx, map_dimensions)?;
 
     let player_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.8);
-    let player_mesh = MeshBuilder::new()
+    let player_entity = MeshBuilder::new()
         .rectangle(
             DrawMode::fill(),
             Rect::new(
@@ -63,7 +59,20 @@ pub fn create_assets(ctx: &mut Context, map_dimensions: (u32, u32)) -> Result<As
             Color::new(0.6, 0.8, 0.5, 1.0),
         )?
         .build(ctx)?;
-    let selection_mesh = MeshBuilder::new()
+    let player_entity_2 = MeshBuilder::new()
+        .rectangle(
+            DrawMode::fill(),
+            Rect::new(
+                (CELL_PIXEL_SIZE.0 - player_size.0) / 2.0,
+                (CELL_PIXEL_SIZE.1 - player_size.1) / 2.0,
+                player_size.0,
+                player_size.1,
+            ),
+            Color::new(0.7, 0.5, 0.8, 1.0),
+        )?
+        .build(ctx)?;
+
+    let selection = MeshBuilder::new()
         .rectangle(
             DrawMode::stroke(2.0),
             Rect::new(-1.0, -1.0, CELL_PIXEL_SIZE.0 + 2.0, CELL_PIXEL_SIZE.1 + 2.0),
@@ -72,7 +81,7 @@ pub fn create_assets(ctx: &mut Context, map_dimensions: (u32, u32)) -> Result<As
         .build(ctx)?;
 
     let neutral_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.6);
-    let neutral_mesh = MeshBuilder::new()
+    let neutral_entity = MeshBuilder::new()
         .rectangle(
             DrawMode::fill(),
             Rect::new(
@@ -94,13 +103,14 @@ pub fn create_assets(ctx: &mut Context, map_dimensions: (u32, u32)) -> Result<As
             Color::new(0.8, 0.4, 0.4, 1.0),
         )?
         .build(ctx)?;
-    let enemy_sprite_batch = SpriteBatch::new(images::mesh_into_image(ctx, enemy_mesh)?);
+    let enemy_entity_batch = SpriteBatch::new(images::mesh_into_image(ctx, enemy_mesh)?);
     let assets = Assets {
-        grid_mesh,
-        player_mesh,
-        selection_mesh,
-        neutral_mesh,
-        enemy_sprite_batch,
+        grid,
+        player_entity,
+        player_entity_2,
+        selection,
+        neutral_entity,
+        enemy_entity_batch,
     };
     Ok(assets)
 }
