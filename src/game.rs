@@ -1,14 +1,15 @@
 use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
-use ggez::event::EventHandler;
+use ggez::event::{EventHandler};
 use ggez::graphics::spritebatch::SpriteBatch;
 use ggez::graphics::{Color, DrawMode, DrawParam, Mesh, MeshBuilder, Rect};
-use ggez::input::mouse::MouseButton;
+use ggez::input::mouse::{self, CursorIcon, MouseButton};
+use ggez::input::keyboard::{KeyMods, KeyCode};
 use ggez::{graphics, Context, ContextBuilder, GameError};
 
-use rand::rngs::ThreadRng;
-
 use crate::enemy_ai::EnemyPlayerAi;
+
+use rand::rngs::ThreadRng;
 use crate::entities::{Entity, EntitySprite, Team};
 use crate::images;
 use crate::maps::{Map, MapType};
@@ -63,6 +64,11 @@ impl EntityGrid {
     }
 }
 
+enum MouseState {
+    Default,
+    DealingDamage,
+}
+
 struct Game {
     grid_mesh: Mesh,
     player_mesh: Mesh,
@@ -72,6 +78,7 @@ struct Game {
     entity_grid: EntityGrid,
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
+    mouse_state: MouseState,
 }
 
 impl Game {
@@ -132,6 +139,7 @@ impl Game {
         }
 
         let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
+        let mouse_state = MouseState::Default;
 
         Ok(Self {
             grid_mesh,
@@ -142,6 +150,7 @@ impl Game {
             entity_grid,
             enemy_player_ai,
             rng,
+            mouse_state,
         })
     }
 
@@ -260,29 +269,50 @@ impl EventHandler for Game {
         Ok(())
     }
 
-    fn mouse_button_down_event(&mut self, _ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+    fn mouse_button_down_event(&mut self, ctx: &mut Context, _button: MouseButton, x: f32, y: f32) {
         if let Some(clicked_pos) = self.screen_to_grid_coordinates([x, y]) {
-            if button == MouseButton::Right {
-                // TODO
-                if let Some(mut health) = self
-                    .entities
-                    .iter_mut()
-                    .filter(|e| e.physics.position() == clicked_pos)
-                    .filter_map(|e| e.health.as_mut())
-                    .next()
-                {
-                    health.current -= 1;
-                    println!("Reduced health down to {}/{}", health.current, health.max)
+
+            match self.mouse_state {
+                MouseState::Default => {
+                    let player_entity = self
+                        .entities
+                        .iter_mut()
+                        .find(|e| e.team == Team::Player)
+                        .expect("player entity");
+                    let current_pos = &player_entity.physics.position();
+                    player_entity.pathfind.find_path(current_pos, clicked_pos);
                 }
-            } else {
-                let player_entity = self
-                    .entities
-                    .iter_mut()
-                    .find(|e| e.team == Team::Player)
-                    .expect("player entity");
-                let current_pos = &player_entity.physics.position();
-                player_entity.pathfind.find_path(current_pos, clicked_pos);
+                MouseState::DealingDamage => {
+                    // TODO
+                    if let Some(mut health) = self
+                        .entities
+                        .iter_mut()
+                        .filter(|e| e.physics.position() == clicked_pos)
+                        .filter_map(|e| e.health.as_mut())
+                        .next()
+                    {
+                        health.current -= 1;
+                        println!("Reduced health down to {}/{}", health.current, health.max)
+                    }
+                    self.mouse_state = MouseState::Default;
+                    mouse::set_cursor_type(ctx, CursorIcon::Default);
+                }
             }
+        }
+    }
+
+    fn key_down_event(
+        &mut self,
+        ctx: &mut Context,
+        keycode: KeyCode,
+        _keymods: KeyMods,
+        _repeat: bool,
+    ) {
+        if keycode == KeyCode::Escape {
+            ggez::event::quit(ctx);
+        } else {
+            self.mouse_state = MouseState::DealingDamage;
+            mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
         }
     }
 }
