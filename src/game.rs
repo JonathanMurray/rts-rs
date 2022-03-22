@@ -9,7 +9,7 @@ use ggez::{graphics, Context, ContextBuilder, GameError};
 use rand::rngs::ThreadRng;
 
 use crate::enemy_ai::EnemyPlayerAi;
-use crate::entities::{Entity, Team};
+use crate::entities::{Entity, EntitySprite, Team};
 use crate::images;
 use crate::maps::{Map, MapType};
 
@@ -66,6 +66,7 @@ impl EntityGrid {
 struct Game {
     grid_mesh: Mesh,
     player_mesh: Mesh,
+    neutral_mesh: Mesh,
     enemy_sprite_batch: SpriteBatch,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
@@ -96,6 +97,20 @@ impl Game {
             )?
             .build(ctx)?;
 
+        let neutral_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.6);
+        let neutral_mesh = MeshBuilder::new()
+            .rectangle(
+                DrawMode::fill(),
+                Rect::new(
+                    (CELL_PIXEL_SIZE.0 - player_size.0) / 2.0,
+                    (CELL_PIXEL_SIZE.1 - player_size.1) / 2.0,
+                    neutral_size.0,
+                    neutral_size.1,
+                ),
+                Color::new(0.8, 0.6, 0.2, 1.0),
+            )?
+            .build(ctx)?;
+
         let enemy_mesh = MeshBuilder::new()
             .circle(
                 DrawMode::fill(),
@@ -121,6 +136,7 @@ impl Game {
         Ok(Self {
             grid_mesh,
             player_mesh,
+            neutral_mesh,
             enemy_sprite_batch,
             entities,
             entity_grid,
@@ -179,6 +195,19 @@ impl EventHandler for Game {
         self.enemy_player_ai
             .run(dt, &mut self.entities[..], &mut self.rng);
 
+        // Remove dead entities
+        self.entities.retain(|e| {
+            let is_dead = e
+                .health
+                .as_ref()
+                .map(|health| health.current == 0)
+                .unwrap_or(false);
+            if is_dead {
+                self.entity_grid.set(&e.physics.position(), false);
+            }
+            !is_dead
+        });
+
         for entity in &mut self.entities {
             if entity.physics.is_ready_for_movement() {
                 if let Some(next_pos) = entity.pathfind.peek_path() {
@@ -207,13 +236,20 @@ impl EventHandler for Game {
 
         for entity in &self.entities {
             let screen_coords = entity.physics.screen_coords();
-            match &entity.team {
-                Team::Player => {
+            match &entity.sprite {
+                EntitySprite::Player => {
                     graphics::draw(ctx, &self.player_mesh, DrawParam::new().dest(screen_coords))?;
                 }
-                Team::Ai => {
+                EntitySprite::Enemy => {
                     self.enemy_sprite_batch
                         .add(DrawParam::new().dest(screen_coords));
+                }
+                EntitySprite::Neutral => {
+                    graphics::draw(
+                        ctx,
+                        &self.neutral_mesh,
+                        DrawParam::new().dest(screen_coords),
+                    )?;
                 }
             }
         }
@@ -224,21 +260,29 @@ impl EventHandler for Game {
         Ok(())
     }
 
-    fn mouse_button_down_event(
-        &mut self,
-        _ctx: &mut Context,
-        _button: MouseButton,
-        x: f32,
-        y: f32,
-    ) {
+    fn mouse_button_down_event(&mut self, _ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
         if let Some(clicked_pos) = self.screen_to_grid_coordinates([x, y]) {
-            let player_entity = self
-                .entities
-                .iter_mut()
-                .find(|e| e.team == Team::Player)
-                .expect("player entity");
-            let current_pos = &player_entity.physics.position();
-            player_entity.pathfind.find_path(current_pos, clicked_pos);
+            if button == MouseButton::Right {
+                // TODO
+                if let Some(mut health) = self
+                    .entities
+                    .iter_mut()
+                    .filter(|e| e.physics.position() == clicked_pos)
+                    .filter_map(|e| e.health.as_mut())
+                    .next()
+                {
+                    health.current -= 1;
+                    println!("Reduced health down to {}/{}", health.current, health.max)
+                }
+            } else {
+                let player_entity = self
+                    .entities
+                    .iter_mut()
+                    .find(|e| e.team == Team::Player)
+                    .expect("player entity");
+                let current_pos = &player_entity.physics.position();
+                player_entity.pathfind.find_path(current_pos, clicked_pos);
+            }
         }
     }
 }

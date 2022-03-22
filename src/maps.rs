@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::entities::{Entity, EntitySprite, PhysicsComponent, Team};
+use crate::entities::{Entity, EntitySprite, HealthComponent, PhysicsComponent, Team};
 use rand::Rng;
 
 #[derive(Debug)]
@@ -20,8 +20,17 @@ impl Map {
             PhysicsComponent::new([0, 0], Duration::from_millis(400)),
             Team::Player,
             EntitySprite::Player,
+            None,
         );
-        let mut entities = vec![player_entity];
+
+        let neutral_entity = Entity::new(
+            PhysicsComponent::new([2, 0], Duration::from_millis(1000)),
+            Team::Neutral,
+            EntitySprite::Neutral,
+            Some(HealthComponent::new(5)),
+        );
+
+        let mut entities = vec![player_entity, neutral_entity];
 
         match map_type {
             MapType::Small => {
@@ -57,7 +66,8 @@ impl Map {
 fn enemy_entity(position: [u32; 2]) -> Entity {
     Entity::new(
         PhysicsComponent::new(position, Duration::from_millis(800)),
-        Team::Ai,
+        Team::Enemy,
         EntitySprite::Enemy,
+        None,
     )
 }

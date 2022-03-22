@@ -24,7 +24,7 @@ impl EnemyPlayerAi {
         if self.timer_s <= 0.0 {
             self.timer_s = 2.0;
             for enemy in entities {
-                if enemy.team == Team::Ai && rng.gen_bool(0.7) {
+                if enemy.team == Team::Enemy && rng.gen_bool(0.7) {
                     let x: u32 = rng.gen_range(0..self.map_dimensions.0);
                     let y: u32 = rng.gen_range(0..self.map_dimensions.1);
                     let current_pos = &enemy.physics.position();

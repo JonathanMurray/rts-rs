@@ -9,15 +9,37 @@ pub struct Entity {
     pub team: Team,
     pub sprite: EntitySprite,
     pub pathfind: PathfindComponent,
+    pub health: Option<HealthComponent>,
 }
 
 impl Entity {
-    pub fn new(movement_component: PhysicsComponent, team: Team, sprite: EntitySprite) -> Self {
+    pub fn new(
+        movement_component: PhysicsComponent,
+        team: Team,
+        sprite: EntitySprite,
+        health: Option<HealthComponent>,
+    ) -> Self {
         Self {
             physics: movement_component,
             team,
             sprite,
             pathfind: PathfindComponent::new(),
+            health,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct HealthComponent {
+    pub max: u32,
+    pub current: u32,
+}
+
+impl HealthComponent {
+    pub fn new(max_health: u32) -> Self {
+        Self {
+            max: max_health,
+            current: max_health,
         }
     }
 }
@@ -25,13 +47,15 @@ impl Entity {
 #[derive(Debug, PartialEq)]
 pub enum Team {
     Player,
-    Ai,
+    Enemy,
+    Neutral,
 }
 
 #[derive(Debug)]
 pub enum EntitySprite {
     Player,
     Enemy,
+    Neutral,
 }
 
 #[derive(Debug)]
