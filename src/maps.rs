@@ -87,6 +87,6 @@ fn enemy_entity(position: [u32; 2]) -> Entity {
         Some(Duration::from_millis(800)),
         Team::Enemy,
         EntitySprite::Enemy,
-        None,
+        Some(HealthComponent::new(1)),
     )
 }
