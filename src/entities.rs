@@ -30,7 +30,7 @@ impl Entity {
         movement_cooldown: Option<Duration>,
         team: Team,
         sprite: EntitySprite,
-        health: Option<HealthComponent>,
+        max_health: Option<u32>,
         training_action: Option<TrainingActionComponent>,
     ) -> Self {
         // Make sure all entities have unique IDs
@@ -39,6 +39,7 @@ impl Entity {
             sub_cell_movement: SubCellMovement::new(position, cooldown),
             pathfinder: Pathfinder::new(),
         });
+        let health = max_health.map(|max_health| HealthComponent::new(max_health));
         Self {
             id,
             name,

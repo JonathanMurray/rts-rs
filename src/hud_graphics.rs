@@ -24,13 +24,23 @@ impl HudGraphics {
     ) -> GameResult {
         let x = 0.0;
         let name_y = 8.0;
-        let training_y = 90.0;
+        let health_y = 90.0;
+        let training_y = 140.0;
 
         let small_font = 30.0;
         let large_font = 40.0;
 
         if let Some(selected_entity) = selected_entity {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
+
+            if let Some(health) = &selected_entity.health {
+                let health = format!(
+                    "HP: [{}{}]",
+                    "=".repeat(health.current as usize),
+                    " ".repeat((health.max - health.current) as usize)
+                );
+                self.draw_text(ctx, [x, health_y], health, small_font)?;
+            }
 
             if let Some(training_action) = &selected_entity.training_action {
                 if let Some(progress) = training_action.progress() {

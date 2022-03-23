@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::entities::{Entity, EntitySprite, HealthComponent, Team, TrainingActionComponent};
+use crate::entities::{Entity, EntitySprite, Team, TrainingActionComponent};
 use rand::Rng;
 
 #[derive(Debug, PartialEq)]
@@ -25,7 +25,7 @@ impl Map {
             None,
             Team::Player,
             EntitySprite::Player2,
-            None,
+            Some(3),
             Some(TrainingActionComponent::new()),
         );
 
@@ -39,7 +39,7 @@ impl Map {
                 None,
                 Team::Neutral,
                 EntitySprite::Neutral,
-                Some(HealthComponent::new(5)),
+                Some(5),
                 None,
             );
             entities.push(neutral_entity);
@@ -94,7 +94,7 @@ fn create_enemy_entity(position: [u32; 2]) -> Entity {
         Some(Duration::from_millis(800)),
         Team::Enemy,
         EntitySprite::Enemy,
-        Some(HealthComponent::new(1)),
+        Some(1),
         None,
     )
 }
@@ -107,7 +107,7 @@ pub fn create_player_entity_1(position: [u32; 2]) -> Entity {
         Some(Duration::from_millis(600)),
         Team::Player,
         EntitySprite::Player,
-        None,
+        Some(2),
         None,
     )
 }
