@@ -213,9 +213,15 @@ impl EventHandler for Game {
                 .as_ref()
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
-            if is_dead && e.is_solid {
-                self.entity_grid.set(&e.position, false);
+            if is_dead {
+                if e.is_solid {
+                    self.entity_grid.set(&e.position, false);
+                }
+                if self.player_state.selected_entity_id == Some(e.id) {
+                    self.player_state.selected_entity_id = None;
+                }
             }
+
             !is_dead
         });
 
@@ -369,6 +375,13 @@ impl EventHandler for Game {
                         }
                     } else {
                         println!("Selected entity has no such action")
+                    }
+                }
+            }
+            KeyCode::X => {
+                if let Some(player_entity) = self.selected_entity_mut() {
+                    if let Some(health) = &mut player_entity.health {
+                        health.current = health.current.saturating_sub(1);
                     }
                 }
             }
