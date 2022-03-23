@@ -19,6 +19,7 @@ impl Map {
     pub fn new(map_type: MapType) -> Self {
         let player_entity_1 = create_player_entity_1([0, 0]);
         let player_entity_2 = Entity::new(
+            "Player building",
             [1, 0],
             true,
             None,
@@ -32,6 +33,7 @@ impl Map {
 
         if map_type != MapType::Empty {
             let neutral_entity = Entity::new(
+                "Neutral entity",
                 [2, 0],
                 false,
                 None,
@@ -86,6 +88,7 @@ impl Map {
 
 fn create_enemy_entity(position: [u32; 2]) -> Entity {
     Entity::new(
+        "Enemy unit",
         position,
         true,
         Some(Duration::from_millis(800)),
@@ -98,6 +101,7 @@ fn create_enemy_entity(position: [u32; 2]) -> Entity {
 
 pub fn create_player_entity_1(position: [u32; 2]) -> Entity {
     Entity::new(
+        "Player unit",
         position,
         true,
         Some(Duration::from_millis(600)),

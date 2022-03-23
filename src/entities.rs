@@ -12,6 +12,7 @@ pub struct EntityId(usize);
 #[derive(Debug)]
 pub struct Entity {
     pub id: EntityId,
+    pub name: &'static str,
     pub position: [u32; 2],
     pub is_solid: bool,
     pub movement: Option<MovementComponent>,
@@ -23,6 +24,7 @@ pub struct Entity {
 
 impl Entity {
     pub fn new(
+        name: &'static str,
         position: [u32; 2],
         is_solid: bool,
         movement_cooldown: Option<Duration>,
@@ -39,6 +41,7 @@ impl Entity {
         });
         Self {
             id,
+            name,
             position,
             is_solid,
             movement,
