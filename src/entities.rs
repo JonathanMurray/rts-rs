@@ -204,38 +204,47 @@ enum MovementDirection {
 
 #[derive(Debug)]
 pub struct TrainingActionComponent {
-    remaining: Option<Duration>,
+    remaining_duration: Option<Duration>,
+    total_duration: Duration,
 }
 
 impl TrainingActionComponent {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
-        Self { remaining: None }
+        Self {
+            remaining_duration: None,
+            total_duration: Duration::from_secs(3),
+        }
     }
 
     pub fn perform(&mut self) {
-        if self.remaining.is_some() {
+        if self.remaining_duration.is_some() {
             println!("Training already in progress!");
         } else {
-            self.remaining = Some(Duration::from_secs(5));
+            self.remaining_duration = Some(self.total_duration);
             println!("Starting training...");
         }
     }
 
     pub fn update(&mut self, dt: Duration) -> TrainingUpdateStatus {
-        match self.remaining.take() {
+        match self.remaining_duration.take() {
             Some(remaining) => {
                 let remaining = remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
                 if remaining.is_zero() {
                     println!("Training done!");
                     TrainingUpdateStatus::Done
                 } else {
-                    self.remaining = Some(remaining);
+                    self.remaining_duration = Some(remaining);
                     TrainingUpdateStatus::Ongoing
                 }
             }
             None => TrainingUpdateStatus::NothingOngoing,
         }
+    }
+
+    pub fn progress(&self) -> Option<f32> {
+        self.remaining_duration
+            .map(|remaining| 1.0 - remaining.as_secs_f32() / self.total_duration.as_secs_f32())
     }
 }
 

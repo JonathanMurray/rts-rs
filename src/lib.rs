@@ -7,4 +7,5 @@ pub mod game;
 mod assets;
 mod enemy_ai;
 mod entities;
+mod hud_graphics;
 mod images;

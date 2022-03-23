@@ -1,7 +1,7 @@
 use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event::EventHandler;
-use ggez::graphics::{Color, DrawParam, Font, Text};
+use ggez::graphics::{Color, DrawParam, Font};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
@@ -12,6 +12,7 @@ use crate::assets::{self, Assets};
 use crate::data::{self, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{Entity, EntityId, Team, TrainingUpdateStatus};
+use crate::hud_graphics::HudGraphics;
 use std::cmp::min;
 
 const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -74,8 +75,8 @@ struct PlayerState {
 }
 
 struct Game {
-    font: Font,
     assets: Assets,
+    hud: HudGraphics,
     player_state: PlayerState,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
@@ -112,9 +113,15 @@ impl Game {
             mouse_state: MouseState::Default,
         };
 
+        let hud_pos = [
+            WORLD_PIXEL_OFFSET.0 + entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0 + 40.0,
+            25.0,
+        ];
+        let hud = HudGraphics::new(hud_pos, font);
+
         Ok(Self {
-            font,
             assets,
+            hud,
             player_state,
             entities,
             entity_grid,
@@ -138,27 +145,16 @@ impl Game {
         }
     }
 
-    fn draw_debug_ui(&self, ctx: &mut Context) -> GameResult {
-        let mut lines = vec![];
-        lines.push(format!(
-            "Selected: {:?}",
-            self.player_state.selected_entity_id
-        ));
-        lines.push(format!("Total entities: {:?}", self.entities.len()));
-
-        let x = WORLD_PIXEL_OFFSET.0
-            + self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
-            + 40.0;
-        let mut y = 25.0;
-        for line in lines {
-            let text = Text::new((line, self.font, 25.0));
-            graphics::draw(ctx, &text, DrawParam::new().dest([x, y]))?;
-            y += 25.0;
-        }
-        Ok(())
+    fn selected_entity(&self) -> Option<&Entity> {
+        self.player_state.selected_entity_id.map(|id| {
+            self.entities
+                .iter()
+                .find(|e| e.id == id)
+                .expect("selected entity must exist")
+        })
     }
 
-    fn selected_entity(&mut self) -> Option<&mut Entity> {
+    fn selected_entity_mut(&mut self) -> Option<&mut Entity> {
         self.player_state.selected_entity_id.map(|id| {
             self.entities
                 .iter_mut()
@@ -168,8 +164,8 @@ impl Game {
     }
 
     fn add_entity(&mut self, target_position: [u32; 2]) -> Option<[u32; 2]> {
-        let left = target_position[0].checked_sub(1).unwrap_or(0);
-        let top = target_position[1].checked_sub(1).unwrap_or(0);
+        let left = target_position[0].saturating_sub(1);
+        let top = target_position[1].saturating_sub(1);
         let right = min(
             target_position[0] + 1,
             self.entity_grid.map_dimensions.0 - 1,
@@ -283,7 +279,9 @@ impl EventHandler for Game {
         }
         self.assets.flush_entity_sprite_batch(ctx)?;
 
-        self.draw_debug_ui(ctx)?;
+        let num_entities = self.entities.len();
+        let selected_entity = self.selected_entity();
+        self.hud.draw(ctx, selected_entity, num_entities)?;
 
         graphics::present(ctx)?;
         Ok(())
@@ -303,18 +301,16 @@ impl EventHandler for Game {
                             "Selected entity index: {:?}",
                             self.player_state.selected_entity_id
                         );
-                    } else {
-                        if let Some(player_entity) = self.selected_entity() {
-                            if let Some(movement) = player_entity.movement.as_mut() {
-                                movement
-                                    .pathfinder
-                                    .find_path(&player_entity.position, clicked_pos);
-                            } else {
-                                println!("Selected entity is immobile")
-                            }
+                    } else if let Some(player_entity) = self.selected_entity_mut() {
+                        if let Some(movement) = player_entity.movement.as_mut() {
+                            movement
+                                .pathfinder
+                                .find_path(&player_entity.position, clicked_pos);
                         } else {
-                            println!("No entity is selected");
+                            println!("Selected entity is immobile")
                         }
+                    } else {
+                        println!("No entity is selected");
                     }
                 }
                 MouseState::DealingDamage => {
@@ -350,7 +346,7 @@ impl EventHandler for Game {
                 mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
             }
             KeyCode::B => {
-                if let Some(player_entity) = self.selected_entity() {
+                if let Some(player_entity) = self.selected_entity_mut() {
                     if let Some(training_action) = &mut player_entity.training_action {
                         training_action.perform();
                     } else {
