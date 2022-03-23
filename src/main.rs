@@ -1,7 +1,7 @@
 extern crate rts_rs;
 
+use rts_rs::data::MapType;
 use rts_rs::game;
-use rts_rs::maps::MapType;
 
 fn main() {
     let args = std::env::args();

@@ -18,6 +18,7 @@ pub struct Entity {
     pub team: Team,
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
+    pub training_action: Option<TrainingActionComponent>,
 }
 
 impl Entity {
@@ -28,6 +29,7 @@ impl Entity {
         team: Team,
         sprite: EntitySprite,
         health: Option<HealthComponent>,
+        training_action: Option<TrainingActionComponent>,
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
@@ -43,6 +45,7 @@ impl Entity {
             team,
             sprite,
             health,
+            training_action,
         }
     }
 }
@@ -144,11 +147,7 @@ impl SubCellMovement {
     }
 
     pub fn update(&mut self, dt: Duration, position: [u32; 2]) {
-        if self.remaining < dt {
-            self.remaining = Duration::ZERO;
-        } else {
-            self.remaining -= dt;
-        }
+        self.remaining = self.remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
         if self.remaining.is_zero() {
             self.previous_position = position;
         }
@@ -201,4 +200,48 @@ enum MovementDirection {
     Straight,
     Diagonal,
     None,
+}
+
+#[derive(Debug)]
+pub struct TrainingActionComponent {
+    remaining: Option<Duration>,
+}
+
+impl TrainingActionComponent {
+    #[allow(clippy::new_without_default)]
+    pub fn new() -> Self {
+        Self { remaining: None }
+    }
+
+    pub fn perform(&mut self) {
+        if self.remaining.is_some() {
+            println!("Training already in progress!");
+        } else {
+            self.remaining = Some(Duration::from_secs(5));
+            println!("Starting training...");
+        }
+    }
+
+    pub fn update(&mut self, dt: Duration) -> TrainingUpdateStatus {
+        match self.remaining.take() {
+            Some(remaining) => {
+                let remaining = remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
+                if remaining.is_zero() {
+                    println!("Training done!");
+                    TrainingUpdateStatus::Done
+                } else {
+                    self.remaining = Some(remaining);
+                    TrainingUpdateStatus::Ongoing
+                }
+            }
+            None => TrainingUpdateStatus::NothingOngoing,
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum TrainingUpdateStatus {
+    NothingOngoing,
+    Ongoing,
+    Done,
 }

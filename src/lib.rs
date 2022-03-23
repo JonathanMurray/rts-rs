@@ -1,8 +1,8 @@
 extern crate ggez;
 extern crate rand;
 
+pub mod data;
 pub mod game;
-pub mod maps;
 
 mod assets;
 mod enemy_ai;

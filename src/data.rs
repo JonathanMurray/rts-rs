@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::entities::{Entity, EntitySprite, HealthComponent, Team};
+use crate::entities::{Entity, EntitySprite, HealthComponent, Team, TrainingActionComponent};
 use rand::Rng;
 
 #[derive(Debug, PartialEq)]
@@ -17,21 +17,15 @@ pub struct Map {
 
 impl Map {
     pub fn new(map_type: MapType) -> Self {
-        let player_entity_1 = Entity::new(
-            [0, 0],
-            true,
-            Some(Duration::from_millis(600)),
-            Team::Player,
-            EntitySprite::Player,
-            None,
-        );
+        let player_entity_1 = create_player_entity_1([0, 0]);
         let player_entity_2 = Entity::new(
             [1, 0],
             true,
-            Some(Duration::from_millis(400)),
+            None,
             Team::Player,
             EntitySprite::Player2,
             None,
+            Some(TrainingActionComponent::new()),
         );
 
         let mut entities = vec![];
@@ -44,6 +38,7 @@ impl Map {
                 Team::Neutral,
                 EntitySprite::Neutral,
                 Some(HealthComponent::new(5)),
+                None,
             );
             entities.push(neutral_entity);
         }
@@ -61,10 +56,10 @@ impl Map {
             }
             MapType::Small => {
                 let dimensions = (8, 8);
-                entities.push(enemy_entity([5, 2]));
-                entities.push(enemy_entity([3, 0]));
-                entities.push(enemy_entity([0, 4]));
-                entities.push(enemy_entity([3, 4]));
+                entities.push(create_enemy_entity([5, 2]));
+                entities.push(create_enemy_entity([3, 0]));
+                entities.push(create_enemy_entity([0, 4]));
+                entities.push(create_enemy_entity([3, 4]));
                 Self {
                     dimensions,
                     entities,
@@ -76,7 +71,7 @@ impl Map {
                 for y in 1..dimensions.1 {
                     for x in 0..dimensions.0 {
                         if rng.gen_bool(0.8) {
-                            entities.push(enemy_entity([x, y]));
+                            entities.push(create_enemy_entity([x, y]));
                         }
                     }
                 }
@@ -89,7 +84,7 @@ impl Map {
     }
 }
 
-fn enemy_entity(position: [u32; 2]) -> Entity {
+fn create_enemy_entity(position: [u32; 2]) -> Entity {
     Entity::new(
         position,
         true,
@@ -97,5 +92,18 @@ fn enemy_entity(position: [u32; 2]) -> Entity {
         Team::Enemy,
         EntitySprite::Enemy,
         Some(HealthComponent::new(1)),
+        None,
+    )
+}
+
+pub fn create_player_entity_1(position: [u32; 2]) -> Entity {
+    Entity::new(
+        position,
+        true,
+        Some(Duration::from_millis(600)),
+        Team::Player,
+        EntitySprite::Player,
+        None,
+        None,
     )
 }
