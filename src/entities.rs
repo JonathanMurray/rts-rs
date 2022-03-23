@@ -221,12 +221,12 @@ impl TrainingActionComponent {
         }
     }
 
-    pub fn perform(&mut self) {
+    pub fn perform(&mut self) -> TrainingPerformStatus {
         if self.remaining_duration.is_some() {
-            println!("Training already in progress!");
+            TrainingPerformStatus::AlreadyOngoing
         } else {
             self.remaining_duration = Some(self.total_duration);
-            println!("Starting training...");
+            TrainingPerformStatus::NewTrainingStarted
         }
     }
 
@@ -257,4 +257,10 @@ pub enum TrainingUpdateStatus {
     NothingOngoing,
     Ongoing,
     Done,
+}
+
+#[derive(PartialEq)]
+pub enum TrainingPerformStatus {
+    NewTrainingStarted,
+    AlreadyOngoing,
 }

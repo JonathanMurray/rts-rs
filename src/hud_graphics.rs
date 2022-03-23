@@ -2,6 +2,7 @@ use ggez::graphics::{self, DrawParam, Font, Text};
 use ggez::{Context, GameResult};
 
 use crate::entities::Entity;
+use crate::game::TeamState;
 
 pub struct HudGraphics {
     position_on_screen: [f32; 2],
@@ -19,16 +20,24 @@ impl HudGraphics {
     pub fn draw(
         &self,
         ctx: &mut Context,
+        player_team_state: &TeamState,
         selected_entity: Option<&Entity>,
-        _num_entities: usize,
     ) -> GameResult {
         let x = 0.0;
-        let name_y = 8.0;
-        let health_y = 90.0;
-        let training_y = 140.0;
+        let resources_y = 5.0;
+        let name_y = 48.0;
+        let health_y = 130.0;
+        let training_y = 180.0;
 
         let small_font = 30.0;
         let large_font = 40.0;
+
+        self.draw_text(
+            ctx,
+            [x, resources_y],
+            format!("Resources: {}", player_team_state.resources),
+            small_font,
+        )?;
 
         if let Some(selected_entity) = selected_entity {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;

@@ -11,7 +11,7 @@ use rand::rngs::ThreadRng;
 use crate::assets::{self, Assets};
 use crate::data::{self, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
-use crate::entities::{Entity, EntityId, Team, TrainingUpdateStatus};
+use crate::entities::{Entity, EntityId, Team, TrainingPerformStatus, TrainingUpdateStatus};
 use crate::hud_graphics::HudGraphics;
 use std::cmp::min;
 
@@ -74,9 +74,14 @@ struct PlayerState {
     mouse_state: MouseState,
 }
 
+pub struct TeamState {
+    pub resources: u32,
+}
+
 struct Game {
     assets: Assets,
     hud: HudGraphics,
+    player_team_state: TeamState,
     player_state: PlayerState,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
@@ -108,6 +113,8 @@ impl Game {
 
         let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
 
+        let player_team_state = TeamState { resources: 5 };
+
         let player_state = PlayerState {
             selected_entity_id: None,
             mouse_state: MouseState::Default,
@@ -122,6 +129,7 @@ impl Game {
         Ok(Self {
             assets,
             hud,
+            player_team_state,
             player_state,
             entities,
             entity_grid,
@@ -279,9 +287,9 @@ impl EventHandler for Game {
         }
         self.assets.flush_entity_sprite_batch(ctx)?;
 
-        let num_entities = self.entities.len();
         let selected_entity = self.selected_entity();
-        self.hud.draw(ctx, selected_entity, num_entities)?;
+        self.hud
+            .draw(ctx, &self.player_team_state, selected_entity)?;
 
         graphics::present(ctx)?;
         Ok(())
@@ -346,9 +354,19 @@ impl EventHandler for Game {
                 mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
             }
             KeyCode::B => {
+                let resources = self.player_team_state.resources;
                 if let Some(player_entity) = self.selected_entity_mut() {
                     if let Some(training_action) = &mut player_entity.training_action {
-                        training_action.perform();
+                        let cost = 1;
+                        if resources >= cost {
+                            if training_action.perform()
+                                == TrainingPerformStatus::NewTrainingStarted
+                            {
+                                self.player_team_state.resources -= cost;
+                            };
+                        } else {
+                            println!("Not enough resources!");
+                        }
                     } else {
                         println!("Selected entity has no such action")
                     }
