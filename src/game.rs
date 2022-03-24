@@ -338,7 +338,6 @@ impl EventHandler for Game {
                         self.player_state.selected_entity_id = self
                             .entities
                             .iter()
-                            .filter(|e| e.team == Team::Player)
                             .find(|e| {
                                 let [w, h] = e.size();
                                 clicked_pos[0] >= e.position[0]
@@ -351,15 +350,15 @@ impl EventHandler for Game {
                             "Selected entity index: {:?}",
                             self.player_state.selected_entity_id
                         );
-                    } else if let Some(player_entity) = self.selected_entity_mut() {
-                        match &mut player_entity.entity_type {
-                            EntityType::Mobile(movement) => {
-                                movement
-                                    .pathfinder
-                                    .find_path(&player_entity.position, clicked_pos);
-                            }
-                            EntityType::Structure { .. } => {
-                                println!("Selected entity is immobile")
+                    } else if let Some(entity) = self.selected_entity_mut() {
+                        if entity.team == Team::Player {
+                            match &mut entity.entity_type {
+                                EntityType::Mobile(movement) => {
+                                    movement.pathfinder.find_path(&entity.position, clicked_pos);
+                                }
+                                EntityType::Structure { .. } => {
+                                    println!("Selected entity is immobile")
+                                }
                             }
                         }
                     } else {
@@ -400,27 +399,31 @@ impl EventHandler for Game {
             }
             KeyCode::B => {
                 let resources = self.player_team_state.resources;
-                if let Some(player_entity) = self.selected_entity_mut() {
-                    if let Some(training_action) = &mut player_entity.training_action {
-                        let cost = 1;
-                        if resources >= cost {
-                            if training_action.perform()
-                                == TrainingPerformStatus::NewTrainingStarted
-                            {
-                                self.player_team_state.resources -= cost;
-                            };
+                if let Some(entity) = self.selected_entity_mut() {
+                    if entity.team == Team::Player {
+                        if let Some(training_action) = &mut entity.training_action {
+                            let cost = 1;
+                            if resources >= cost {
+                                if training_action.perform()
+                                    == TrainingPerformStatus::NewTrainingStarted
+                                {
+                                    self.player_team_state.resources -= cost;
+                                };
+                            } else {
+                                println!("Not enough resources!");
+                            }
                         } else {
-                            println!("Not enough resources!");
+                            println!("Selected entity has no such action")
                         }
-                    } else {
-                        println!("Selected entity has no such action")
                     }
                 }
             }
             KeyCode::X => {
-                if let Some(player_entity) = self.selected_entity_mut() {
-                    if let Some(health) = &mut player_entity.health {
-                        health.current = health.current.saturating_sub(1);
+                if let Some(entity) = self.selected_entity_mut() {
+                    if entity.team == Team::Player {
+                        if let Some(health) = &mut entity.health {
+                            health.current = health.current.saturating_sub(1);
+                        }
                     }
                 }
             }
