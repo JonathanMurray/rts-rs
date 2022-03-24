@@ -11,7 +11,9 @@ use rand::rngs::ThreadRng;
 use crate::assets::{self, Assets};
 use crate::data::{self, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
-use crate::entities::{Entity, EntityId, Team, TrainingPerformStatus, TrainingUpdateStatus};
+use crate::entities::{
+    Entity, EntityId, EntityType, Team, TrainingPerformStatus, TrainingUpdateStatus,
+};
 use crate::hud_graphics::HudGraphics;
 use std::cmp::min;
 
@@ -51,6 +53,12 @@ impl EntityGrid {
 
     fn set(&mut self, position: &[u32; 2], occupied: bool) {
         let i = self.index(position);
+        // Protect against bugs where two entities occupy same cell or we "double free" a cell
+        assert_ne!(
+            self.grid[i], occupied,
+            "Trying to set grid{:?}={} but it already has that value!",
+            position, occupied
+        );
         self.grid[i] = occupied;
     }
 
@@ -105,7 +113,13 @@ impl Game {
         let mut entity_grid = EntityGrid::new(map_dimensions);
         for entity in &entities {
             if entity.is_solid {
-                entity_grid.set(&entity.position, true);
+                // TODO set area?
+                let [w, h] = entity.size();
+                for x in entity.position[0]..entity.position[0] + w {
+                    for y in entity.position[1]..entity.position[1] + h {
+                        entity_grid.set(&[x, y], true);
+                    }
+                }
             }
         }
 
@@ -171,21 +185,25 @@ impl Game {
         })
     }
 
-    fn add_entity(&mut self, target_position: [u32; 2]) -> Option<[u32; 2]> {
-        let left = target_position[0].saturating_sub(1);
-        let top = target_position[1].saturating_sub(1);
+    fn try_add_trained_entity(
+        &mut self,
+        source_position: [u32; 2],
+        source_size: [u32; 2],
+    ) -> Option<[u32; 2]> {
+        let left = source_position[0].saturating_sub(1);
+        let top = source_position[1].saturating_sub(1);
         let right = min(
-            target_position[0] + 1,
+            source_position[0] + source_size[0],
             self.entity_grid.map_dimensions.0 - 1,
         );
         let bot = min(
-            target_position[1] + 1,
+            source_position[1] + source_size[1],
             self.entity_grid.map_dimensions.1 - 1,
         );
         for x in left..right + 1 {
             for y in top..bot + 1 {
                 if !self.entity_grid.get(&[x, y]) {
-                    let new_entity = data::create_player_entity_1([x, y]);
+                    let new_entity = data::create_player_unit([x, y]);
                     self.entities.push(new_entity);
                     self.entity_grid.set(&[x, y], true);
                     return Some([x, y]);
@@ -207,17 +225,23 @@ impl EventHandler for Game {
             .run(dt, &mut self.entities[..], &mut self.rng);
 
         // Remove dead entities
-        self.entities.retain(|e| {
-            let is_dead = e
+        self.entities.retain(|entity| {
+            let is_dead = entity
                 .health
                 .as_ref()
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
             if is_dead {
-                if e.is_solid {
-                    self.entity_grid.set(&e.position, false);
+                if entity.is_solid {
+                    // TODO set area?
+                    let [w, h] = entity.size();
+                    for x in entity.position[0]..entity.position[0] + w {
+                        for y in entity.position[1]..entity.position[1] + h {
+                            self.entity_grid.set(&[x, y], false);
+                        }
+                    }
                 }
-                if self.player_state.selected_entity_id == Some(e.id) {
+                if self.player_state.selected_entity_id == Some(entity.id) {
                     self.player_state.selected_entity_id = None;
                 }
             }
@@ -226,7 +250,7 @@ impl EventHandler for Game {
         });
 
         for entity in &mut self.entities {
-            if let Some(movement) = &mut entity.movement {
+            if let EntityType::Mobile(movement) = &mut entity.entity_type {
                 if movement.sub_cell_movement.is_ready() {
                     if let Some(next_pos) = movement.pathfinder.peek_path() {
                         let occupied = self.entity_grid.get(next_pos);
@@ -244,25 +268,32 @@ impl EventHandler for Game {
         }
 
         for entity in &mut self.entities {
-            if let Some(movement) = entity.movement.as_mut() {
+            if let EntityType::Mobile(movement) = &mut entity.entity_type {
                 movement.sub_cell_movement.update(dt, entity.position);
             }
         }
 
-        let mut requested_entity_creations = Vec::new();
+        let mut completed_trainings = Vec::new();
         for entity in &mut self.entities {
             let status = entity
                 .training_action
                 .as_mut()
                 .map(|training_action| training_action.update(dt));
             if status == Some(TrainingUpdateStatus::Done) {
-                requested_entity_creations.push(entity.position);
+                completed_trainings.push((entity.position, entity.size()));
             }
         }
 
-        for target_position in requested_entity_creations {
-            let actual_pos = self.add_entity(target_position);
-            println!("Created entity at: {:?}", actual_pos);
+        for (source_position, source_size) in completed_trainings {
+            if self
+                .try_add_trained_entity(source_position, source_size)
+                .is_none()
+            {
+                eprintln!(
+                    "Failed to create entity around {:?}, {:?}",
+                    source_position, source_size
+                );
+            }
         }
 
         Ok(())
@@ -274,18 +305,16 @@ impl EventHandler for Game {
         graphics::draw(ctx, &self.assets.grid, DrawParam::new())?;
 
         for entity in &self.entities {
-            let screen_coords = entity
-                .movement
-                .as_ref()
-                .map(|movement| movement.sub_cell_movement.screen_coords(entity.position))
-                .unwrap_or_else(|| grid_to_screen_coords(entity.position));
+            let screen_coords = match &entity.entity_type {
+                EntityType::Mobile(movement) => {
+                    movement.sub_cell_movement.screen_coords(entity.position)
+                }
+                EntityType::Structure { .. } => grid_to_screen_coords(entity.position),
+            };
 
             if self.player_state.selected_entity_id.as_ref() == Some(&entity.id) {
-                graphics::draw(
-                    ctx,
-                    &self.assets.selection,
-                    DrawParam::new().dest(screen_coords),
-                )?;
+                self.assets
+                    .draw_selection(ctx, entity.size(), screen_coords)?;
             }
 
             self.assets
@@ -309,19 +338,29 @@ impl EventHandler for Game {
                         self.player_state.selected_entity_id = self
                             .entities
                             .iter()
-                            .find(|e| e.team == Team::Player && e.position == clicked_pos)
+                            .filter(|e| e.team == Team::Player)
+                            .find(|e| {
+                                let [w, h] = e.size();
+                                clicked_pos[0] >= e.position[0]
+                                    && clicked_pos[0] < e.position[0] + w
+                                    && clicked_pos[1] >= e.position[1]
+                                    && clicked_pos[1] < e.position[1] + h
+                            })
                             .map(|e| e.id);
                         println!(
                             "Selected entity index: {:?}",
                             self.player_state.selected_entity_id
                         );
                     } else if let Some(player_entity) = self.selected_entity_mut() {
-                        if let Some(movement) = player_entity.movement.as_mut() {
-                            movement
-                                .pathfinder
-                                .find_path(&player_entity.position, clicked_pos);
-                        } else {
-                            println!("Selected entity is immobile")
+                        match &mut player_entity.entity_type {
+                            EntityType::Mobile(movement) => {
+                                movement
+                                    .pathfinder
+                                    .find_path(&player_entity.position, clicked_pos);
+                            }
+                            EntityType::Structure { .. } => {
+                                println!("Selected entity is immobile")
+                            }
                         }
                     } else {
                         println!("No entity is selected");

@@ -2,7 +2,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::time::Duration;
 
-use crate::entities::{Entity, Team};
+use crate::entities::{Entity, EntityType, Team};
 
 pub struct EnemyPlayerAi {
     timer_s: f32,
@@ -23,16 +23,16 @@ impl EnemyPlayerAi {
         // TODO Instead of mutating game state, return commands
         if self.timer_s <= 0.0 {
             self.timer_s = 2.0;
-            for enemy in entities {
-                if enemy.team == Team::Enemy && rng.gen_bool(0.7) {
+            for entity in entities {
+                if entity.team == Team::Enemy && rng.gen_bool(0.7) {
                     let x: u32 = rng.gen_range(0..self.map_dimensions.0);
                     let y: u32 = rng.gen_range(0..self.map_dimensions.1);
-                    enemy
-                        .movement
-                        .as_mut()
-                        .expect("Enemy must be mobile")
-                        .pathfinder
-                        .find_path(&enemy.position, [x, y]);
+                    match &mut entity.entity_type {
+                        EntityType::Mobile(movement) => {
+                            movement.pathfinder.find_path(&entity.position, [x, y]);
+                        }
+                        EntityType::Structure { .. } => panic!("Enemy must be mobile"),
+                    }
                 }
             }
         }

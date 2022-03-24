@@ -15,41 +15,65 @@ pub struct Entity {
     pub name: &'static str,
     pub position: [u32; 2],
     pub is_solid: bool,
-    pub movement: Option<MovementComponent>,
+    pub entity_type: EntityType,
     pub team: Team,
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
     pub training_action: Option<TrainingActionComponent>,
 }
 
+#[derive(Debug)]
+pub enum EntityType {
+    Mobile(MovementComponent),
+    Structure { size: [u32; 2] },
+}
+
+pub struct EntityConfig {
+    pub name: &'static str,
+    pub is_solid: bool,
+    pub sprite: EntitySprite,
+    pub max_health: Option<u32>,
+}
+
+pub enum MobileOrStructureConfig {
+    MovementCooldown(Duration),
+    StructureSize([u32; 2]),
+}
+
 impl Entity {
     pub fn new(
-        name: &'static str,
+        config: EntityConfig,
         position: [u32; 2],
-        is_solid: bool,
-        movement_cooldown: Option<Duration>,
+        mobile_or_structure: MobileOrStructureConfig,
         team: Team,
-        sprite: EntitySprite,
-        max_health: Option<u32>,
         training_action: Option<TrainingActionComponent>,
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
-        let movement = movement_cooldown.map(|cooldown| MovementComponent {
-            sub_cell_movement: SubCellMovement::new(position, cooldown),
-            pathfinder: Pathfinder::new(),
-        });
-        let health = max_health.map(|max_health| HealthComponent::new(max_health));
+        let entity_type = match mobile_or_structure {
+            MobileOrStructureConfig::MovementCooldown(cooldown) => {
+                EntityType::Mobile(MovementComponent::new(position, cooldown))
+            }
+            MobileOrStructureConfig::StructureSize(size) => EntityType::Structure { size },
+        };
+        let health = config.max_health.map(HealthComponent::new);
         Self {
             id,
-            name,
+            name: config.name,
             position,
-            is_solid,
-            movement,
+            is_solid: config.is_solid,
+            entity_type,
             team,
-            sprite,
+            sprite: config.sprite,
             health,
             training_action,
+        }
+    }
+
+    pub fn size(&self) -> [u32; 2] {
+        match self.entity_type {
+            EntityType::Mobile(_) => [1, 1],
+            EntityType::Structure { size } => size,
         }
     }
 }
@@ -78,8 +102,8 @@ pub enum Team {
 
 #[derive(Debug)]
 pub enum EntitySprite {
-    Player,
-    Player2,
+    PlayerUnit,
+    PlayerBuilding,
     Enemy,
     Neutral,
 }
@@ -88,6 +112,15 @@ pub enum EntitySprite {
 pub struct MovementComponent {
     pub sub_cell_movement: SubCellMovement,
     pub pathfinder: Pathfinder,
+}
+
+impl MovementComponent {
+    pub fn new(position: [u32; 2], movement_cooldown: Duration) -> Self {
+        Self {
+            sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
+            pathfinder: Pathfinder::new(),
+        }
+    }
 }
 
 #[derive(Debug)]
