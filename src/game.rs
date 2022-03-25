@@ -1,7 +1,7 @@
 use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event::EventHandler;
-use ggez::graphics::{Color, DrawParam, Font};
+use ggez::graphics::{Color, Font};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
@@ -17,11 +17,15 @@ use crate::entities::{
 use crate::hud_graphics::HudGraphics;
 use std::cmp::min;
 
-const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
+pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
 const WINDOW_DIMENSIONS: (f32, f32) = (1600.0, 1200.0);
 pub const CELL_PIXEL_SIZE: (f32, f32) = (50.0, 50.0);
-pub const WORLD_PIXEL_OFFSET: (f32, f32) = (20.0, 20.0);
+pub const WORLD_POSITION_ON_SCREEN: (f32, f32) = (100.0, 100.0);
+const CAMERA_SIZE: [f32; 2] = [
+    WINDOW_DIMENSIONS.0 - WORLD_POSITION_ON_SCREEN.0 * 2.0,
+    700.0,
+];
 
 const TITLE: &str = "RTS";
 
@@ -80,6 +84,7 @@ enum MouseState {
 struct PlayerState {
     selected_entity_id: Option<EntityId>,
     mouse_state: MouseState,
+    camera_position_in_world: [f32; 2],
 }
 
 pub struct TeamState {
@@ -106,7 +111,7 @@ impl Game {
 
         println!("Created {} entities", entities.len());
 
-        let assets = assets::create_assets(ctx, map_dimensions)?;
+        let assets = assets::create_assets(ctx, CAMERA_SIZE)?;
 
         let rng = rand::thread_rng();
 
@@ -129,15 +134,18 @@ impl Game {
 
         let player_team_state = TeamState { resources: 5 };
 
+        let camera_position_in_world = [0.0, 0.0];
         let player_state = PlayerState {
             selected_entity_id: None,
             mouse_state: MouseState::Default,
+            camera_position_in_world,
         };
 
         let hud_pos = [
-            WORLD_PIXEL_OFFSET.0 + entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0 + 40.0,
-            25.0,
+            WORLD_POSITION_ON_SCREEN.0,
+            WORLD_POSITION_ON_SCREEN.1 + CAMERA_SIZE[1] + 25.0,
         ];
+
         let hud = HudGraphics::new(hud_pos, font);
 
         Ok(Self {
@@ -154,14 +162,36 @@ impl Game {
 
     fn screen_to_grid_coordinates(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
         let [x, y] = coordinates;
-        if x < WORLD_PIXEL_OFFSET.0 || y < WORLD_PIXEL_OFFSET.1 {
+        if x < WORLD_POSITION_ON_SCREEN.0 || y < WORLD_POSITION_ON_SCREEN.1 {
+            println!("Top/left of the game area on screen");
             return None;
         }
-        let grid_x = ((x - WORLD_PIXEL_OFFSET.0) / CELL_PIXEL_SIZE.0) as u32;
-        let grid_y = ((y - WORLD_PIXEL_OFFSET.1) / CELL_PIXEL_SIZE.1) as u32;
+        if x >= WORLD_POSITION_ON_SCREEN.0
+            + self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
+            || y >= WORLD_POSITION_ON_SCREEN.1
+                + self.entity_grid.map_dimensions.1 as f32 * CELL_PIXEL_SIZE.1
+        {
+            println!("Bot/right of the game area on screen");
+            return None;
+        }
+
+        println!(
+            "Camera pos: {:?}",
+            self.player_state.camera_position_in_world
+        );
+        let grid_x = (x - WORLD_POSITION_ON_SCREEN.0
+            + self.player_state.camera_position_in_world[0])
+            / CELL_PIXEL_SIZE.0;
+        let grid_y = (y - WORLD_POSITION_ON_SCREEN.1
+            + self.player_state.camera_position_in_world[1])
+            / CELL_PIXEL_SIZE.1;
+        println!("Grid pos: ({}, {})", grid_x, grid_y); //TODO
+        let grid_x = grid_x as u32;
+        let grid_y = grid_y as u32;
+        println!("Grid pos as u32: ({}, {})", grid_x, grid_y); //TODO
         if grid_x < self.entity_grid.map_dimensions.0 && grid_y < self.entity_grid.map_dimensions.1
         {
-            Some([grid_x as u32, grid_y as u32])
+            Some([grid_x, grid_y])
         } else {
             None
         }
@@ -302,15 +332,26 @@ impl EventHandler for Game {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, COLOR_BG);
 
-        graphics::draw(ctx, &self.assets.grid, DrawParam::new())?;
+        self.assets.draw_grid(
+            ctx,
+            WORLD_POSITION_ON_SCREEN,
+            self.player_state.camera_position_in_world,
+        )?;
+
+        let offset = [
+            WORLD_POSITION_ON_SCREEN.0 - self.player_state.camera_position_in_world[0],
+            WORLD_POSITION_ON_SCREEN.1 - self.player_state.camera_position_in_world[1],
+        ];
 
         for entity in &self.entities {
-            let screen_coords = match &entity.entity_type {
+            let pixel_pos = match &entity.entity_type {
                 EntityType::Mobile(movement) => {
-                    movement.sub_cell_movement.screen_coords(entity.position)
+                    movement.sub_cell_movement.pixel_position(entity.position)
                 }
-                EntityType::Structure { .. } => grid_to_screen_coords(entity.position),
+                EntityType::Structure { .. } => grid_to_pixel_position(entity.position),
             };
+
+            let screen_coords = [offset[0] + pixel_pos[0], offset[1] + pixel_pos[1]];
 
             if self.player_state.selected_entity_id.as_ref() == Some(&entity.id) {
                 self.assets
@@ -321,6 +362,9 @@ impl EventHandler for Game {
                 .draw_entity(ctx, &entity.sprite, screen_coords)?;
         }
         self.assets.flush_entity_sprite_batch(ctx)?;
+
+        self.assets
+            .draw_background_around_grid(ctx, WORLD_POSITION_ON_SCREEN)?;
 
         let selected_entity = self.selected_entity();
         self.hud
@@ -335,6 +379,7 @@ impl EventHandler for Game {
             match self.player_state.mouse_state {
                 MouseState::Default => {
                     if button == MouseButton::Left {
+                        // TODO (bug) Don't select neutral entity when player unit is on top of it
                         self.player_state.selected_entity_id = self
                             .entities
                             .iter()
@@ -427,14 +472,36 @@ impl EventHandler for Game {
                     }
                 }
             }
+            KeyCode::Left => {
+                self.player_state.camera_position_in_world[0] =
+                    (self.player_state.camera_position_in_world[0] - 15.0).max(0.0);
+            }
+            KeyCode::Right => {
+                self.player_state.camera_position_in_world[0] =
+                    (self.player_state.camera_position_in_world[0] + 15.0).min(
+                        self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
+                            - CAMERA_SIZE[0],
+                    );
+            }
+            KeyCode::Up => {
+                self.player_state.camera_position_in_world[1] =
+                    (self.player_state.camera_position_in_world[1] - 15.0).max(0.0);
+            }
+            KeyCode::Down => {
+                self.player_state.camera_position_in_world[1] =
+                    (self.player_state.camera_position_in_world[1] + 15.0).min(
+                        self.entity_grid.map_dimensions.1 as f32 * CELL_PIXEL_SIZE.1
+                            - CAMERA_SIZE[1],
+                    );
+            }
             _ => {}
         }
     }
 }
 
-pub fn grid_to_screen_coords(coordinates: [u32; 2]) -> [f32; 2] {
+pub fn grid_to_pixel_position(grid_position: [u32; 2]) -> [f32; 2] {
     [
-        WORLD_PIXEL_OFFSET.0 + CELL_PIXEL_SIZE.0 * coordinates[0] as f32,
-        WORLD_PIXEL_OFFSET.1 + CELL_PIXEL_SIZE.1 * coordinates[1] as f32,
+        grid_position[0] as f32 * CELL_PIXEL_SIZE.0,
+        grid_position[1] as f32 * CELL_PIXEL_SIZE.1,
     ]
 }

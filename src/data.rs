@@ -56,14 +56,14 @@ impl Map {
 
         match map_type {
             MapType::Empty => {
-                let dimensions = (8, 8);
+                let dimensions = (12, 12);
                 Self {
                     dimensions,
                     entities,
                 }
             }
             MapType::Small => {
-                let dimensions = (8, 8);
+                let dimensions = (12, 12);
                 entities.push(create_enemy_entity([5, 2]));
                 entities.push(create_enemy_entity([3, 0]));
                 entities.push(create_enemy_entity([0, 4]));
@@ -75,10 +75,10 @@ impl Map {
             }
             MapType::LoadTest => {
                 let mut rng = rand::thread_rng();
-                let dimensions = (30, 20);
+                let dimensions = (50, 50);
                 for y in 2..dimensions.1 {
                     for x in 0..dimensions.0 {
-                        if rng.gen_bool(0.8) {
+                        if rng.gen_bool(0.6) {
                             entities.push(create_enemy_entity([x, y]));
                         }
                     }

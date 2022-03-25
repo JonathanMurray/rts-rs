@@ -190,9 +190,9 @@ impl SubCellMovement {
         }
     }
 
-    pub fn screen_coords(&self, position: [u32; 2]) -> [f32; 2] {
-        let prev_pos = game::grid_to_screen_coords(self.previous_position);
-        let pos = game::grid_to_screen_coords(position);
+    pub fn pixel_position(&self, position: [u32; 2]) -> [f32; 2] {
+        let prev_pos = game::grid_to_pixel_position(self.previous_position);
+        let pos = game::grid_to_pixel_position(position);
         let progress = match SubCellMovement::direction(self.previous_position, position) {
             MovementDirection::Straight => {
                 self.remaining.as_secs_f32() / self.straight_movement_cooldown.as_secs_f32()
