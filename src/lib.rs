@@ -5,6 +5,7 @@ pub mod data;
 pub mod game;
 
 mod assets;
+mod camera;
 mod enemy_ai;
 mod entities;
 mod hud_graphics;

@@ -7,15 +7,16 @@ use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
 
 use rand::rngs::ThreadRng;
+use std::cmp::min;
 
 use crate::assets::{self, Assets};
+use crate::camera::Camera;
 use crate::data::{self, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
     Entity, EntityId, EntityType, Team, TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::hud_graphics::HudGraphics;
-use std::cmp::min;
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
@@ -84,7 +85,7 @@ enum MouseState {
 struct PlayerState {
     selected_entity_id: Option<EntityId>,
     mouse_state: MouseState,
-    camera_position_in_world: [f32; 2],
+    camera: Camera,
 }
 
 pub struct TeamState {
@@ -134,11 +135,15 @@ impl Game {
 
         let player_team_state = TeamState { resources: 5 };
 
-        let camera_position_in_world = [0.0, 0.0];
+        let max_camera_position = [
+            map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - CAMERA_SIZE[0],
+            map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1] - CAMERA_SIZE[1],
+        ];
+        let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState {
             selected_entity_id: None,
             mouse_state: MouseState::Default,
-            camera_position_in_world,
+            camera,
         };
 
         let hud_pos = [
@@ -175,16 +180,10 @@ impl Game {
             return None;
         }
 
-        println!(
-            "Camera pos: {:?}",
-            self.player_state.camera_position_in_world
-        );
-        let grid_x = (x - WORLD_POSITION_ON_SCREEN[0]
-            + self.player_state.camera_position_in_world[0])
-            / CELL_PIXEL_SIZE[0];
-        let grid_y = (y - WORLD_POSITION_ON_SCREEN[1]
-            + self.player_state.camera_position_in_world[1])
-            / CELL_PIXEL_SIZE[1];
+        let camera_pos = self.player_state.camera.position_in_world();
+        println!("Camera pos: {:?}", camera_pos);
+        let grid_x = (x - WORLD_POSITION_ON_SCREEN[0] + camera_pos[0]) / CELL_PIXEL_SIZE[0];
+        let grid_y = (y - WORLD_POSITION_ON_SCREEN[1] + camera_pos[1]) / CELL_PIXEL_SIZE[1];
         println!("Grid pos: ({}, {})", grid_x, grid_y); //TODO
         let grid_x = grid_x as u32;
         let grid_y = grid_y as u32;
@@ -327,6 +326,8 @@ impl EventHandler for Game {
             }
         }
 
+        self.player_state.camera.update(ctx, dt);
+
         Ok(())
     }
 
@@ -336,12 +337,12 @@ impl EventHandler for Game {
         self.assets.draw_grid(
             ctx,
             WORLD_POSITION_ON_SCREEN,
-            self.player_state.camera_position_in_world,
+            self.player_state.camera.position_in_world(),
         )?;
 
         let offset = [
-            WORLD_POSITION_ON_SCREEN[0] - self.player_state.camera_position_in_world[0],
-            WORLD_POSITION_ON_SCREEN[1] - self.player_state.camera_position_in_world[1],
+            WORLD_POSITION_ON_SCREEN[0] - self.player_state.camera.position_in_world()[0],
+            WORLD_POSITION_ON_SCREEN[1] - self.player_state.camera.position_in_world()[1],
         ];
 
         for entity in &self.entities {
@@ -472,28 +473,6 @@ impl EventHandler for Game {
                         }
                     }
                 }
-            }
-            KeyCode::Left => {
-                self.player_state.camera_position_in_world[0] =
-                    (self.player_state.camera_position_in_world[0] - 15.0).max(0.0);
-            }
-            KeyCode::Right => {
-                self.player_state.camera_position_in_world[0] =
-                    (self.player_state.camera_position_in_world[0] + 15.0).min(
-                        self.entity_grid.map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0]
-                            - CAMERA_SIZE[0],
-                    );
-            }
-            KeyCode::Up => {
-                self.player_state.camera_position_in_world[1] =
-                    (self.player_state.camera_position_in_world[1] - 15.0).max(0.0);
-            }
-            KeyCode::Down => {
-                self.player_state.camera_position_in_world[1] =
-                    (self.player_state.camera_position_in_world[1] + 15.0).min(
-                        self.entity_grid.map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1]
-                            - CAMERA_SIZE[1],
-                    );
             }
             _ => {}
         }
