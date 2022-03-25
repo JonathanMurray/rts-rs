@@ -6,11 +6,11 @@ use crate::entities::{Entity, EntityType, Team};
 
 pub struct EnemyPlayerAi {
     timer_s: f32,
-    map_dimensions: (u32, u32),
+    map_dimensions: [u32; 2],
 }
 
 impl EnemyPlayerAi {
-    pub fn new(map_dimensions: (u32, u32)) -> Self {
+    pub fn new(map_dimensions: [u32; 2]) -> Self {
         Self {
             timer_s: 0.0,
             map_dimensions,
@@ -25,8 +25,8 @@ impl EnemyPlayerAi {
             self.timer_s = 2.0;
             for entity in entities {
                 if entity.team == Team::Enemy && rng.gen_bool(0.7) {
-                    let x: u32 = rng.gen_range(0..self.map_dimensions.0);
-                    let y: u32 = rng.gen_range(0..self.map_dimensions.1);
+                    let x: u32 = rng.gen_range(0..self.map_dimensions[0]);
+                    let y: u32 = rng.gen_range(0..self.map_dimensions[1]);
                     match &mut entity.entity_type {
                         EntityType::Mobile(movement) => {
                             movement.pathfinder.find_path(&entity.position, [x, y]);

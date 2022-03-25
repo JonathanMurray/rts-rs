@@ -19,11 +19,11 @@ use std::cmp::min;
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
-const WINDOW_DIMENSIONS: (f32, f32) = (1600.0, 1200.0);
-pub const CELL_PIXEL_SIZE: (f32, f32) = (50.0, 50.0);
-pub const WORLD_POSITION_ON_SCREEN: (f32, f32) = (100.0, 100.0);
+const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 1200.0];
+pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
+const WORLD_POSITION_ON_SCREEN: [f32; 2] = [100.0, 100.0];
 const CAMERA_SIZE: [f32; 2] = [
-    WINDOW_DIMENSIONS.0 - WORLD_POSITION_ON_SCREEN.0 * 2.0,
+    WINDOW_DIMENSIONS[0] - WORLD_POSITION_ON_SCREEN[0] * 2.0,
     700.0,
 ];
 
@@ -32,7 +32,7 @@ const TITLE: &str = "RTS";
 pub fn run(map_type: MapType) -> GameResult {
     let (mut ctx, event_loop) = ContextBuilder::new("rts", "jm")
         .window_setup(WindowSetup::default().title(TITLE))
-        .window_mode(WindowMode::default().dimensions(WINDOW_DIMENSIONS.0, WINDOW_DIMENSIONS.1))
+        .window_mode(WindowMode::default().dimensions(WINDOW_DIMENSIONS[0], WINDOW_DIMENSIONS[1]))
         .add_resource_path("resources")
         .build()
         .expect("Creating ggez context");
@@ -43,12 +43,12 @@ pub fn run(map_type: MapType) -> GameResult {
 
 struct EntityGrid {
     grid: Vec<bool>,
-    map_dimensions: (u32, u32),
+    map_dimensions: [u32; 2],
 }
 
 impl EntityGrid {
-    fn new(map_dimensions: (u32, u32)) -> Self {
-        let grid = vec![false; (map_dimensions.0 * map_dimensions.1) as usize];
+    fn new(map_dimensions: [u32; 2]) -> Self {
+        let grid = vec![false; (map_dimensions[0] * map_dimensions[1]) as usize];
         Self {
             grid,
             map_dimensions,
@@ -72,7 +72,7 @@ impl EntityGrid {
 
     fn index(&self, position: &[u32; 2]) -> usize {
         let [x, y] = position;
-        (y * self.map_dimensions.0 + x) as usize
+        (y * self.map_dimensions[0] + x) as usize
     }
 }
 
@@ -142,8 +142,8 @@ impl Game {
         };
 
         let hud_pos = [
-            WORLD_POSITION_ON_SCREEN.0,
-            WORLD_POSITION_ON_SCREEN.1 + CAMERA_SIZE[1] + 25.0,
+            WORLD_POSITION_ON_SCREEN[0],
+            WORLD_POSITION_ON_SCREEN[1] + CAMERA_SIZE[1] + 25.0,
         ];
 
         let hud = HudGraphics::new(hud_pos, font);
@@ -162,14 +162,14 @@ impl Game {
 
     fn screen_to_grid_coordinates(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
         let [x, y] = coordinates;
-        if x < WORLD_POSITION_ON_SCREEN.0 || y < WORLD_POSITION_ON_SCREEN.1 {
+        if x < WORLD_POSITION_ON_SCREEN[0] || y < WORLD_POSITION_ON_SCREEN[1] {
             println!("Top/left of the game area on screen");
             return None;
         }
-        if x >= WORLD_POSITION_ON_SCREEN.0
-            + self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
-            || y >= WORLD_POSITION_ON_SCREEN.1
-                + self.entity_grid.map_dimensions.1 as f32 * CELL_PIXEL_SIZE.1
+        if x >= WORLD_POSITION_ON_SCREEN[0]
+            + self.entity_grid.map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0]
+            || y >= WORLD_POSITION_ON_SCREEN[1]
+                + self.entity_grid.map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1]
         {
             println!("Bot/right of the game area on screen");
             return None;
@@ -179,17 +179,18 @@ impl Game {
             "Camera pos: {:?}",
             self.player_state.camera_position_in_world
         );
-        let grid_x = (x - WORLD_POSITION_ON_SCREEN.0
+        let grid_x = (x - WORLD_POSITION_ON_SCREEN[0]
             + self.player_state.camera_position_in_world[0])
-            / CELL_PIXEL_SIZE.0;
-        let grid_y = (y - WORLD_POSITION_ON_SCREEN.1
+            / CELL_PIXEL_SIZE[0];
+        let grid_y = (y - WORLD_POSITION_ON_SCREEN[1]
             + self.player_state.camera_position_in_world[1])
-            / CELL_PIXEL_SIZE.1;
+            / CELL_PIXEL_SIZE[1];
         println!("Grid pos: ({}, {})", grid_x, grid_y); //TODO
         let grid_x = grid_x as u32;
         let grid_y = grid_y as u32;
         println!("Grid pos as u32: ({}, {})", grid_x, grid_y); //TODO
-        if grid_x < self.entity_grid.map_dimensions.0 && grid_y < self.entity_grid.map_dimensions.1
+        if grid_x < self.entity_grid.map_dimensions[0]
+            && grid_y < self.entity_grid.map_dimensions[1]
         {
             Some([grid_x, grid_y])
         } else {
@@ -224,11 +225,11 @@ impl Game {
         let top = source_position[1].saturating_sub(1);
         let right = min(
             source_position[0] + source_size[0],
-            self.entity_grid.map_dimensions.0 - 1,
+            self.entity_grid.map_dimensions[0] - 1,
         );
         let bot = min(
             source_position[1] + source_size[1],
-            self.entity_grid.map_dimensions.1 - 1,
+            self.entity_grid.map_dimensions[1] - 1,
         );
         for x in left..right + 1 {
             for y in top..bot + 1 {
@@ -339,8 +340,8 @@ impl EventHandler for Game {
         )?;
 
         let offset = [
-            WORLD_POSITION_ON_SCREEN.0 - self.player_state.camera_position_in_world[0],
-            WORLD_POSITION_ON_SCREEN.1 - self.player_state.camera_position_in_world[1],
+            WORLD_POSITION_ON_SCREEN[0] - self.player_state.camera_position_in_world[0],
+            WORLD_POSITION_ON_SCREEN[1] - self.player_state.camera_position_in_world[1],
         ];
 
         for entity in &self.entities {
@@ -479,7 +480,7 @@ impl EventHandler for Game {
             KeyCode::Right => {
                 self.player_state.camera_position_in_world[0] =
                     (self.player_state.camera_position_in_world[0] + 15.0).min(
-                        self.entity_grid.map_dimensions.0 as f32 * CELL_PIXEL_SIZE.0
+                        self.entity_grid.map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0]
                             - CAMERA_SIZE[0],
                     );
             }
@@ -490,7 +491,7 @@ impl EventHandler for Game {
             KeyCode::Down => {
                 self.player_state.camera_position_in_world[1] =
                     (self.player_state.camera_position_in_world[1] + 15.0).min(
-                        self.entity_grid.map_dimensions.1 as f32 * CELL_PIXEL_SIZE.1
+                        self.entity_grid.map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1]
                             - CAMERA_SIZE[1],
                     );
             }
@@ -501,7 +502,7 @@ impl EventHandler for Game {
 
 pub fn grid_to_pixel_position(grid_position: [u32; 2]) -> [f32; 2] {
     [
-        grid_position[0] as f32 * CELL_PIXEL_SIZE.0,
-        grid_position[1] as f32 * CELL_PIXEL_SIZE.1,
+        grid_position[0] as f32 * CELL_PIXEL_SIZE[0],
+        grid_position[1] as f32 * CELL_PIXEL_SIZE[1],
     ]
 }

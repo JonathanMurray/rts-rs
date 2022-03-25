@@ -25,9 +25,9 @@ impl Assets {
         &self,
         ctx: &mut Context,
         size: [u32; 2],
-        screen_cords: [f32; 2],
+        screen_coords: [f32; 2],
     ) -> GameResult {
-        let param = DrawParam::new().dest(screen_cords);
+        let param = DrawParam::new().dest(screen_coords);
         match size {
             [1, 1] => self.selection.draw(ctx, param)?,
             [2, 2] => self.selection_2x2.draw(ctx, param)?,
@@ -42,14 +42,14 @@ impl Assets {
     pub fn draw_grid(
         &self,
         ctx: &mut Context,
-        screen_cords: (f32, f32),
+        screen_coords: [f32; 2],
         camera_position_in_world: [f32; 2],
     ) -> GameResult {
         self.grid.draw(
             ctx,
             DrawParam::new().dest([
-                screen_cords.0 - camera_position_in_world[0] % CELL_PIXEL_SIZE.0,
-                screen_cords.1 - camera_position_in_world[1] % CELL_PIXEL_SIZE.1,
+                screen_coords[0] - camera_position_in_world[0] % CELL_PIXEL_SIZE[0],
+                screen_coords[1] - camera_position_in_world[1] % CELL_PIXEL_SIZE[1],
             ]),
         )?;
 
@@ -77,13 +77,18 @@ impl Assets {
     pub fn draw_background_around_grid(
         &self,
         ctx: &mut Context,
-        screen_cords: (f32, f32),
+        screen_coords: [f32; 2],
     ) -> GameResult {
         for mesh in &self.background_around_grid {
-            mesh.draw(ctx, DrawParam::new().dest([screen_cords.0, screen_cords.1]))?;
+            mesh.draw(
+                ctx,
+                DrawParam::new().dest([screen_coords[0], screen_coords[1]]),
+            )?;
         }
-        self.grid_border
-            .draw(ctx, DrawParam::new().dest([screen_cords.0, screen_cords.1]))?;
+        self.grid_border.draw(
+            ctx,
+            DrawParam::new().dest([screen_coords[0], screen_coords[1]]),
+        )?;
         Ok(())
     }
 
@@ -105,28 +110,28 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         .build(ctx)?;
     let background_around_grid = build_background_around_grid(ctx, camera_size)?;
 
-    let player_unit_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.8);
+    let player_unit_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
     let player_unit = MeshBuilder::new()
         .rectangle(
             DrawMode::fill(),
             Rect::new(
-                (CELL_PIXEL_SIZE.0 - player_unit_size.0) / 2.0,
-                (CELL_PIXEL_SIZE.1 - player_unit_size.1) / 2.0,
-                player_unit_size.0,
-                player_unit_size.1,
+                (CELL_PIXEL_SIZE[0] - player_unit_size[0]) / 2.0,
+                (CELL_PIXEL_SIZE[1] - player_unit_size[1]) / 2.0,
+                player_unit_size[0],
+                player_unit_size[1],
             ),
             Color::new(0.6, 0.8, 0.5, 1.0),
         )?
         .build(ctx)?;
-    let player_building_size = (CELL_PIXEL_SIZE.0 * 1.9, CELL_PIXEL_SIZE.1 * 1.9);
+    let player_building_size = [CELL_PIXEL_SIZE[0] * 1.9, CELL_PIXEL_SIZE[1] * 1.9];
     let player_building = MeshBuilder::new()
         .rectangle(
             DrawMode::fill(),
             Rect::new(
-                (CELL_PIXEL_SIZE.0 * 2.0 - player_building_size.0) / 2.0,
-                (CELL_PIXEL_SIZE.1 * 2.0 - player_building_size.1) / 2.0,
-                player_building_size.0,
-                player_building_size.1,
+                (CELL_PIXEL_SIZE[0] * 2.0 - player_building_size[0]) / 2.0,
+                (CELL_PIXEL_SIZE[1] * 2.0 - player_building_size[1]) / 2.0,
+                player_building_size[0],
+                player_building_size[1],
             ),
             Color::new(0.7, 0.5, 0.8, 1.0),
         )?
@@ -136,7 +141,12 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
     let selection = MeshBuilder::new()
         .rectangle(
             DrawMode::stroke(2.0),
-            Rect::new(-1.0, -1.0, CELL_PIXEL_SIZE.0 + 2.0, CELL_PIXEL_SIZE.1 + 2.0),
+            Rect::new(
+                -1.0,
+                -1.0,
+                CELL_PIXEL_SIZE[0] + 2.0,
+                CELL_PIXEL_SIZE[1] + 2.0,
+            ),
             Color::new(0.6, 0.9, 0.6, 1.0),
         )?
         .build(ctx)?;
@@ -146,22 +156,22 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
             Rect::new(
                 -1.0,
                 -1.0,
-                CELL_PIXEL_SIZE.0 * 2.0 + 2.0,
-                CELL_PIXEL_SIZE.1 * 2.0 + 2.0,
+                CELL_PIXEL_SIZE[0] * 2.0 + 2.0,
+                CELL_PIXEL_SIZE[1] * 2.0 + 2.0,
             ),
             Color::new(0.6, 0.9, 0.6, 1.0),
         )?
         .build(ctx)?;
 
-    let neutral_size = (CELL_PIXEL_SIZE.0 * 0.7, CELL_PIXEL_SIZE.1 * 0.6);
+    let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.6];
     let neutral_entity = MeshBuilder::new()
         .rectangle(
             DrawMode::fill(),
             Rect::new(
-                (CELL_PIXEL_SIZE.0 - player_unit_size.0) / 2.0,
-                (CELL_PIXEL_SIZE.1 - player_unit_size.1) / 2.0,
-                neutral_size.0,
-                neutral_size.1,
+                (CELL_PIXEL_SIZE[0] - player_unit_size[0]) / 2.0,
+                (CELL_PIXEL_SIZE[1] - player_unit_size[1]) / 2.0,
+                neutral_size[0],
+                neutral_size[1],
             ),
             Color::new(0.8, 0.6, 0.2, 1.0),
         )?
@@ -170,8 +180,8 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
     let enemy_mesh = MeshBuilder::new()
         .circle(
             DrawMode::fill(),
-            [CELL_PIXEL_SIZE.0 / 2.0, CELL_PIXEL_SIZE.1 / 2.0],
-            CELL_PIXEL_SIZE.0 * 0.25,
+            [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] / 2.0],
+            CELL_PIXEL_SIZE[0] * 0.25,
             0.05,
             Color::new(0.8, 0.4, 0.4, 1.0),
         )?
@@ -244,23 +254,23 @@ fn build_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Mesh, GameErro
     let mut builder = MeshBuilder::new();
     const LINE_WIDTH: f32 = 2.0;
 
-    let x0 = -CELL_PIXEL_SIZE.0;
-    let x1 = x0 + camera_size[0] + CELL_PIXEL_SIZE.0 * 2.0;
-    let y0 = -CELL_PIXEL_SIZE.1;
-    let y1 = y0 + camera_size[1] + CELL_PIXEL_SIZE.1 * 2.0;
+    let x0 = -CELL_PIXEL_SIZE[0];
+    let x1 = x0 + camera_size[0] + CELL_PIXEL_SIZE[0] * 2.0;
+    let y0 = -CELL_PIXEL_SIZE[1];
+    let y1 = y0 + camera_size[1] + CELL_PIXEL_SIZE[1] * 2.0;
 
-    let num_columns = ((x1 - x0) / CELL_PIXEL_SIZE.0 as f32) as u32;
-    let num_rows = ((y1 - y0) / CELL_PIXEL_SIZE.1 as f32) as u32;
+    let num_columns = ((x1 - x0) / CELL_PIXEL_SIZE[0] as f32) as u32;
+    let num_rows = ((y1 - y0) / CELL_PIXEL_SIZE[1] as f32) as u32;
 
     // Horizontal lines
     for i in 0..num_rows {
-        let y = y0 + i as f32 * CELL_PIXEL_SIZE.1;
+        let y = y0 + i as f32 * CELL_PIXEL_SIZE[1];
         builder.line(&[[x0, y], [x1, y]], LINE_WIDTH, COLOR_GRID)?;
     }
 
     // Vertical lines
     for i in 0..num_columns {
-        let x = x0 + i as f32 * CELL_PIXEL_SIZE.0;
+        let x = x0 + i as f32 * CELL_PIXEL_SIZE[0];
         builder.line(&[[x, y0], [x, y1]], LINE_WIDTH, COLOR_GRID)?;
     }
 
