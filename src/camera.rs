@@ -21,7 +21,7 @@ impl Camera {
     }
 
     pub fn update(&mut self, ctx: &Context, dt: Duration) {
-        const PAN_SPEED: f32 = 500.0;
+        const PAN_SPEED: f32 = 700.0;
         let [mut x, mut y] = self.position_in_world;
         if ggez::input::keyboard::is_key_pressed(ctx, KeyCode::Left) {
             x -= PAN_SPEED * dt.as_secs_f32();

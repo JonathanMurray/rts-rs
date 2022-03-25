@@ -16,14 +16,14 @@ use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
     Entity, EntityId, EntityType, Team, TrainingPerformStatus, TrainingUpdateStatus,
 };
-use crate::hud_graphics::HudGraphics;
+use crate::hud_graphics::{HudGraphics, MinimapGraphics};
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
 const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 1200.0];
 pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
 const WORLD_POSITION_ON_SCREEN: [f32; 2] = [100.0, 100.0];
-const CAMERA_SIZE: [f32; 2] = [
+pub const CAMERA_SIZE: [f32; 2] = [
     WINDOW_DIMENSIONS[0] - WORLD_POSITION_ON_SCREEN[0] * 2.0,
     700.0,
 ];
@@ -95,6 +95,7 @@ pub struct TeamState {
 struct Game {
     assets: Assets,
     hud: HudGraphics,
+    minimap: MinimapGraphics,
     player_team_state: TeamState,
     player_state: PlayerState,
     entities: Vec<Entity>,
@@ -150,12 +151,14 @@ impl Game {
             WORLD_POSITION_ON_SCREEN[0],
             WORLD_POSITION_ON_SCREEN[1] + CAMERA_SIZE[1] + 25.0,
         ];
-
+        let minimap_pos = [900.0, hud_pos[1] + 100.0];
         let hud = HudGraphics::new(hud_pos, font);
+        let minimap = MinimapGraphics::new(ctx, minimap_pos, map_dimensions)?;
 
         Ok(Self {
             assets,
             hud,
+            minimap,
             player_team_state,
             player_state,
             entities,
@@ -371,6 +374,8 @@ impl EventHandler for Game {
         let selected_entity = self.selected_entity();
         self.hud
             .draw(ctx, &self.player_team_state, selected_entity)?;
+        self.minimap
+            .draw(ctx, self.player_state.camera.position_in_world())?;
 
         graphics::present(ctx)?;
         Ok(())

@@ -75,7 +75,7 @@ impl Map {
             }
             MapType::LoadTest => {
                 let mut rng = rand::thread_rng();
-                let dimensions = [50, 50];
+                let dimensions = [50, 25];
                 for y in 2..dimensions[1] {
                     for x in 0..dimensions[0] {
                         if rng.gen_bool(0.6) {
