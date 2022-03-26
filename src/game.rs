@@ -79,7 +79,8 @@ impl EntityGrid {
     }
 }
 
-enum CursorAction {
+#[derive(PartialEq, Copy, Clone)]
+pub enum CursorAction {
     Default,
     DealDamage,
     IssueMovement,
@@ -435,8 +436,12 @@ impl EventHandler for Game {
             .draw_background_around_grid(ctx, WORLD_POSITION_ON_SCREEN)?;
 
         let selected_entity = self.selected_entity();
-        self.hud
-            .draw(ctx, self.teams.get(&Team::Player).unwrap(), selected_entity)?;
+        self.hud.draw(
+            ctx,
+            self.teams.get(&Team::Player).unwrap(),
+            selected_entity,
+            self.player_state.cursor_action,
+        )?;
         self.minimap
             .draw(ctx, self.player_state.camera.position_in_world)?;
 

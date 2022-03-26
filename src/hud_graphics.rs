@@ -5,7 +5,7 @@ use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
 use crate::entities::{ActionType, Entity, EntityState, Team, NUM_UNIT_ACTIONS};
-use crate::game::{TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
+use crate::game::{CursorAction, TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
 
 const NUM_BUTTONS: usize = NUM_UNIT_ACTIONS;
 
@@ -38,6 +38,7 @@ impl HudGraphics {
         ctx: &mut Context,
         player_team_state: &TeamState,
         selected_entity: Option<&Entity>,
+        cursor_action: CursorAction,
     ) -> GameResult {
         let x = 0.0;
         let resources_y = 5.0;
@@ -78,6 +79,7 @@ impl HudGraphics {
                 let mut button_states = [ButtonState {
                     shown: false,
                     matches_entity_state: false,
+                    matches_cursor_action: false,
                 }; NUM_BUTTONS];
                 if let Some(training) = &selected_entity.training {
                     if let Some(progress) = training.progress() {
@@ -104,11 +106,15 @@ impl HudGraphics {
                                 if selected_entity.state == EntityState::Moving {
                                     button_states[i].matches_entity_state = true;
                                 }
+                                if cursor_action == CursorAction::IssueMovement {
+                                    button_states[i].matches_cursor_action = true;
+                                }
                             }
                             ActionType::Heal => {}
                             ActionType::Harm => {
-                                // TODO: When cursor_action == DealDamage, Harm button should be highlighted
-                                //       (but a different type of highlight: pending action, not unit state)
+                                if cursor_action == CursorAction::DealDamage {
+                                    button_states[i].matches_cursor_action = true;
+                                }
                             }
                         }
                         action_text.push_str(&format!("{:?} ", action_type));
@@ -179,6 +185,7 @@ impl HudGraphics {
 struct ButtonState {
     shown: bool,
     matches_entity_state: bool,
+    matches_cursor_action: bool,
 }
 
 pub struct MinimapGraphics {
@@ -253,27 +260,32 @@ impl MinimapGraphics {
 pub struct Button {
     rect: Rect,
     border: Mesh,
-    highlight: Mesh,
+    highlight_entity_state: Mesh,
+    highlight_cursor_action: Mesh,
     text: Text,
 }
 
 impl Button {
     fn new(ctx: &mut Context, rect: Rect, text: &str, font: Font) -> GameResult<Button> {
         let border = MeshBuilder::new()
-            .rectangle(DrawMode::stroke(1.0), rect, Color::new(1.0, 1.0, 1.0, 1.0))?
+            .rectangle(DrawMode::stroke(1.0), rect, Color::new(0.7, 0.7, 0.7, 1.0))?
             .build(ctx)?;
-        let highlight = MeshBuilder::new()
+        let highlight_entity_state = MeshBuilder::new()
             .rectangle(
                 DrawMode::stroke(3.0),
-                Rect::new(rect.x - 1.0, rect.y - 1.0, rect.w + 2.0, rect.h + 2.0),
-                Color::new(0.8, 0.8, 0.0, 1.0),
+                Rect::new(rect.x + 2.0, rect.y + 2.0, rect.w - 4.0, rect.h - 4.0),
+                Color::new(0.4, 0.95, 0.4, 1.0),
             )?
+            .build(ctx)?;
+        let highlight_cursor_action = MeshBuilder::new()
+            .rectangle(DrawMode::fill(), rect, Color::new(1.0, 1.0, 0.6, 0.05))?
             .build(ctx)?;
         let text = Text::new((text, font, 40.0));
         Ok(Self {
             rect,
             border,
-            highlight,
+            highlight_entity_state,
+            highlight_cursor_action,
             text,
         })
     }
@@ -288,7 +300,12 @@ impl Button {
             )?;
         }
         if state.matches_entity_state {
-            self.highlight.draw(ctx, DrawParam::default())?;
+            self.highlight_entity_state
+                .draw(ctx, DrawParam::default())?;
+        }
+        if state.matches_cursor_action {
+            self.highlight_cursor_action
+                .draw(ctx, DrawParam::default())?;
         }
         Ok(())
     }
