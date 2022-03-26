@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::entities::{
-    Entity, EntityConfig, EntitySprite, HealingActionComponent, PhysicalTypeConfig, Team,
+    ActionType, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team,
     TrainingActionComponent,
 };
 use rand::Rng;
@@ -40,7 +40,7 @@ impl Map {
             [2, 1],
             Team::Player,
             Some(TrainingActionComponent::new(EntityType::PlayerUnit)),
-            None,
+            [None, None],
         );
 
         let mut entities = vec![];
@@ -57,7 +57,7 @@ impl Map {
                 [1, 3],
                 Team::Neutral,
                 None,
-                None,
+                [None, None],
             );
             entities.push(neutral_entity);
         }
@@ -121,7 +121,7 @@ fn create_enemy_building(position: [u32; 2]) -> Entity {
         position,
         Team::Enemy,
         Some(TrainingActionComponent::new(EntityType::EnemyUnit)),
-        None,
+        [None, None],
     )
 }
 
@@ -143,5 +143,11 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
         },
         _ => panic!("Unhandled entity type: {:?}", entity_type),
     };
-    Entity::new(config, position, team, None, Some(HealingActionComponent))
+    Entity::new(
+        config,
+        position,
+        team,
+        None,
+        [Some(ActionType::Heal), Some(ActionType::SelfHarm)],
+    )
 }

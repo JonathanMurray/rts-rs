@@ -21,7 +21,7 @@ pub struct Entity {
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
     pub training_action: Option<TrainingActionComponent>,
-    pub healing_action: Option<HealingActionComponent>,
+    pub instant_actions: [Option<ActionType>; 2],
 }
 
 #[derive(Debug)]
@@ -49,7 +49,7 @@ impl Entity {
         position: [u32; 2],
         team: Team,
         training_action: Option<TrainingActionComponent>,
-        healing_action: Option<HealingActionComponent>,
+        instant_actions: [Option<ActionType>; 2],
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
@@ -70,7 +70,7 @@ impl Entity {
             sprite: config.sprite,
             health,
             training_action,
-            healing_action,
+            instant_actions,
         }
     }
 
@@ -98,6 +98,12 @@ impl HealthComponent {
 
     pub fn receive_healing(&mut self, amount: u32) {
         self.current = min(self.current + amount, self.max);
+    }
+
+    pub fn receive_damage(&mut self, amount: u32) {
+        // TODO if an entity took damage that brings it below 0 and was then healed up by a lower
+        //      amount in the same game frame, it would not be marked as dead, which seems wrong.
+        self.current = self.current.saturating_sub(amount);
     }
 }
 
@@ -315,7 +321,9 @@ pub enum TrainingPerformStatus {
 #[derive(Debug)]
 pub struct HealingActionComponent;
 
+#[derive(Debug, Copy, Clone)]
 pub enum ActionType {
     Train(EntityType),
     Heal,
+    SelfHarm,
 }

@@ -7,21 +7,27 @@ use ggez::{Context, GameResult};
 use crate::entities::{ActionType, Entity};
 use crate::game::{TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
 
+const NUM_BUTTONS: usize = 2;
+
 pub struct HudGraphics {
     position_on_screen: [f32; 2],
     font: Font,
-    button: Button,
+    buttons: [Button; NUM_BUTTONS],
 }
 
 impl HudGraphics {
     pub fn new(ctx: &mut Context, position: [f32; 2], font: Font) -> GameResult<Self> {
         let w = 80.0;
-        let button_rect = Rect::new(position[0] + 5.0, position[1] + 270.0, w, w);
-        let button = Button::new(ctx, button_rect, font)?;
+        let button_1_rect = Rect::new(position[0] + 5.0, position[1] + 270.0, w, w);
+        let button_1 = Button::new(ctx, button_1_rect, "V", font)?;
+        let button_margin = 5.0;
+        let button_2_rect = Rect::new(button_1_rect.x + w + button_margin, button_1_rect.y, w, w);
+        let button_2 = Button::new(ctx, button_2_rect, "B", font)?;
+        let buttons = [button_1, button_2];
         Ok(Self {
             position_on_screen: position,
             font,
-            button,
+            buttons,
         })
     }
 
@@ -47,7 +53,7 @@ impl HudGraphics {
             small_font,
         )?;
 
-        let mut should_draw_action_button = false;
+        let mut actions = [false; NUM_BUTTONS];
 
         if let Some(selected_entity) = selected_entity {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
@@ -62,7 +68,7 @@ impl HudGraphics {
             }
 
             if let Some(training_action) = &selected_entity.training_action {
-                should_draw_action_button = true;
+                actions[0] = true;
                 if let Some(progress) = training_action.progress() {
                     self.draw_text(ctx, [x, action_y], "Training in progress", small_font)?;
                     let progress_w = 20.0;
@@ -73,17 +79,26 @@ impl HudGraphics {
                     );
                     self.draw_text(ctx, [x, action_y + 35.0], progress_bar, small_font)?;
                 } else {
-                    self.draw_text(ctx, [x, action_y], "Press [B] to train a unit", small_font)?;
+                    self.draw_text(ctx, [x, action_y], "Press [V] to train a unit", small_font)?;
                 }
             }
-            if selected_entity.healing_action.is_some() {
-                should_draw_action_button = true;
-                self.draw_text(ctx, [x, action_y], "Press [B] to heal", small_font)?;
+            let mut action_text = String::new();
+            for (action_i, action) in selected_entity.instant_actions.iter().enumerate() {
+                if let Some(action_type) = action {
+                    actions[action_i] = true;
+                    match action_type {
+                        ActionType::Heal => action_text.push_str("Heal "),
+                        ActionType::SelfHarm => action_text.push_str("Self-harm "),
+                        _ => panic!("Unhandled action: {:?}", action_type),
+                    }
+                }
             }
+            self.draw_text(ctx, [x, action_y], action_text, small_font)?;
         }
 
-        // TODO draw it differently if hovered
-        self.button.draw(ctx, should_draw_action_button)?;
+        for (button_i, button) in self.buttons.iter().enumerate() {
+            button.draw(ctx, actions[button_i])?;
+        }
 
         Ok(())
     }
@@ -93,14 +108,17 @@ impl HudGraphics {
         mouse_position: [f32; 2],
         selected_entity: &Entity,
     ) -> Option<ActionType> {
-        if self.button.rect.contains(mouse_position) {
-            if let Some(training_action) = &selected_entity.training_action {
-                return Some(ActionType::Train(training_action.trained_entity_type));
-            }
-            if selected_entity.healing_action.is_some() {
-                return Some(ActionType::Heal);
+        for (button_i, button) in self.buttons.iter().enumerate() {
+            if button.rect.contains(mouse_position) {
+                if button_i == 0 {
+                    if let Some(training_action) = &selected_entity.training_action {
+                        return Some(ActionType::Train(training_action.trained_entity_type));
+                    }
+                }
+                return selected_entity.instant_actions[button_i];
             }
         }
+
         None
     }
 
@@ -109,13 +127,14 @@ impl HudGraphics {
         keycode: KeyCode,
         selected_entity: &Entity,
     ) -> Option<ActionType> {
-        if keycode == KeyCode::B {
+        if keycode == KeyCode::V {
             if let Some(training_action) = &selected_entity.training_action {
                 return Some(ActionType::Train(training_action.trained_entity_type));
             }
-            if selected_entity.healing_action.is_some() {
-                return Some(ActionType::Heal);
-            }
+            return selected_entity.instant_actions[0];
+        }
+        if keycode == KeyCode::B {
+            return selected_entity.instant_actions[1];
         }
         None
     }
@@ -215,15 +234,16 @@ pub struct Button {
 }
 
 impl Button {
-    fn new(ctx: &mut Context, rect: Rect, font: Font) -> GameResult<Button> {
+    fn new(ctx: &mut Context, rect: Rect, text: &str, font: Font) -> GameResult<Button> {
         let border = MeshBuilder::new()
             .rectangle(DrawMode::stroke(1.0), rect, Color::new(1.0, 1.0, 1.0, 1.0))?
             .build(ctx)?;
-        let text = Text::new(("B", font, 40.0));
+        let text = Text::new((text, font, 40.0));
         Ok(Self { rect, border, text })
     }
 
     fn draw(&self, ctx: &mut Context, draw_action: bool) -> GameResult {
+        // TODO draw it differently if hovered
         self.border.draw(ctx, DrawParam::default())?;
         if draw_action {
             self.text.draw(

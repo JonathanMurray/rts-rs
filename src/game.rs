@@ -274,6 +274,16 @@ impl Game {
                     .expect("Entity needs health to be able to heal");
                 health.receive_healing(1);
             }
+            ActionType::SelfHarm => {
+                let entity = self
+                    .selected_entity_mut()
+                    .expect("Need selected entity to self-harm");
+                let health = entity
+                    .health
+                    .as_mut()
+                    .expect("Entity needs health to be able to self-harm");
+                health.receive_damage(1);
+            }
         }
     }
 }
@@ -461,14 +471,14 @@ impl EventHandler for Game {
                 }
                 MouseState::DealingDamage => {
                     // TODO this only works for structures' top-left corner
-                    if let Some(mut health) = self
+                    if let Some(health) = self
                         .entities
                         .iter_mut()
                         .filter(|e| e.position == clicked_world_pos)
                         .filter_map(|e| e.health.as_mut())
                         .next()
                     {
-                        health.current -= 1;
+                        health.receive_damage(1);
                         println!("Reduced health down to {}/{}", health.current, health.max)
                     }
                     self.player_state.mouse_state = MouseState::Default;
@@ -511,19 +521,10 @@ impl EventHandler for Game {
                 self.player_state.mouse_state = MouseState::DealingDamage;
                 mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
             }
-            KeyCode::B => {
+            KeyCode::V | KeyCode::B => {
                 if let Some(entity) = self.selected_entity() {
                     if let Some(action_type) = self.hud.on_button_click(keycode, entity) {
                         self.try_perform_player_action(action_type);
-                    }
-                }
-            }
-            KeyCode::X => {
-                if let Some(entity) = self.selected_entity_mut() {
-                    if entity.team == Team::Player {
-                        if let Some(health) = &mut entity.health {
-                            health.current = health.current.saturating_sub(1);
-                        }
                     }
                 }
             }
