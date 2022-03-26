@@ -15,12 +15,11 @@ pub struct Assets {
     grid: Mesh,
     grid_border: Mesh,
     background_around_grid: Vec<Mesh>,
-    player_unit: Mesh,
     player_building: Mesh,
     enemy_building: Mesh,
     selections: HashMap<([u32; 2], Team), Mesh>,
     neutral_entity: Mesh,
-    enemy_entity_batch: SpriteBatch,
+    entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
 }
 
 impl Assets {
@@ -58,18 +57,21 @@ impl Assets {
     pub fn draw_entity(
         &mut self,
         ctx: &mut Context,
-        sprite: &EntitySprite,
+        sprite: EntitySprite,
+        team: Team,
         screen_coords: [f32; 2],
     ) -> GameResult {
         let param = DrawParam::new().dest(screen_coords);
         match sprite {
-            EntitySprite::PlayerUnit => self.player_unit.draw(ctx, param)?,
             EntitySprite::PlayerBuilding => self.player_building.draw(ctx, param)?,
-            EntitySprite::Neutral => self.neutral_entity.draw(ctx, param)?,
-            EntitySprite::Enemy => {
-                self.enemy_entity_batch.add(param);
-            }
             EntitySprite::EnemyBuilding => self.enemy_building.draw(ctx, param)?,
+            EntitySprite::Neutral => self.neutral_entity.draw(ctx, param)?,
+            entity_sprite => {
+                self.entity_batches
+                    .get_mut(&(entity_sprite, team))
+                    .unwrap_or_else(|| panic!("Unhandled sprite: {:?}", entity_sprite))
+                    .add(param);
+            }
         };
         Ok(())
     }
@@ -93,8 +95,10 @@ impl Assets {
     }
 
     pub fn flush_entity_sprite_batch(&mut self, ctx: &mut Context) -> GameResult {
-        self.enemy_entity_batch.draw(ctx, DrawParam::default())?;
-        self.enemy_entity_batch.clear();
+        for batch in self.entity_batches.values_mut() {
+            batch.draw(ctx, DrawParam::default())?;
+            batch.clear();
+        }
         Ok(())
     }
 }
@@ -110,19 +114,10 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         .build(ctx)?;
     let background_around_grid = build_background_around_grid(ctx, camera_size)?;
 
-    let player_unit_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
-    let player_unit = MeshBuilder::new()
-        .rectangle(
-            DrawMode::fill(),
-            Rect::new(
-                (CELL_PIXEL_SIZE[0] - player_unit_size[0]) / 2.0,
-                (CELL_PIXEL_SIZE[1] - player_unit_size[1]) / 2.0,
-                player_unit_size[0],
-                player_unit_size[1],
-            ),
-            Color::new(0.6, 0.8, 0.5, 1.0),
-        )?
-        .build(ctx)?;
+    let mut entity_batches = Default::default();
+    create_square_unit(ctx, &mut entity_batches)?;
+    create_circle_unit(ctx, &mut entity_batches)?;
+
     let player_building_size = [CELL_PIXEL_SIZE[0] * 1.9, CELL_PIXEL_SIZE[1] * 1.9];
     let player_building = MeshBuilder::new()
         .rectangle(
@@ -150,13 +145,13 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         )?
         .build(ctx)?;
 
-    let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.6];
+    let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
     let neutral_entity = MeshBuilder::new()
         .rectangle(
             DrawMode::fill(),
             Rect::new(
-                (CELL_PIXEL_SIZE[0] - player_unit_size[0]) / 2.0,
-                (CELL_PIXEL_SIZE[1] - player_unit_size[1]) / 2.0,
+                (CELL_PIXEL_SIZE[0] - neutral_size[0]) / 2.0,
+                (CELL_PIXEL_SIZE[1] - neutral_size[1]) / 2.0,
                 neutral_size[0],
                 neutral_size[1],
             ),
@@ -164,29 +159,67 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         )?
         .build(ctx)?;
 
-    let enemy_mesh = MeshBuilder::new()
-        .circle(
-            DrawMode::fill(),
-            [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] / 2.0],
-            CELL_PIXEL_SIZE[0] * 0.25,
-            0.05,
-            Color::new(0.8, 0.4, 0.4, 1.0),
-        )?
-        .build(ctx)?;
-    let enemy_entity_batch = SpriteBatch::new(images::mesh_into_image(ctx, enemy_mesh)?);
     let selections = Default::default();
     let assets = Assets {
         grid,
         grid_border,
         background_around_grid,
-        player_unit,
         player_building,
         enemy_building,
         selections,
         neutral_entity,
-        enemy_entity_batch,
+        entity_batches,
     };
     Ok(assets)
+}
+
+fn create_square_unit(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
+    let rect = Rect::new(
+        (CELL_PIXEL_SIZE[0] - size[0]) / 2.0,
+        (CELL_PIXEL_SIZE[1] - size[1]) / 2.0,
+        size[0],
+        size[1],
+    );
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let mesh = MeshBuilder::new()
+            .rectangle(DrawMode::fill(), rect, color)?
+            .build(ctx)?;
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::SquareUnit, team), batch);
+    }
+    Ok(())
+}
+
+fn create_circle_unit(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let mesh = MeshBuilder::new()
+            .circle(
+                DrawMode::fill(),
+                [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] / 2.0],
+                CELL_PIXEL_SIZE[0] * 0.25,
+                0.05,
+                color,
+            )?
+            .build(ctx)?;
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::CircleUnit, team), batch);
+    }
+    Ok(())
 }
 
 fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameResult<Mesh> {
@@ -210,7 +243,7 @@ fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameR
 }
 
 fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> GameResult<Vec<Mesh>> {
-    // This feels hacky. We use 4 huge meshes that are placed surrounding the grid as a way to
+    // HACK: We use 4 huge meshes that are placed surrounding the grid as a way to
     // draw a background over any entities that were rendered (either fully or just partially)
     // outside of the game world area. Is there some nicer way to do this, supported by ggez?
     // Essentially what we want is an inverted Rect: "Draw a background on the entire screen except

@@ -414,7 +414,7 @@ impl EventHandler for Game {
             }
 
             self.assets
-                .draw_entity(ctx, &entity.sprite, screen_coords)?;
+                .draw_entity(ctx, entity.sprite, entity.team, screen_coords)?;
         }
         self.assets.flush_entity_sprite_batch(ctx)?;
 

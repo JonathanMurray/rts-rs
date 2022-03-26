@@ -15,9 +15,9 @@ pub enum MapType {
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EntityType {
-    PlayerUnit,
+    SquareUnit,
     PlayerBuilding,
-    EnemyUnit,
+    CircleUnit,
     EnemyBuilding,
 }
 
@@ -28,7 +28,7 @@ pub struct Map {
 
 impl Map {
     pub fn new(map_type: MapType) -> Self {
-        let player_unit = create_entity(EntityType::PlayerUnit, [4, 4], Team::Player);
+        let player_unit = create_entity(EntityType::SquareUnit, [4, 4], Team::Player);
         let player_building = Entity::new(
             EntityConfig {
                 name: "Player building",
@@ -39,7 +39,7 @@ impl Map {
             },
             [2, 1],
             Team::Player,
-            Some(TrainingActionComponent::new(EntityType::PlayerUnit)),
+            Some(TrainingActionComponent::new(EntityType::SquareUnit)),
             [None, None],
         );
 
@@ -76,10 +76,10 @@ impl Map {
             MapType::Small => {
                 let dimensions = [30, 20];
 
-                entities.push(create_entity(EntityType::EnemyUnit, [5, 2], Team::Enemy));
-                entities.push(create_entity(EntityType::EnemyUnit, [3, 0], Team::Enemy));
-                entities.push(create_entity(EntityType::EnemyUnit, [0, 4], Team::Enemy));
-                entities.push(create_entity(EntityType::EnemyUnit, [3, 4], Team::Enemy));
+                entities.push(create_entity(EntityType::CircleUnit, [5, 2], Team::Enemy));
+                entities.push(create_entity(EntityType::CircleUnit, [3, 0], Team::Enemy));
+                entities.push(create_entity(EntityType::CircleUnit, [0, 4], Team::Enemy));
+                entities.push(create_entity(EntityType::CircleUnit, [3, 4], Team::Enemy));
                 entities.push(create_enemy_building([8, 4]));
                 Self {
                     dimensions,
@@ -89,14 +89,20 @@ impl Map {
             MapType::LoadTest => {
                 let mut rng = rand::thread_rng();
                 let dimensions = [50, 25];
-                for y in 2..dimensions[1] {
-                    for x in 0..dimensions[0] {
+                for y in 5..dimensions[1] {
+                    for x in 5..dimensions[0] {
                         if rng.gen_bool(0.6) {
-                            entities.push(create_entity(
-                                EntityType::EnemyUnit,
-                                [x, y],
-                                Team::Enemy,
-                            ));
+                            let team = if rng.gen_bool(0.5) {
+                                Team::Player
+                            } else {
+                                Team::Enemy
+                            };
+                            let entity_type = if rng.gen_bool(0.5) {
+                                EntityType::CircleUnit
+                            } else {
+                                EntityType::SquareUnit
+                            };
+                            entities.push(create_entity(entity_type, [x, y], team));
                         }
                     }
                 }
@@ -120,34 +126,34 @@ fn create_enemy_building(position: [u32; 2]) -> Entity {
         },
         position,
         Team::Enemy,
-        Some(TrainingActionComponent::new(EntityType::EnemyUnit)),
+        Some(TrainingActionComponent::new(EntityType::CircleUnit)),
         [None, None],
     )
 }
 
 pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) -> Entity {
-    let config = match entity_type {
-        EntityType::PlayerUnit => EntityConfig {
-            name: "Player unit",
-            is_solid: true,
-            sprite: EntitySprite::PlayerUnit,
-            max_health: Some(2),
-            physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
-        },
-        EntityType::EnemyUnit => EntityConfig {
-            name: "Enemy unit",
-            is_solid: true,
-            sprite: EntitySprite::Enemy,
-            max_health: Some(1),
-            physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(800)),
-        },
+    let (config, actions) = match entity_type {
+        EntityType::SquareUnit => (
+            EntityConfig {
+                name: "Square",
+                is_solid: true,
+                sprite: EntitySprite::SquareUnit,
+                max_health: Some(3),
+                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
+            },
+            [Some(ActionType::SelfHarm), Some(ActionType::Heal)],
+        ),
+        EntityType::CircleUnit => (
+            EntityConfig {
+                name: "Circle",
+                is_solid: true,
+                sprite: EntitySprite::CircleUnit,
+                max_health: Some(2),
+                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(800)),
+            },
+            [Some(ActionType::SelfHarm), None],
+        ),
         _ => panic!("Unhandled entity type: {:?}", entity_type),
     };
-    Entity::new(
-        config,
-        position,
-        team,
-        None,
-        [Some(ActionType::Heal), Some(ActionType::SelfHarm)],
-    )
+    Entity::new(config, position, team, None, actions)
 }

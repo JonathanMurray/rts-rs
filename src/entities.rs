@@ -114,11 +114,11 @@ pub enum Team {
     Neutral,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub enum EntitySprite {
-    PlayerUnit,
+    SquareUnit,
     PlayerBuilding,
-    Enemy,
+    CircleUnit,
     EnemyBuilding,
     Neutral,
 }
