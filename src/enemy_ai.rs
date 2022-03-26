@@ -3,6 +3,7 @@ use rand::Rng;
 use std::time::Duration;
 
 use crate::entities::{Entity, PhysicalType, Team, TrainingPerformStatus};
+use crate::game::TeamState;
 
 pub struct EnemyPlayerAi {
     timer_s: f32,
@@ -17,7 +18,13 @@ impl EnemyPlayerAi {
         }
     }
 
-    pub fn run(&mut self, dt: Duration, entities: &mut [Entity], rng: &mut ThreadRng) {
+    pub fn run(
+        &mut self,
+        dt: Duration,
+        entities: &mut [Entity],
+        rng: &mut ThreadRng,
+        team_state: &mut TeamState,
+    ) {
         self.timer_s -= dt.as_secs_f32();
 
         // TODO Instead of mutating game state, return commands
@@ -33,10 +40,13 @@ impl EnemyPlayerAi {
                         }
                         PhysicalType::Structure { .. } => {
                             if let Some(training_action) = &mut entity.training_action {
-                                if let TrainingPerformStatus::NewTrainingStarted =
-                                    training_action.perform()
-                                {
-                                    println!("Enemy building started training a unit");
+                                let cost = training_action.cost();
+                                if team_state.resources >= cost {
+                                    if let TrainingPerformStatus::NewTrainingStarted =
+                                        training_action.perform()
+                                    {
+                                        team_state.resources -= cost;
+                                    }
                                 }
                             }
                         }

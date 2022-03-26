@@ -94,7 +94,7 @@ impl HealthComponent {
     }
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum Team {
     Player,
     Enemy,
@@ -256,6 +256,10 @@ impl TrainingActionComponent {
             total_duration: Duration::from_secs(3),
             trained_entity_type,
         }
+    }
+
+    pub fn cost(&self) -> u32 {
+        1 // TODO dynamic costs
     }
 
     pub fn perform(&mut self) -> TrainingPerformStatus {

@@ -15,8 +15,8 @@ pub struct Assets {
     player_unit: Mesh,
     player_building: Mesh,
     enemy_building: Mesh,
-    pub selection: Mesh,
-    pub selection_2x2: Mesh,
+    selection: Mesh,
+    selection_2x2: Mesh,
     neutral_entity: Mesh,
     enemy_entity_batch: SpriteBatch,
 }

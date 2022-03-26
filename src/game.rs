@@ -8,6 +8,7 @@ use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
 
 use rand::rngs::ThreadRng;
 use std::cmp::min;
+use std::collections::HashMap;
 
 use crate::assets::{self, Assets};
 use crate::camera::Camera;
@@ -96,7 +97,7 @@ struct Game {
     assets: Assets,
     hud: HudGraphics,
     minimap: MinimapGraphics,
-    player_team_state: TeamState,
+    teams: HashMap<Team, TeamState>,
     player_state: PlayerState,
     entities: Vec<Entity>,
     entity_grid: EntityGrid,
@@ -134,7 +135,9 @@ impl Game {
 
         let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
 
-        let player_team_state = TeamState { resources: 5 };
+        let mut teams = HashMap::new();
+        teams.insert(Team::Player, TeamState { resources: 5 });
+        teams.insert(Team::Enemy, TeamState { resources: 5 });
 
         let max_camera_position = [
             map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - CAMERA_SIZE[0],
@@ -159,7 +162,7 @@ impl Game {
             assets,
             hud,
             minimap,
-            player_team_state,
+            teams,
             player_state,
             entities,
             entity_grid,
@@ -254,8 +257,12 @@ impl EventHandler for Game {
 
         let dt = ggez::timer::delta(ctx);
 
-        self.enemy_player_ai
-            .run(dt, &mut self.entities[..], &mut self.rng);
+        self.enemy_player_ai.run(
+            dt,
+            &mut self.entities[..],
+            &mut self.rng,
+            self.teams.get_mut(&Team::Enemy).unwrap(),
+        );
 
         // Remove dead entities
         self.entities.retain(|entity| {
@@ -378,7 +385,7 @@ impl EventHandler for Game {
 
         let selected_entity = self.selected_entity();
         self.hud
-            .draw(ctx, &self.player_team_state, selected_entity)?;
+            .draw(ctx, self.teams.get(&Team::Player).unwrap(), selected_entity)?;
         self.minimap
             .draw(ctx, self.player_state.camera.position_in_world)?;
 
@@ -471,16 +478,16 @@ impl EventHandler for Game {
                 mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
             }
             KeyCode::B => {
-                let resources = self.player_team_state.resources;
+                let resources = self.teams.get(&Team::Player).unwrap().resources;
                 if let Some(entity) = self.selected_entity_mut() {
                     if entity.team == Team::Player {
                         if let Some(training_action) = &mut entity.training_action {
-                            let cost = 1;
+                            let cost = training_action.cost();
                             if resources >= cost {
                                 if training_action.perform()
                                     == TrainingPerformStatus::NewTrainingStarted
                                 {
-                                    self.player_team_state.resources -= cost;
+                                    self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
                                 };
                             } else {
                                 println!("Not enough resources!");
