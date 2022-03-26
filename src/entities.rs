@@ -1,4 +1,4 @@
-use std::cmp::Ordering;
+use std::cmp::{min, Ordering};
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Duration;
 
@@ -21,6 +21,7 @@ pub struct Entity {
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
     pub training_action: Option<TrainingActionComponent>,
+    pub healing_action: Option<HealingActionComponent>,
 }
 
 #[derive(Debug)]
@@ -48,6 +49,7 @@ impl Entity {
         position: [u32; 2],
         team: Team,
         training_action: Option<TrainingActionComponent>,
+        healing_action: Option<HealingActionComponent>,
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
@@ -68,6 +70,7 @@ impl Entity {
             sprite: config.sprite,
             health,
             training_action,
+            healing_action,
         }
     }
 
@@ -91,6 +94,10 @@ impl HealthComponent {
             max: max_health,
             current: max_health,
         }
+    }
+
+    pub fn receive_healing(&mut self, amount: u32) {
+        self.current = min(self.current + amount, self.max);
     }
 }
 
@@ -245,11 +252,10 @@ enum MovementDirection {
 pub struct TrainingActionComponent {
     remaining_duration: Option<Duration>,
     total_duration: Duration,
-    trained_entity_type: EntityType,
+    pub trained_entity_type: EntityType,
 }
 
 impl TrainingActionComponent {
-    #[allow(clippy::new_without_default)]
     pub fn new(trained_entity_type: EntityType) -> Self {
         Self {
             remaining_duration: None,
@@ -304,4 +310,12 @@ pub enum TrainingUpdateStatus {
 pub enum TrainingPerformStatus {
     NewTrainingStarted,
     AlreadyOngoing,
+}
+
+#[derive(Debug)]
+pub struct HealingActionComponent;
+
+pub enum ActionType {
+    Train(EntityType),
+    Heal,
 }

@@ -15,7 +15,7 @@ use crate::camera::Camera;
 use crate::data::{self, EntityType, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
-    Entity, EntityId, PhysicalType, Team, TrainingPerformStatus, TrainingUpdateStatus,
+    ActionType, Entity, EntityId, PhysicalType, Team, TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::hud_graphics::{HudGraphics, MinimapGraphics};
 
@@ -244,22 +244,35 @@ impl Game {
         None
     }
 
-    fn try_perform_player_action(&mut self) {
-        let resources = self.teams.get(&Team::Player).unwrap().resources;
-        if let Some(entity) = self.selected_entity_mut() {
-            if entity.team == Team::Player {
-                if let Some(training_action) = &mut entity.training_action {
-                    let cost = training_action.cost();
-                    if resources >= cost {
-                        if training_action.perform() == TrainingPerformStatus::NewTrainingStarted {
-                            self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
-                        };
-                    } else {
-                        println!("Not enough resources!");
-                    }
+    fn try_perform_player_action(&mut self, action_type: ActionType) {
+        match action_type {
+            ActionType::Train(_trained_entity_type) => {
+                let resources = self.teams.get(&Team::Player).unwrap().resources;
+                let entity = self
+                    .selected_entity_mut()
+                    .expect("Need selected entity to train");
+                let training_action = entity
+                    .training_action
+                    .as_mut()
+                    .expect("Selected entity must be able to train");
+                let cost = training_action.cost();
+                if resources >= cost {
+                    if training_action.perform() == TrainingPerformStatus::NewTrainingStarted {
+                        self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
+                    };
                 } else {
-                    println!("Selected entity has no such action")
+                    println!("Not enough resources!");
                 }
+            }
+            ActionType::Heal => {
+                let entity = self
+                    .selected_entity_mut()
+                    .expect("Need selected entity to heal");
+                let health = entity
+                    .health
+                    .as_mut()
+                    .expect("Entity needs health to be able to heal");
+                health.receive_healing(1);
             }
         }
     }
@@ -477,9 +490,10 @@ impl EventHandler for Game {
                 ];
             }
 
-            let was_button_clicked = self.hud.on_mouse_click([x, y]);
-            if was_button_clicked {
-                self.try_perform_player_action();
+            if let Some(selected_entity) = self.selected_entity() {
+                if let Some(action_type) = self.hud.on_mouse_click([x, y], selected_entity) {
+                    self.try_perform_player_action(action_type);
+                }
             }
         }
     }
@@ -498,7 +512,11 @@ impl EventHandler for Game {
                 mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
             }
             KeyCode::B => {
-                self.try_perform_player_action();
+                if let Some(entity) = self.selected_entity() {
+                    if let Some(action_type) = self.hud.on_button_click(keycode, entity) {
+                        self.try_perform_player_action(action_type);
+                    }
+                }
             }
             KeyCode::X => {
                 if let Some(entity) = self.selected_entity_mut() {

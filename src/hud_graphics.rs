@@ -1,9 +1,10 @@
 use ggez::graphics::{
     self, Color, DrawMode, DrawParam, Drawable, Font, Mesh, MeshBuilder, Rect, Text,
 };
+use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
-use crate::entities::Entity;
+use crate::entities::{ActionType, Entity};
 use crate::game::{TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
 
 pub struct HudGraphics {
@@ -34,7 +35,7 @@ impl HudGraphics {
         let resources_y = 5.0;
         let name_y = 48.0;
         let health_y = 130.0;
-        let training_y = 180.0;
+        let action_y = 180.0;
 
         let small_font = 30.0;
         let large_font = 40.0;
@@ -46,7 +47,7 @@ impl HudGraphics {
             small_font,
         )?;
 
-        let mut should_draw_training_button = false;
+        let mut should_draw_action_button = false;
 
         if let Some(selected_entity) = selected_entity {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
@@ -61,35 +62,62 @@ impl HudGraphics {
             }
 
             if let Some(training_action) = &selected_entity.training_action {
-                should_draw_training_button = true;
+                should_draw_action_button = true;
                 if let Some(progress) = training_action.progress() {
-                    self.draw_text(ctx, [x, training_y], "Training in progress", small_font)?;
+                    self.draw_text(ctx, [x, action_y], "Training in progress", small_font)?;
                     let progress_w = 20.0;
                     let progress_bar = format!(
                         "[{}{}]",
                         "=".repeat((progress * progress_w) as usize),
                         " ".repeat(((1.0 - progress) * progress_w) as usize)
                     );
-                    self.draw_text(ctx, [x, training_y + 35.0], progress_bar, small_font)?;
+                    self.draw_text(ctx, [x, action_y + 35.0], progress_bar, small_font)?;
                 } else {
-                    self.draw_text(
-                        ctx,
-                        [x, training_y],
-                        "Press [B] to train a unit",
-                        small_font,
-                    )?;
+                    self.draw_text(ctx, [x, action_y], "Press [B] to train a unit", small_font)?;
                 }
+            }
+            if selected_entity.healing_action.is_some() {
+                should_draw_action_button = true;
+                self.draw_text(ctx, [x, action_y], "Press [B] to heal", small_font)?;
             }
         }
 
         // TODO draw it differently if hovered
-        self.button.draw(ctx, should_draw_training_button)?;
+        self.button.draw(ctx, should_draw_action_button)?;
 
         Ok(())
     }
 
-    pub fn on_mouse_click(&self, mouse_position: [f32; 2]) -> bool {
-        self.button.rect.contains(mouse_position)
+    pub fn on_mouse_click(
+        &self,
+        mouse_position: [f32; 2],
+        selected_entity: &Entity,
+    ) -> Option<ActionType> {
+        if self.button.rect.contains(mouse_position) {
+            if let Some(training_action) = &selected_entity.training_action {
+                return Some(ActionType::Train(training_action.trained_entity_type));
+            }
+            if selected_entity.healing_action.is_some() {
+                return Some(ActionType::Heal);
+            }
+        }
+        None
+    }
+
+    pub fn on_button_click(
+        &self,
+        keycode: KeyCode,
+        selected_entity: &Entity,
+    ) -> Option<ActionType> {
+        if keycode == KeyCode::B {
+            if let Some(training_action) = &selected_entity.training_action {
+                return Some(ActionType::Train(training_action.trained_entity_type));
+            }
+            if selected_entity.healing_action.is_some() {
+                return Some(ActionType::Heal);
+            }
+        }
+        None
     }
 
     fn draw_text(
@@ -195,9 +223,9 @@ impl Button {
         Ok(Self { rect, border, text })
     }
 
-    fn draw(&self, ctx: &mut Context, draw_training_action: bool) -> GameResult {
+    fn draw(&self, ctx: &mut Context, draw_action: bool) -> GameResult {
         self.border.draw(ctx, DrawParam::default())?;
-        if draw_training_action {
+        if draw_action {
             self.text.draw(
                 ctx,
                 DrawParam::default().dest([self.rect.x + 30.0, self.rect.y + 20.0]),
