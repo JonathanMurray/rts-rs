@@ -5,7 +5,7 @@ use ggez::{Context, GameError, GameResult};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use crate::entities::EntitySprite;
+use crate::entities::{EntitySprite, Team};
 use crate::game::{CELL_PIXEL_SIZE, COLOR_BG};
 use crate::images;
 
@@ -18,7 +18,7 @@ pub struct Assets {
     player_unit: Mesh,
     player_building: Mesh,
     enemy_building: Mesh,
-    selections: HashMap<[u32; 2], Mesh>,
+    selections: HashMap<([u32; 2], Team), Mesh>,
     neutral_entity: Mesh,
     enemy_entity_batch: SpriteBatch,
 }
@@ -28,11 +28,12 @@ impl Assets {
         &mut self,
         ctx: &mut Context,
         size: [u32; 2],
+        team: Team,
         screen_coords: [f32; 2],
     ) -> GameResult {
-        let mesh = match self.selections.entry(size) {
+        let mesh = match self.selections.entry((size, team)) {
             Entry::Occupied(o) => o.into_mut(),
-            Entry::Vacant(v) => v.insert(create_selection_mesh(ctx, size)?),
+            Entry::Vacant(v) => v.insert(create_selection_mesh(ctx, size, team)?),
         };
         mesh.draw(ctx, DrawParam::new().dest(screen_coords))
     }
@@ -188,7 +189,12 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
     Ok(assets)
 }
 
-fn create_selection_mesh(ctx: &mut Context, size: [u32; 2]) -> GameResult<Mesh> {
+fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameResult<Mesh> {
+    let color = match team {
+        Team::Player => Color::new(0.6, 0.9, 0.6, 1.0),
+        Team::Enemy => Color::new(0.8, 0.4, 0.4, 1.0),
+        Team::Neutral => Color::new(0.8, 0.8, 0.6, 1.0),
+    };
     MeshBuilder::new()
         .rectangle(
             DrawMode::stroke(2.0),
@@ -198,7 +204,7 @@ fn create_selection_mesh(ctx: &mut Context, size: [u32; 2]) -> GameResult<Mesh> 
                 CELL_PIXEL_SIZE[0] * size[0] as f32 + 2.0,
                 CELL_PIXEL_SIZE[1] * size[1] as f32 + 2.0,
             ),
-            Color::new(0.6, 0.9, 0.6, 1.0),
+            color,
         )?
         .build(ctx)
 }

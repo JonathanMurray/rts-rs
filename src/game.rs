@@ -410,7 +410,7 @@ impl EventHandler for Game {
 
             if self.player_state.selected_entity_id.as_ref() == Some(&entity.id) {
                 self.assets
-                    .draw_selection(ctx, entity.size(), screen_coords)?;
+                    .draw_selection(ctx, entity.size(), entity.team, screen_coords)?;
             }
 
             self.assets
