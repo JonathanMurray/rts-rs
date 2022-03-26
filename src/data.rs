@@ -113,7 +113,7 @@ fn create_enemy_building(position: [u32; 2]) -> Entity {
             is_solid: true,
             sprite: EntitySprite::EnemyBuilding,
             max_health: Some(2),
-            physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
+            physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
         },
         position,
         Team::Enemy,

@@ -188,10 +188,8 @@ impl Game {
         println!("Camera pos: {:?}", camera_pos);
         let grid_x = (x - WORLD_POSITION_ON_SCREEN[0] + camera_pos[0]) / CELL_PIXEL_SIZE[0];
         let grid_y = (y - WORLD_POSITION_ON_SCREEN[1] + camera_pos[1]) / CELL_PIXEL_SIZE[1];
-        println!("Grid pos: ({}, {})", grid_x, grid_y); //TODO
         let grid_x = grid_x as u32;
         let grid_y = grid_y as u32;
-        println!("Grid pos as u32: ({}, {})", grid_x, grid_y); //TODO
         if grid_x < self.entity_grid.map_dimensions[0]
             && grid_y < self.entity_grid.map_dimensions[1]
         {

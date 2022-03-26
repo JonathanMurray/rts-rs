@@ -2,6 +2,9 @@ use ggez::graphics::spritebatch::SpriteBatch;
 use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Mesh, MeshBuilder, Rect};
 use ggez::{Context, GameError, GameResult};
 
+use std::collections::hash_map::Entry;
+use std::collections::HashMap;
+
 use crate::entities::EntitySprite;
 use crate::game::{CELL_PIXEL_SIZE, COLOR_BG};
 use crate::images;
@@ -15,29 +18,23 @@ pub struct Assets {
     player_unit: Mesh,
     player_building: Mesh,
     enemy_building: Mesh,
-    selection: Mesh,
-    selection_2x2: Mesh,
+    selections: HashMap<[u32; 2], Mesh>,
     neutral_entity: Mesh,
     enemy_entity_batch: SpriteBatch,
 }
 
 impl Assets {
     pub fn draw_selection(
-        &self,
+        &mut self,
         ctx: &mut Context,
         size: [u32; 2],
         screen_coords: [f32; 2],
     ) -> GameResult {
-        let param = DrawParam::new().dest(screen_coords);
-        match size {
-            [1, 1] => self.selection.draw(ctx, param)?,
-            [2, 2] => self.selection_2x2.draw(ctx, param)?,
-            _ => {
-                // TODO: handle buildings of any size
-                panic!("Unhandled structured size: {:?}", size);
-            }
-        }
-        Ok(())
+        let mesh = match self.selections.entry(size) {
+            Entry::Occupied(o) => o.into_mut(),
+            Entry::Vacant(v) => v.insert(create_selection_mesh(ctx, size)?),
+        };
+        mesh.draw(ctx, DrawParam::new().dest(screen_coords))
     }
 
     pub fn draw_grid(
@@ -138,43 +135,17 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
             Color::new(0.7, 0.5, 0.8, 1.0),
         )?
         .build(ctx)?;
-    let enemy_building_size = [CELL_PIXEL_SIZE[0] * 1.7, CELL_PIXEL_SIZE[1] * 1.7];
+    let enemy_building_size = [CELL_PIXEL_SIZE[0] * 2.9, CELL_PIXEL_SIZE[1] * 1.9];
     let enemy_building = MeshBuilder::new()
         .rectangle(
             DrawMode::fill(),
             Rect::new(
-                (CELL_PIXEL_SIZE[0] * 2.0 - enemy_building_size[0]) / 2.0,
+                (CELL_PIXEL_SIZE[0] * 3.0 - enemy_building_size[0]) / 2.0,
                 (CELL_PIXEL_SIZE[1] * 2.0 - enemy_building_size[1]) / 2.0,
                 enemy_building_size[0],
                 enemy_building_size[1],
             ),
             Color::new(0.9, 0.4, 0.4, 1.0),
-        )?
-        .build(ctx)?;
-
-    // TODO create and cache selection meshes on the fly
-    let selection = MeshBuilder::new()
-        .rectangle(
-            DrawMode::stroke(2.0),
-            Rect::new(
-                -1.0,
-                -1.0,
-                CELL_PIXEL_SIZE[0] + 2.0,
-                CELL_PIXEL_SIZE[1] + 2.0,
-            ),
-            Color::new(0.6, 0.9, 0.6, 1.0),
-        )?
-        .build(ctx)?;
-    let selection_2x2 = MeshBuilder::new()
-        .rectangle(
-            DrawMode::stroke(2.0),
-            Rect::new(
-                -1.0,
-                -1.0,
-                CELL_PIXEL_SIZE[0] * 2.0 + 2.0,
-                CELL_PIXEL_SIZE[1] * 2.0 + 2.0,
-            ),
-            Color::new(0.6, 0.9, 0.6, 1.0),
         )?
         .build(ctx)?;
 
@@ -202,6 +173,7 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         )?
         .build(ctx)?;
     let enemy_entity_batch = SpriteBatch::new(images::mesh_into_image(ctx, enemy_mesh)?);
+    let selections = Default::default();
     let assets = Assets {
         grid,
         grid_border,
@@ -209,12 +181,26 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         player_unit,
         player_building,
         enemy_building,
-        selection,
-        selection_2x2,
+        selections,
         neutral_entity,
         enemy_entity_batch,
     };
     Ok(assets)
+}
+
+fn create_selection_mesh(ctx: &mut Context, size: [u32; 2]) -> GameResult<Mesh> {
+    MeshBuilder::new()
+        .rectangle(
+            DrawMode::stroke(2.0),
+            Rect::new(
+                -1.0,
+                -1.0,
+                CELL_PIXEL_SIZE[0] * size[0] as f32 + 2.0,
+                CELL_PIXEL_SIZE[1] * size[1] as f32 + 2.0,
+            ),
+            Color::new(0.6, 0.9, 0.6, 1.0),
+        )?
+        .build(ctx)
 }
 
 fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> GameResult<Vec<Mesh>> {
