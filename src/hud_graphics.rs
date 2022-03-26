@@ -1,4 +1,6 @@
-use ggez::graphics::{self, Color, DrawMode, DrawParam, Font, Mesh, MeshBuilder, Rect, Text};
+use ggez::graphics::{
+    self, Color, DrawMode, DrawParam, Drawable, Font, Mesh, MeshBuilder, Rect, Text,
+};
 use ggez::{Context, GameResult};
 
 use crate::entities::Entity;
@@ -7,14 +9,19 @@ use crate::game::{TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
 pub struct HudGraphics {
     position_on_screen: [f32; 2],
     font: Font,
+    button: Button,
 }
 
 impl HudGraphics {
-    pub fn new(position: [f32; 2], font: Font) -> Self {
-        Self {
+    pub fn new(ctx: &mut Context, position: [f32; 2], font: Font) -> GameResult<Self> {
+        let w = 80.0;
+        let button_rect = Rect::new(position[0] + 5.0, position[1] + 270.0, w, w);
+        let button = Button::new(ctx, button_rect, font)?;
+        Ok(Self {
             position_on_screen: position,
             font,
-        }
+            button,
+        })
     }
 
     pub fn draw(
@@ -39,6 +46,8 @@ impl HudGraphics {
             small_font,
         )?;
 
+        let mut should_draw_training_button = false;
+
         if let Some(selected_entity) = selected_entity {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
 
@@ -52,6 +61,7 @@ impl HudGraphics {
             }
 
             if let Some(training_action) = &selected_entity.training_action {
+                should_draw_training_button = true;
                 if let Some(progress) = training_action.progress() {
                     self.draw_text(ctx, [x, training_y], "Training in progress", small_font)?;
                     let progress_w = 20.0;
@@ -72,7 +82,14 @@ impl HudGraphics {
             }
         }
 
+        // TODO draw it differently if hovered
+        self.button.draw(ctx, should_draw_training_button)?;
+
         Ok(())
+    }
+
+    pub fn on_mouse_click(&self, mouse_position: [f32; 2]) -> bool {
+        self.button.rect.contains(mouse_position)
     }
 
     fn draw_text(
@@ -160,5 +177,32 @@ impl MinimapGraphics {
 
     pub fn rect(&self) -> &Rect {
         &self.rect
+    }
+}
+
+pub struct Button {
+    rect: Rect,
+    border: Mesh,
+    text: Text,
+}
+
+impl Button {
+    fn new(ctx: &mut Context, rect: Rect, font: Font) -> GameResult<Button> {
+        let border = MeshBuilder::new()
+            .rectangle(DrawMode::stroke(1.0), rect, Color::new(1.0, 1.0, 1.0, 1.0))?
+            .build(ctx)?;
+        let text = Text::new(("B", font, 40.0));
+        Ok(Self { rect, border, text })
+    }
+
+    fn draw(&self, ctx: &mut Context, draw_training_action: bool) -> GameResult {
+        self.border.draw(ctx, DrawParam::default())?;
+        if draw_training_action {
+            self.text.draw(
+                ctx,
+                DrawParam::default().dest([self.rect.x + 30.0, self.rect.y + 20.0]),
+            )?;
+        }
+        Ok(())
     }
 }

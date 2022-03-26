@@ -155,7 +155,7 @@ impl Game {
             WORLD_POSITION_ON_SCREEN[1] + CAMERA_SIZE[1] + 25.0,
         ];
         let minimap_pos = [900.0, hud_pos[1] + 100.0];
-        let hud = HudGraphics::new(hud_pos, font);
+        let hud = HudGraphics::new(ctx, hud_pos, font)?;
         let minimap = MinimapGraphics::new(ctx, minimap_pos, map_dimensions)?;
 
         Ok(Self {
@@ -174,18 +174,15 @@ impl Game {
     fn screen_to_grid_coordinates(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
         let [x, y] = coordinates;
         if x < WORLD_POSITION_ON_SCREEN[0] || y < WORLD_POSITION_ON_SCREEN[1] {
-            println!("Top/left of the game area on screen");
             return None;
         }
         if x >= WORLD_POSITION_ON_SCREEN[0] + CAMERA_SIZE[0]
             || y >= WORLD_POSITION_ON_SCREEN[1] + CAMERA_SIZE[1]
         {
-            println!("Bot/right of the game area on screen");
             return None;
         }
 
         let camera_pos = self.player_state.camera.position_in_world;
-        println!("Camera pos: {:?}", camera_pos);
         let grid_x = (x - WORLD_POSITION_ON_SCREEN[0] + camera_pos[0]) / CELL_PIXEL_SIZE[0];
         let grid_y = (y - WORLD_POSITION_ON_SCREEN[1] + camera_pos[1]) / CELL_PIXEL_SIZE[1];
         let grid_x = grid_x as u32;
@@ -245,6 +242,26 @@ impl Game {
             }
         }
         None
+    }
+
+    fn try_perform_player_action(&mut self) {
+        let resources = self.teams.get(&Team::Player).unwrap().resources;
+        if let Some(entity) = self.selected_entity_mut() {
+            if entity.team == Team::Player {
+                if let Some(training_action) = &mut entity.training_action {
+                    let cost = training_action.cost();
+                    if resources >= cost {
+                        if training_action.perform() == TrainingPerformStatus::NewTrainingStarted {
+                            self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
+                        };
+                    } else {
+                        println!("Not enough resources!");
+                    }
+                } else {
+                    println!("Selected entity has no such action")
+                }
+            }
+        }
     }
 }
 
@@ -459,6 +476,11 @@ impl EventHandler for Game {
                         - CAMERA_SIZE[1] / 2.0,
                 ];
             }
+
+            let was_button_clicked = self.hud.on_mouse_click([x, y]);
+            if was_button_clicked {
+                self.try_perform_player_action();
+            }
         }
     }
 
@@ -476,25 +498,7 @@ impl EventHandler for Game {
                 mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
             }
             KeyCode::B => {
-                let resources = self.teams.get(&Team::Player).unwrap().resources;
-                if let Some(entity) = self.selected_entity_mut() {
-                    if entity.team == Team::Player {
-                        if let Some(training_action) = &mut entity.training_action {
-                            let cost = training_action.cost();
-                            if resources >= cost {
-                                if training_action.perform()
-                                    == TrainingPerformStatus::NewTrainingStarted
-                                {
-                                    self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
-                                };
-                            } else {
-                                println!("Not enough resources!");
-                            }
-                        } else {
-                            println!("Selected entity has no such action")
-                        }
-                    }
-                }
+                self.try_perform_player_action();
             }
             KeyCode::X => {
                 if let Some(entity) = self.selected_entity_mut() {
