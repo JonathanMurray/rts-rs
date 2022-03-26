@@ -81,8 +81,8 @@ impl EntityGrid {
 
 enum CursorAction {
     Default,
-    DealingDamage,
-    IssuingMovement,
+    DealDamage,
+    IssueMovement,
 }
 
 struct PlayerState {
@@ -95,8 +95,8 @@ impl PlayerState {
     fn set_cursor_action(&mut self, ctx: &mut Context, cursor_action: CursorAction) {
         match cursor_action {
             CursorAction::Default => mouse::set_cursor_type(ctx, CursorIcon::Default),
-            CursorAction::DealingDamage => mouse::set_cursor_type(ctx, CursorIcon::Crosshair),
-            CursorAction::IssuingMovement => mouse::set_cursor_type(ctx, CursorIcon::Move),
+            CursorAction::DealDamage => mouse::set_cursor_type(ctx, CursorIcon::Crosshair),
+            CursorAction::IssueMovement => mouse::set_cursor_type(ctx, CursorIcon::Move),
         }
         self.cursor_action = cursor_action;
     }
@@ -264,13 +264,14 @@ impl Game {
                 let entity = self
                     .selected_entity_mut()
                     .expect("Need selected entity to train");
-                let training_action = entity
-                    .training_action
+                let training = entity
+                    .training
                     .as_mut()
                     .expect("Selected entity must be able to train");
-                let cost = training_action.cost();
+                let cost = training.cost();
                 if resources >= cost {
-                    if training_action.perform() == TrainingPerformStatus::NewTrainingStarted {
+                    if training.start() == TrainingPerformStatus::NewTrainingStarted {
+                        entity.state = EntityState::TrainingUnit;
                         self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
                     };
                 } else {
@@ -279,7 +280,7 @@ impl Game {
             }
             ActionType::Move => {
                 self.player_state
-                    .set_cursor_action(ctx, CursorAction::IssuingMovement);
+                    .set_cursor_action(ctx, CursorAction::IssueMovement);
             }
             ActionType::Heal => {
                 let entity = self
@@ -293,7 +294,7 @@ impl Game {
             }
             ActionType::Harm => {
                 self.player_state
-                    .set_cursor_action(ctx, CursorAction::DealingDamage);
+                    .set_cursor_action(ctx, CursorAction::DealDamage);
             }
         }
     }
@@ -367,11 +368,9 @@ impl EventHandler for Game {
 
         let mut completed_trainings = Vec::new();
         for entity in &mut self.entities {
-            let status = entity
-                .training_action
-                .as_mut()
-                .map(|training_action| training_action.update(dt));
+            let status = entity.training.as_mut().map(|training| training.update(dt));
             if let Some(TrainingUpdateStatus::Done(trained_entity_type)) = status {
+                entity.state = EntityState::Idle;
                 completed_trainings.push((
                     trained_entity_type,
                     entity.team,
@@ -483,7 +482,7 @@ impl EventHandler for Game {
                         println!("No entity is selected");
                     }
                 }
-                CursorAction::DealingDamage => {
+                CursorAction::DealDamage => {
                     // TODO this only works for structures' top-left corner
                     if let Some(health) = self
                         .entities
@@ -498,7 +497,7 @@ impl EventHandler for Game {
                     self.player_state
                         .set_cursor_action(ctx, CursorAction::Default);
                 }
-                CursorAction::IssuingMovement => {
+                CursorAction::IssueMovement => {
                     //TODO deduplicate
                     let entity = self
                         .selected_entity_mut()

@@ -39,11 +39,11 @@ impl EnemyPlayerAi {
                             movement.pathfinder.find_path(&entity.position, [x, y]);
                         }
                         PhysicalType::Structure { .. } => {
-                            if let Some(training_action) = &mut entity.training_action {
-                                let cost = training_action.cost();
+                            if let Some(training) = &mut entity.training {
+                                let cost = training.cost();
                                 if team_state.resources >= cost {
                                     if let TrainingPerformStatus::NewTrainingStarted =
-                                        training_action.perform()
+                                        training.start()
                                     {
                                         team_state.resources -= cost;
                                     }

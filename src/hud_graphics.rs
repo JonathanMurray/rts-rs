@@ -4,7 +4,7 @@ use ggez::graphics::{
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
-use crate::entities::{ActionType, Entity, Team, NUM_UNIT_ACTIONS};
+use crate::entities::{ActionType, Entity, EntityState, Team, NUM_UNIT_ACTIONS};
 use crate::game::{TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
 
 const NUM_BUTTONS: usize = NUM_UNIT_ACTIONS;
@@ -67,7 +67,6 @@ impl HudGraphics {
                 self.draw_text(ctx, [x, health_y], health, small_font)?;
             }
 
-            // TODO: reflect this by highlighting buttons instead
             self.draw_text(
                 ctx,
                 [x + 200.0, health_y],
@@ -76,11 +75,12 @@ impl HudGraphics {
             )?;
 
             if selected_entity.team == Team::Player {
-                let mut actions = [false; NUM_BUTTONS];
-                if let Some(training_action) = &selected_entity.training_action {
-                    actions[0] = true;
-                    if let Some(progress) = training_action.progress() {
-                        self.draw_text(ctx, [x, action_y], "Training in progress", small_font)?;
+                let mut button_states = [ButtonState {
+                    shown: false,
+                    matches_entity_state: false,
+                }; NUM_BUTTONS];
+                if let Some(training) = &selected_entity.training {
+                    if let Some(progress) = training.progress() {
                         let progress_w = 20.0;
                         let progress_bar = format!(
                             "[{}{}]",
@@ -88,26 +88,36 @@ impl HudGraphics {
                             " ".repeat(((1.0 - progress) * progress_w) as usize)
                         );
                         self.draw_text(ctx, [x, action_y + 35.0], progress_bar, small_font)?;
-                    } else {
-                        self.draw_text(
-                            ctx,
-                            [x, action_y],
-                            "Press [C] to train a unit",
-                            small_font,
-                        )?;
                     }
                 }
                 let mut action_text = String::new();
-                for (action_i, action) in selected_entity.unit_actions.iter().enumerate() {
+                for (i, action) in selected_entity.actions.iter().enumerate() {
                     if let Some(action_type) = action {
-                        actions[action_i] = true;
+                        button_states[i].shown = true;
+                        match action_type {
+                            ActionType::Train(_) => {
+                                if selected_entity.state == EntityState::TrainingUnit {
+                                    button_states[i].matches_entity_state = true;
+                                }
+                            }
+                            ActionType::Move => {
+                                if selected_entity.state == EntityState::Moving {
+                                    button_states[i].matches_entity_state = true;
+                                }
+                            }
+                            ActionType::Heal => {}
+                            ActionType::Harm => {
+                                // TODO: When cursor_action == DealDamage, Harm button should be highlighted
+                                //       (but a different type of highlight: pending action, not unit state)
+                            }
+                        }
                         action_text.push_str(&format!("{:?} ", action_type));
                     }
                 }
                 self.draw_text(ctx, [x, action_y], action_text, small_font)?;
 
                 for (button_i, button) in self.buttons.iter().enumerate() {
-                    button.draw(ctx, actions[button_i])?;
+                    button.draw(ctx, button_states[button_i])?;
                 }
             }
         }
@@ -122,12 +132,7 @@ impl HudGraphics {
     ) -> Option<ActionType> {
         for (button_i, button) in self.buttons.iter().enumerate() {
             if button.rect.contains(mouse_position) {
-                if button_i == 0 {
-                    if let Some(training_action) = &selected_player_entity.training_action {
-                        return Some(ActionType::Train(training_action.trained_entity_type));
-                    }
-                }
-                return selected_player_entity.unit_actions[button_i];
+                return selected_player_entity.actions[button_i];
             }
         }
 
@@ -140,16 +145,13 @@ impl HudGraphics {
         selected_player_entity: &Entity,
     ) -> Option<ActionType> {
         if keycode == KeyCode::C {
-            if let Some(training_action) = &selected_player_entity.training_action {
-                return Some(ActionType::Train(training_action.trained_entity_type));
-            }
-            return selected_player_entity.unit_actions[0];
+            return selected_player_entity.actions[0];
         }
         if keycode == KeyCode::V {
-            return selected_player_entity.unit_actions[1];
+            return selected_player_entity.actions[1];
         }
         if keycode == KeyCode::B {
-            return selected_player_entity.unit_actions[2];
+            return selected_player_entity.actions[2];
         }
         None
     }
@@ -171,6 +173,12 @@ impl HudGraphics {
             ]),
         )
     }
+}
+
+#[derive(Copy, Clone)]
+struct ButtonState {
+    shown: bool,
+    matches_entity_state: bool,
 }
 
 pub struct MinimapGraphics {
@@ -245,6 +253,7 @@ impl MinimapGraphics {
 pub struct Button {
     rect: Rect,
     border: Mesh,
+    highlight: Mesh,
     text: Text,
 }
 
@@ -253,18 +262,33 @@ impl Button {
         let border = MeshBuilder::new()
             .rectangle(DrawMode::stroke(1.0), rect, Color::new(1.0, 1.0, 1.0, 1.0))?
             .build(ctx)?;
+        let highlight = MeshBuilder::new()
+            .rectangle(
+                DrawMode::stroke(3.0),
+                Rect::new(rect.x - 1.0, rect.y - 1.0, rect.w + 2.0, rect.h + 2.0),
+                Color::new(0.8, 0.8, 0.0, 1.0),
+            )?
+            .build(ctx)?;
         let text = Text::new((text, font, 40.0));
-        Ok(Self { rect, border, text })
+        Ok(Self {
+            rect,
+            border,
+            highlight,
+            text,
+        })
     }
 
-    fn draw(&self, ctx: &mut Context, draw_action: bool) -> GameResult {
+    fn draw(&self, ctx: &mut Context, state: ButtonState) -> GameResult {
         // TODO draw it differently if hovered
         self.border.draw(ctx, DrawParam::default())?;
-        if draw_action {
+        if state.shown {
             self.text.draw(
                 ctx,
                 DrawParam::default().dest([self.rect.x + 30.0, self.rect.y + 20.0]),
             )?;
+        }
+        if state.matches_entity_state {
+            self.highlight.draw(ctx, DrawParam::default())?;
         }
         Ok(())
     }

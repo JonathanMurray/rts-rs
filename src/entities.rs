@@ -12,9 +12,10 @@ pub const NUM_UNIT_ACTIONS: usize = 3;
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct EntityId(usize);
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum EntityState {
     Idle,
+    TrainingUnit,
     Moving,
 }
 
@@ -28,8 +29,8 @@ pub struct Entity {
     pub team: Team,
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
-    pub training_action: Option<TrainingActionComponent>,
-    pub unit_actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
+    pub training: Option<TrainingComponent>,
+    pub actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
     pub state: EntityState,
 }
 
@@ -57,8 +58,7 @@ impl Entity {
         config: EntityConfig,
         position: [u32; 2],
         team: Team,
-        training_action: Option<TrainingActionComponent>,
-        unit_actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
+        actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
@@ -69,6 +69,13 @@ impl Entity {
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
         let health = config.max_health.map(HealthComponent::new);
+        // TODO: handle multiple training actions on one entity
+        let training = actions.iter().find_map(|action| match action {
+            Some(ActionType::Train(trained_entity_type)) => {
+                Some(TrainingComponent::new(*trained_entity_type))
+            }
+            _ => None,
+        });
         Self {
             id,
             name: config.name,
@@ -78,8 +85,8 @@ impl Entity {
             team,
             sprite: config.sprite,
             health,
-            training_action,
-            unit_actions,
+            training,
+            actions,
             state: EntityState::Idle,
         }
     }
@@ -265,13 +272,13 @@ enum MovementDirection {
 }
 
 #[derive(Debug)]
-pub struct TrainingActionComponent {
+pub struct TrainingComponent {
     remaining_duration: Option<Duration>,
     total_duration: Duration,
     pub trained_entity_type: EntityType,
 }
 
-impl TrainingActionComponent {
+impl TrainingComponent {
     pub fn new(trained_entity_type: EntityType) -> Self {
         Self {
             remaining_duration: None,
@@ -284,7 +291,8 @@ impl TrainingActionComponent {
         1 // TODO dynamic costs
     }
 
-    pub fn perform(&mut self) -> TrainingPerformStatus {
+    #[must_use]
+    pub fn start(&mut self) -> TrainingPerformStatus {
         if self.remaining_duration.is_some() {
             TrainingPerformStatus::AlreadyOngoing
         } else {
