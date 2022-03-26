@@ -98,6 +98,7 @@ pub struct MinimapGraphics {
     border_mesh: Mesh,
     camera_mesh: Mesh,
     camera_scale: [f32; 2],
+    rect: Rect,
 }
 
 impl MinimapGraphics {
@@ -106,19 +107,17 @@ impl MinimapGraphics {
         position: [f32; 2],
         map_dimensions: [u32; 2],
     ) -> GameResult<Self> {
-        let cell_pixel_size_in_minimap = 5.0;
+        let cell_pixel_size_in_minimap = 8.0;
+
+        let rect = Rect::new(
+            position[0],
+            position[1],
+            map_dimensions[0] as f32 * cell_pixel_size_in_minimap,
+            map_dimensions[1] as f32 * cell_pixel_size_in_minimap,
+        );
 
         let border_mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::stroke(2.0),
-                Rect::new(
-                    position[0],
-                    position[1],
-                    map_dimensions[0] as f32 * cell_pixel_size_in_minimap,
-                    map_dimensions[1] as f32 * cell_pixel_size_in_minimap,
-                ),
-                Color::new(1.0, 1.0, 1.0, 1.0),
-            )?
+            .rectangle(DrawMode::stroke(2.0), rect, Color::new(1.0, 1.0, 1.0, 1.0))?
             .build(ctx)?;
 
         let camera_scale = [
@@ -142,6 +141,7 @@ impl MinimapGraphics {
             border_mesh,
             camera_mesh,
             camera_scale,
+            rect,
         })
     }
 
@@ -155,7 +155,10 @@ impl MinimapGraphics {
                 camera_position_in_world[1] * self.camera_scale[1],
             ]),
         )?;
-
         Ok(())
+    }
+
+    pub fn rect(&self) -> &Rect {
+        &self.rect
     }
 }

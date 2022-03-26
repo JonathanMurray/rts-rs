@@ -4,7 +4,7 @@ use ggez::input::keyboard::KeyCode;
 use ggez::Context;
 
 pub struct Camera {
-    position_in_world: [f32; 2],
+    pub position_in_world: [f32; 2],
     max_position: [f32; 2],
 }
 
@@ -14,10 +14,6 @@ impl Camera {
             position_in_world,
             max_position,
         }
-    }
-
-    pub fn position_in_world(&self) -> [f32; 2] {
-        self.position_in_world
     }
 
     pub fn update(&mut self, ctx: &Context, dt: Duration) {

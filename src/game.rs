@@ -174,16 +174,14 @@ impl Game {
             println!("Top/left of the game area on screen");
             return None;
         }
-        if x >= WORLD_POSITION_ON_SCREEN[0]
-            + self.entity_grid.map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0]
-            || y >= WORLD_POSITION_ON_SCREEN[1]
-                + self.entity_grid.map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1]
+        if x >= WORLD_POSITION_ON_SCREEN[0] + CAMERA_SIZE[0]
+            || y >= WORLD_POSITION_ON_SCREEN[1] + CAMERA_SIZE[1]
         {
             println!("Bot/right of the game area on screen");
             return None;
         }
 
-        let camera_pos = self.player_state.camera.position_in_world();
+        let camera_pos = self.player_state.camera.position_in_world;
         println!("Camera pos: {:?}", camera_pos);
         let grid_x = (x - WORLD_POSITION_ON_SCREEN[0] + camera_pos[0]) / CELL_PIXEL_SIZE[0];
         let grid_y = (y - WORLD_POSITION_ON_SCREEN[1] + camera_pos[1]) / CELL_PIXEL_SIZE[1];
@@ -340,12 +338,12 @@ impl EventHandler for Game {
         self.assets.draw_grid(
             ctx,
             WORLD_POSITION_ON_SCREEN,
-            self.player_state.camera.position_in_world(),
+            self.player_state.camera.position_in_world,
         )?;
 
         let offset = [
-            WORLD_POSITION_ON_SCREEN[0] - self.player_state.camera.position_in_world()[0],
-            WORLD_POSITION_ON_SCREEN[1] - self.player_state.camera.position_in_world()[1],
+            WORLD_POSITION_ON_SCREEN[0] - self.player_state.camera.position_in_world[0],
+            WORLD_POSITION_ON_SCREEN[1] - self.player_state.camera.position_in_world[1],
         ];
 
         for entity in &self.entities {
@@ -375,14 +373,14 @@ impl EventHandler for Game {
         self.hud
             .draw(ctx, &self.player_team_state, selected_entity)?;
         self.minimap
-            .draw(ctx, self.player_state.camera.position_in_world())?;
+            .draw(ctx, self.player_state.camera.position_in_world)?;
 
         graphics::present(ctx)?;
         Ok(())
     }
 
     fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
-        if let Some(clicked_pos) = self.screen_to_grid_coordinates([x, y]) {
+        if let Some(clicked_world_pos) = self.screen_to_grid_coordinates([x, y]) {
             match self.player_state.mouse_state {
                 MouseState::Default => {
                     if button == MouseButton::Left {
@@ -392,10 +390,10 @@ impl EventHandler for Game {
                             .iter()
                             .find(|e| {
                                 let [w, h] = e.size();
-                                clicked_pos[0] >= e.position[0]
-                                    && clicked_pos[0] < e.position[0] + w
-                                    && clicked_pos[1] >= e.position[1]
-                                    && clicked_pos[1] < e.position[1] + h
+                                clicked_world_pos[0] >= e.position[0]
+                                    && clicked_world_pos[0] < e.position[0] + w
+                                    && clicked_world_pos[1] >= e.position[1]
+                                    && clicked_world_pos[1] < e.position[1] + h
                             })
                             .map(|e| e.id);
                         println!(
@@ -406,7 +404,9 @@ impl EventHandler for Game {
                         if entity.team == Team::Player {
                             match &mut entity.entity_type {
                                 EntityType::Mobile(movement) => {
-                                    movement.pathfinder.find_path(&entity.position, clicked_pos);
+                                    movement
+                                        .pathfinder
+                                        .find_path(&entity.position, clicked_world_pos);
                                 }
                                 EntityType::Structure { .. } => {
                                     println!("Selected entity is immobile")
@@ -422,7 +422,7 @@ impl EventHandler for Game {
                     if let Some(mut health) = self
                         .entities
                         .iter_mut()
-                        .filter(|e| e.position == clicked_pos)
+                        .filter(|e| e.position == clicked_world_pos)
                         .filter_map(|e| e.health.as_mut())
                         .next()
                     {
@@ -432,6 +432,20 @@ impl EventHandler for Game {
                     self.player_state.mouse_state = MouseState::Default;
                     mouse::set_cursor_type(ctx, CursorIcon::Default);
                 }
+            }
+        } else {
+            let minimap = self.minimap.rect();
+            if minimap.contains([x, y]) {
+                self.player_state.camera.position_in_world = [
+                    ((x - minimap.x) / minimap.w)
+                        * self.entity_grid.map_dimensions[0] as f32
+                        * CELL_PIXEL_SIZE[0]
+                        - CAMERA_SIZE[0] / 2.0,
+                    ((y - minimap.y) / minimap.h)
+                        * self.entity_grid.map_dimensions[1] as f32
+                        * CELL_PIXEL_SIZE[1]
+                        - CAMERA_SIZE[1] / 2.0,
+                ];
             }
         }
     }
