@@ -4,7 +4,7 @@ use ggez::graphics::{
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
-use crate::entities::{ActionType, Entity};
+use crate::entities::{ActionType, Entity, Team};
 use crate::game::{TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
 
 const NUM_BUTTONS: usize = 2;
@@ -53,8 +53,6 @@ impl HudGraphics {
             small_font,
         )?;
 
-        let mut actions = [false; NUM_BUTTONS];
-
         if let Some(selected_entity) = selected_entity {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
 
@@ -67,37 +65,45 @@ impl HudGraphics {
                 self.draw_text(ctx, [x, health_y], health, small_font)?;
             }
 
-            if let Some(training_action) = &selected_entity.training_action {
-                actions[0] = true;
-                if let Some(progress) = training_action.progress() {
-                    self.draw_text(ctx, [x, action_y], "Training in progress", small_font)?;
-                    let progress_w = 20.0;
-                    let progress_bar = format!(
-                        "[{}{}]",
-                        "=".repeat((progress * progress_w) as usize),
-                        " ".repeat(((1.0 - progress) * progress_w) as usize)
-                    );
-                    self.draw_text(ctx, [x, action_y + 35.0], progress_bar, small_font)?;
-                } else {
-                    self.draw_text(ctx, [x, action_y], "Press [V] to train a unit", small_font)?;
-                }
-            }
-            let mut action_text = String::new();
-            for (action_i, action) in selected_entity.instant_actions.iter().enumerate() {
-                if let Some(action_type) = action {
-                    actions[action_i] = true;
-                    match action_type {
-                        ActionType::Heal => action_text.push_str("Heal "),
-                        ActionType::SelfHarm => action_text.push_str("Self-harm "),
-                        _ => panic!("Unhandled action: {:?}", action_type),
+            if selected_entity.team == Team::Player {
+                let mut actions = [false; NUM_BUTTONS];
+                if let Some(training_action) = &selected_entity.training_action {
+                    actions[0] = true;
+                    if let Some(progress) = training_action.progress() {
+                        self.draw_text(ctx, [x, action_y], "Training in progress", small_font)?;
+                        let progress_w = 20.0;
+                        let progress_bar = format!(
+                            "[{}{}]",
+                            "=".repeat((progress * progress_w) as usize),
+                            " ".repeat(((1.0 - progress) * progress_w) as usize)
+                        );
+                        self.draw_text(ctx, [x, action_y + 35.0], progress_bar, small_font)?;
+                    } else {
+                        self.draw_text(
+                            ctx,
+                            [x, action_y],
+                            "Press [V] to train a unit",
+                            small_font,
+                        )?;
                     }
                 }
-            }
-            self.draw_text(ctx, [x, action_y], action_text, small_font)?;
-        }
+                let mut action_text = String::new();
+                for (action_i, action) in selected_entity.instant_actions.iter().enumerate() {
+                    if let Some(action_type) = action {
+                        actions[action_i] = true;
+                        match action_type {
+                            ActionType::Heal => action_text.push_str("Heal "),
+                            ActionType::SelfHarm => action_text.push_str("Self-harm "),
+                            _ => panic!("Unhandled action: {:?}", action_type),
+                        }
+                    }
+                }
+                self.draw_text(ctx, [x, action_y], action_text, small_font)?;
 
-        for (button_i, button) in self.buttons.iter().enumerate() {
-            button.draw(ctx, actions[button_i])?;
+                for (button_i, button) in self.buttons.iter().enumerate() {
+                    button.draw(ctx, actions[button_i])?;
+                }
+            }
         }
 
         Ok(())
@@ -106,16 +112,16 @@ impl HudGraphics {
     pub fn on_mouse_click(
         &self,
         mouse_position: [f32; 2],
-        selected_entity: &Entity,
+        selected_player_entity: &Entity,
     ) -> Option<ActionType> {
         for (button_i, button) in self.buttons.iter().enumerate() {
             if button.rect.contains(mouse_position) {
                 if button_i == 0 {
-                    if let Some(training_action) = &selected_entity.training_action {
+                    if let Some(training_action) = &selected_player_entity.training_action {
                         return Some(ActionType::Train(training_action.trained_entity_type));
                     }
                 }
-                return selected_entity.instant_actions[button_i];
+                return selected_player_entity.instant_actions[button_i];
             }
         }
 
@@ -125,16 +131,16 @@ impl HudGraphics {
     pub fn on_button_click(
         &self,
         keycode: KeyCode,
-        selected_entity: &Entity,
+        selected_player_entity: &Entity,
     ) -> Option<ActionType> {
         if keycode == KeyCode::V {
-            if let Some(training_action) = &selected_entity.training_action {
+            if let Some(training_action) = &selected_player_entity.training_action {
                 return Some(ActionType::Train(training_action.trained_entity_type));
             }
-            return selected_entity.instant_actions[0];
+            return selected_player_entity.instant_actions[0];
         }
         if keycode == KeyCode::B {
-            return selected_entity.instant_actions[1];
+            return selected_player_entity.instant_actions[1];
         }
         None
     }

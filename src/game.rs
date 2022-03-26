@@ -500,9 +500,11 @@ impl EventHandler for Game {
                 ];
             }
 
-            if let Some(selected_entity) = self.selected_entity() {
-                if let Some(action_type) = self.hud.on_mouse_click([x, y], selected_entity) {
-                    self.try_perform_player_action(action_type);
+            if let Some(entity) = self.selected_entity() {
+                if entity.team == Team::Player {
+                    if let Some(action_type) = self.hud.on_mouse_click([x, y], entity) {
+                        self.try_perform_player_action(action_type);
+                    }
                 }
             }
         }
@@ -523,8 +525,10 @@ impl EventHandler for Game {
             }
             KeyCode::V | KeyCode::B => {
                 if let Some(entity) = self.selected_entity() {
-                    if let Some(action_type) = self.hud.on_button_click(keycode, entity) {
-                        self.try_perform_player_action(action_type);
+                    if entity.team == Team::Player {
+                        if let Some(action_type) = self.hud.on_button_click(keycode, entity) {
+                            self.try_perform_player_action(action_type);
+                        }
                     }
                 }
             }
