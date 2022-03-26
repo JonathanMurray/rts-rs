@@ -7,8 +7,16 @@ use crate::game;
 
 static NEXT_ENTITY_ID: AtomicUsize = AtomicUsize::new(1);
 
+pub const NUM_UNIT_ACTIONS: usize = 3;
+
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct EntityId(usize);
+
+#[derive(Debug)]
+pub enum EntityState {
+    Idle,
+    Moving,
+}
 
 #[derive(Debug)]
 pub struct Entity {
@@ -21,7 +29,8 @@ pub struct Entity {
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
     pub training_action: Option<TrainingActionComponent>,
-    pub instant_actions: [Option<ActionType>; 2],
+    pub unit_actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
+    pub state: EntityState,
 }
 
 #[derive(Debug)]
@@ -49,7 +58,7 @@ impl Entity {
         position: [u32; 2],
         team: Team,
         training_action: Option<TrainingActionComponent>,
-        instant_actions: [Option<ActionType>; 2],
+        unit_actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
@@ -70,7 +79,8 @@ impl Entity {
             sprite: config.sprite,
             health,
             training_action,
-            instant_actions,
+            unit_actions,
+            state: EntityState::Idle,
         }
     }
 
@@ -324,6 +334,7 @@ pub struct HealingActionComponent;
 #[derive(Debug, Copy, Clone)]
 pub enum ActionType {
     Train(EntityType),
+    Move,
     Heal,
-    SelfHarm,
+    Harm,
 }

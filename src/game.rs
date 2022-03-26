@@ -15,7 +15,8 @@ use crate::camera::Camera;
 use crate::data::{self, EntityType, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
-    ActionType, Entity, EntityId, PhysicalType, Team, TrainingPerformStatus, TrainingUpdateStatus,
+    ActionType, Entity, EntityId, EntityState, PhysicalType, Team, TrainingPerformStatus,
+    TrainingUpdateStatus,
 };
 use crate::hud_graphics::{HudGraphics, MinimapGraphics};
 
@@ -78,15 +79,27 @@ impl EntityGrid {
     }
 }
 
-enum MouseState {
+enum CursorAction {
     Default,
     DealingDamage,
+    IssuingMovement,
 }
 
 struct PlayerState {
     selected_entity_id: Option<EntityId>,
-    mouse_state: MouseState,
+    cursor_action: CursorAction,
     camera: Camera,
+}
+
+impl PlayerState {
+    fn set_cursor_action(&mut self, ctx: &mut Context, cursor_action: CursorAction) {
+        match cursor_action {
+            CursorAction::Default => mouse::set_cursor_type(ctx, CursorIcon::Default),
+            CursorAction::DealingDamage => mouse::set_cursor_type(ctx, CursorIcon::Crosshair),
+            CursorAction::IssuingMovement => mouse::set_cursor_type(ctx, CursorIcon::Move),
+        }
+        self.cursor_action = cursor_action;
+    }
 }
 
 pub struct TeamState {
@@ -146,7 +159,7 @@ impl Game {
         let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState {
             selected_entity_id: None,
-            mouse_state: MouseState::Default,
+            cursor_action: CursorAction::Default,
             camera,
         };
 
@@ -244,7 +257,7 @@ impl Game {
         None
     }
 
-    fn try_perform_player_action(&mut self, action_type: ActionType) {
+    fn try_perform_player_action(&mut self, ctx: &mut Context, action_type: ActionType) {
         match action_type {
             ActionType::Train(_trained_entity_type) => {
                 let resources = self.teams.get(&Team::Player).unwrap().resources;
@@ -264,6 +277,10 @@ impl Game {
                     println!("Not enough resources!");
                 }
             }
+            ActionType::Move => {
+                self.player_state
+                    .set_cursor_action(ctx, CursorAction::IssuingMovement);
+            }
             ActionType::Heal => {
                 let entity = self
                     .selected_entity_mut()
@@ -274,15 +291,9 @@ impl Game {
                     .expect("Entity needs health to be able to heal");
                 health.receive_healing(1);
             }
-            ActionType::SelfHarm => {
-                let entity = self
-                    .selected_entity_mut()
-                    .expect("Need selected entity to self-harm");
-                let health = entity
-                    .health
-                    .as_mut()
-                    .expect("Entity needs health to be able to self-harm");
-                health.receive_damage(1);
+            ActionType::Harm => {
+                self.player_state
+                    .set_cursor_action(ctx, CursorAction::DealingDamage);
             }
         }
     }
@@ -331,6 +342,7 @@ impl EventHandler for Game {
             if let PhysicalType::Mobile(movement) = &mut entity.physical_type {
                 if movement.sub_cell_movement.is_ready() {
                     if let Some(next_pos) = movement.pathfinder.peek_path() {
+                        entity.state = EntityState::Moving;
                         let occupied = self.entity_grid.get(next_pos);
                         if !occupied {
                             let old_pos = entity.position;
@@ -340,6 +352,8 @@ impl EventHandler for Game {
                             entity.position = new_pos;
                             self.entity_grid.set(&new_pos, true);
                         }
+                    } else {
+                        entity.state = EntityState::Idle;
                     }
                 }
             }
@@ -433,8 +447,8 @@ impl EventHandler for Game {
 
     fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
         if let Some(clicked_world_pos) = self.screen_to_grid_coordinates([x, y]) {
-            match self.player_state.mouse_state {
-                MouseState::Default => {
+            match self.player_state.cursor_action {
+                CursorAction::Default => {
                     if button == MouseButton::Left {
                         // TODO (bug) Don't select neutral entity when player unit is on top of it
                         self.player_state.selected_entity_id = self
@@ -469,7 +483,7 @@ impl EventHandler for Game {
                         println!("No entity is selected");
                     }
                 }
-                MouseState::DealingDamage => {
+                CursorAction::DealingDamage => {
                     // TODO this only works for structures' top-left corner
                     if let Some(health) = self
                         .entities
@@ -481,8 +495,27 @@ impl EventHandler for Game {
                         health.receive_damage(1);
                         println!("Reduced health down to {}/{}", health.current, health.max)
                     }
-                    self.player_state.mouse_state = MouseState::Default;
-                    mouse::set_cursor_type(ctx, CursorIcon::Default);
+                    self.player_state
+                        .set_cursor_action(ctx, CursorAction::Default);
+                }
+                CursorAction::IssuingMovement => {
+                    //TODO deduplicate
+                    let entity = self
+                        .selected_entity_mut()
+                        .expect("Cannot issue movement without selected entity");
+                    assert_eq!(entity.team, Team::Player);
+                    match &mut entity.physical_type {
+                        PhysicalType::Mobile(movement) => {
+                            movement
+                                .pathfinder
+                                .find_path(&entity.position, clicked_world_pos);
+                        }
+                        PhysicalType::Structure { .. } => {
+                            panic!("Cannot issue movement for structure")
+                        }
+                    }
+                    self.player_state
+                        .set_cursor_action(ctx, CursorAction::Default);
                 }
             }
         } else {
@@ -503,7 +536,7 @@ impl EventHandler for Game {
             if let Some(entity) = self.selected_entity() {
                 if entity.team == Team::Player {
                     if let Some(action_type) = self.hud.on_mouse_click([x, y], entity) {
-                        self.try_perform_player_action(action_type);
+                        self.try_perform_player_action(ctx, action_type);
                     }
                 }
             }
@@ -519,20 +552,15 @@ impl EventHandler for Game {
     ) {
         match keycode {
             KeyCode::Escape => ggez::event::quit(ctx),
-            KeyCode::A => {
-                self.player_state.mouse_state = MouseState::DealingDamage;
-                mouse::set_cursor_type(ctx, CursorIcon::Crosshair);
-            }
-            KeyCode::V | KeyCode::B => {
+            _ => {
                 if let Some(entity) = self.selected_entity() {
                     if entity.team == Team::Player {
                         if let Some(action_type) = self.hud.on_button_click(keycode, entity) {
-                            self.try_perform_player_action(action_type);
+                            self.try_perform_player_action(ctx, action_type);
                         }
                     }
                 }
             }
-            _ => {}
         }
     }
 }

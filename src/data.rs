@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use crate::entities::{
     ActionType, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team,
-    TrainingActionComponent,
+    TrainingActionComponent, NUM_UNIT_ACTIONS
 };
 use rand::Rng;
 
@@ -40,7 +40,7 @@ impl Map {
             [2, 1],
             Team::Player,
             Some(TrainingActionComponent::new(EntityType::SquareUnit)),
-            [None, None],
+            [None; NUM_UNIT_ACTIONS],
         );
 
         let mut entities = vec![];
@@ -57,7 +57,7 @@ impl Map {
                 [1, 3],
                 Team::Neutral,
                 None,
-                [None, None],
+                [None; NUM_UNIT_ACTIONS],
             );
             entities.push(neutral_entity);
         }
@@ -127,7 +127,7 @@ fn create_enemy_building(position: [u32; 2]) -> Entity {
         position,
         Team::Enemy,
         Some(TrainingActionComponent::new(EntityType::CircleUnit)),
-        [None, None],
+        [None; NUM_UNIT_ACTIONS],
     )
 }
 
@@ -141,7 +141,11 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 max_health: Some(3),
                 physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
             },
-            [Some(ActionType::SelfHarm), Some(ActionType::Heal)],
+            [
+                Some(ActionType::Move),
+                Some(ActionType::Harm),
+                Some(ActionType::Heal),
+            ],
         ),
         EntityType::CircleUnit => (
             EntityConfig {
@@ -151,7 +155,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 max_health: Some(2),
                 physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(800)),
             },
-            [Some(ActionType::SelfHarm), None],
+            [Some(ActionType::Move), Some(ActionType::Harm), None],
         ),
         _ => panic!("Unhandled entity type: {:?}", entity_type),
     };

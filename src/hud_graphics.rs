@@ -4,10 +4,10 @@ use ggez::graphics::{
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
-use crate::entities::{ActionType, Entity, Team};
+use crate::entities::{ActionType, Entity, Team, NUM_UNIT_ACTIONS};
 use crate::game::{TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
 
-const NUM_BUTTONS: usize = 2;
+const NUM_BUTTONS: usize = NUM_UNIT_ACTIONS;
 
 pub struct HudGraphics {
     position_on_screen: [f32; 2],
@@ -19,11 +19,13 @@ impl HudGraphics {
     pub fn new(ctx: &mut Context, position: [f32; 2], font: Font) -> GameResult<Self> {
         let w = 80.0;
         let button_1_rect = Rect::new(position[0] + 5.0, position[1] + 270.0, w, w);
-        let button_1 = Button::new(ctx, button_1_rect, "V", font)?;
+        let button_1 = Button::new(ctx, button_1_rect, "C", font)?;
         let button_margin = 5.0;
         let button_2_rect = Rect::new(button_1_rect.x + w + button_margin, button_1_rect.y, w, w);
-        let button_2 = Button::new(ctx, button_2_rect, "B", font)?;
-        let buttons = [button_1, button_2];
+        let button_2 = Button::new(ctx, button_2_rect, "V", font)?;
+        let button_3_rect = Rect::new(button_2_rect.x + w + button_margin, button_1_rect.y, w, w);
+        let button_3 = Button::new(ctx, button_3_rect, "B", font)?;
+        let buttons = [button_1, button_2, button_3];
         Ok(Self {
             position_on_screen: position,
             font,
@@ -65,6 +67,14 @@ impl HudGraphics {
                 self.draw_text(ctx, [x, health_y], health, small_font)?;
             }
 
+            // TODO: reflect this by highlighting buttons instead
+            self.draw_text(
+                ctx,
+                [x + 200.0, health_y],
+                format!("STATE: {:?}", selected_entity.state),
+                small_font,
+            )?;
+
             if selected_entity.team == Team::Player {
                 let mut actions = [false; NUM_BUTTONS];
                 if let Some(training_action) = &selected_entity.training_action {
@@ -82,20 +92,16 @@ impl HudGraphics {
                         self.draw_text(
                             ctx,
                             [x, action_y],
-                            "Press [V] to train a unit",
+                            "Press [C] to train a unit",
                             small_font,
                         )?;
                     }
                 }
                 let mut action_text = String::new();
-                for (action_i, action) in selected_entity.instant_actions.iter().enumerate() {
+                for (action_i, action) in selected_entity.unit_actions.iter().enumerate() {
                     if let Some(action_type) = action {
                         actions[action_i] = true;
-                        match action_type {
-                            ActionType::Heal => action_text.push_str("Heal "),
-                            ActionType::SelfHarm => action_text.push_str("Self-harm "),
-                            _ => panic!("Unhandled action: {:?}", action_type),
-                        }
+                        action_text.push_str(&format!("{:?} ", action_type));
                     }
                 }
                 self.draw_text(ctx, [x, action_y], action_text, small_font)?;
@@ -121,7 +127,7 @@ impl HudGraphics {
                         return Some(ActionType::Train(training_action.trained_entity_type));
                     }
                 }
-                return selected_player_entity.instant_actions[button_i];
+                return selected_player_entity.unit_actions[button_i];
             }
         }
 
@@ -133,14 +139,17 @@ impl HudGraphics {
         keycode: KeyCode,
         selected_player_entity: &Entity,
     ) -> Option<ActionType> {
-        if keycode == KeyCode::V {
+        if keycode == KeyCode::C {
             if let Some(training_action) = &selected_player_entity.training_action {
                 return Some(ActionType::Train(training_action.trained_entity_type));
             }
-            return selected_player_entity.instant_actions[0];
+            return selected_player_entity.unit_actions[0];
+        }
+        if keycode == KeyCode::V {
+            return selected_player_entity.unit_actions[1];
         }
         if keycode == KeyCode::B {
-            return selected_player_entity.instant_actions[1];
+            return selected_player_entity.unit_actions[2];
         }
         None
     }
