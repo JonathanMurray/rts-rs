@@ -2,7 +2,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::time::Duration;
 
-use crate::entities::{Entity, EntityType, Team};
+use crate::entities::{Entity, PhysicalType, Team, TrainingPerformStatus};
 
 pub struct EnemyPlayerAi {
     timer_s: f32,
@@ -27,11 +27,19 @@ impl EnemyPlayerAi {
                 if entity.team == Team::Enemy && rng.gen_bool(0.7) {
                     let x: u32 = rng.gen_range(0..self.map_dimensions[0]);
                     let y: u32 = rng.gen_range(0..self.map_dimensions[1]);
-                    match &mut entity.entity_type {
-                        EntityType::Mobile(movement) => {
+                    match &mut entity.physical_type {
+                        PhysicalType::Mobile(movement) => {
                             movement.pathfinder.find_path(&entity.position, [x, y]);
                         }
-                        EntityType::Structure { .. } => panic!("Enemy must be mobile"),
+                        PhysicalType::Structure { .. } => {
+                            if let Some(training_action) = &mut entity.training_action {
+                                if let TrainingPerformStatus::NewTrainingStarted =
+                                    training_action.perform()
+                                {
+                                    println!("Enemy building started training a unit");
+                                }
+                            }
+                        }
                     }
                 }
             }

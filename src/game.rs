@@ -11,10 +11,10 @@ use std::cmp::min;
 
 use crate::assets::{self, Assets};
 use crate::camera::Camera;
-use crate::data::{self, Map, MapType};
+use crate::data::{self, EntityType, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
-    Entity, EntityId, EntityType, Team, TrainingPerformStatus, TrainingUpdateStatus,
+    Entity, EntityId, PhysicalType, Team, TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::hud_graphics::{HudGraphics, MinimapGraphics};
 
@@ -218,6 +218,8 @@ impl Game {
 
     fn try_add_trained_entity(
         &mut self,
+        entity_type: EntityType,
+        team: Team,
         source_position: [u32; 2],
         source_size: [u32; 2],
     ) -> Option<[u32; 2]> {
@@ -234,7 +236,7 @@ impl Game {
         for x in left..right + 1 {
             for y in top..bot + 1 {
                 if !self.entity_grid.get(&[x, y]) {
-                    let new_entity = data::create_player_unit([x, y]);
+                    let new_entity = data::create_entity(entity_type, [x, y], team);
                     self.entities.push(new_entity);
                     self.entity_grid.set(&[x, y], true);
                     return Some([x, y]);
@@ -281,7 +283,7 @@ impl EventHandler for Game {
         });
 
         for entity in &mut self.entities {
-            if let EntityType::Mobile(movement) = &mut entity.entity_type {
+            if let PhysicalType::Mobile(movement) = &mut entity.physical_type {
                 if movement.sub_cell_movement.is_ready() {
                     if let Some(next_pos) = movement.pathfinder.peek_path() {
                         let occupied = self.entity_grid.get(next_pos);
@@ -299,7 +301,7 @@ impl EventHandler for Game {
         }
 
         for entity in &mut self.entities {
-            if let EntityType::Mobile(movement) = &mut entity.entity_type {
+            if let PhysicalType::Mobile(movement) = &mut entity.physical_type {
                 movement.sub_cell_movement.update(dt, entity.position);
             }
         }
@@ -310,14 +312,19 @@ impl EventHandler for Game {
                 .training_action
                 .as_mut()
                 .map(|training_action| training_action.update(dt));
-            if status == Some(TrainingUpdateStatus::Done) {
-                completed_trainings.push((entity.position, entity.size()));
+            if let Some(TrainingUpdateStatus::Done(trained_entity_type)) = status {
+                completed_trainings.push((
+                    trained_entity_type,
+                    entity.team,
+                    entity.position,
+                    entity.size(),
+                ));
             }
         }
 
-        for (source_position, source_size) in completed_trainings {
+        for (entity_type, team, source_position, source_size) in completed_trainings {
             if self
-                .try_add_trained_entity(source_position, source_size)
+                .try_add_trained_entity(entity_type, team, source_position, source_size)
                 .is_none()
             {
                 eprintln!(
@@ -347,11 +354,11 @@ impl EventHandler for Game {
         ];
 
         for entity in &self.entities {
-            let pixel_pos = match &entity.entity_type {
-                EntityType::Mobile(movement) => {
+            let pixel_pos = match &entity.physical_type {
+                PhysicalType::Mobile(movement) => {
                     movement.sub_cell_movement.pixel_position(entity.position)
                 }
-                EntityType::Structure { .. } => grid_to_pixel_position(entity.position),
+                PhysicalType::Structure { .. } => grid_to_pixel_position(entity.position),
             };
 
             let screen_coords = [offset[0] + pixel_pos[0], offset[1] + pixel_pos[1]];
@@ -402,13 +409,13 @@ impl EventHandler for Game {
                         );
                     } else if let Some(entity) = self.selected_entity_mut() {
                         if entity.team == Team::Player {
-                            match &mut entity.entity_type {
-                                EntityType::Mobile(movement) => {
+                            match &mut entity.physical_type {
+                                PhysicalType::Mobile(movement) => {
                                     movement
                                         .pathfinder
                                         .find_path(&entity.position, clicked_world_pos);
                                 }
-                                EntityType::Structure { .. } => {
+                                PhysicalType::Structure { .. } => {
                                     println!("Selected entity is immobile")
                                 }
                             }
@@ -418,7 +425,7 @@ impl EventHandler for Game {
                     }
                 }
                 MouseState::DealingDamage => {
-                    // TODO
+                    // TODO this only works for structures' top-left corner
                     if let Some(mut health) = self
                         .entities
                         .iter_mut()

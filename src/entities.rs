@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Duration;
 
+use crate::data::EntityType;
 use crate::game;
 
 static NEXT_ENTITY_ID: AtomicUsize = AtomicUsize::new(1);
@@ -15,7 +16,7 @@ pub struct Entity {
     pub name: &'static str,
     pub position: [u32; 2],
     pub is_solid: bool,
-    pub entity_type: EntityType,
+    pub physical_type: PhysicalType,
     pub team: Team,
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
@@ -23,7 +24,7 @@ pub struct Entity {
 }
 
 #[derive(Debug)]
-pub enum EntityType {
+pub enum PhysicalType {
     Mobile(MovementComponent),
     Structure { size: [u32; 2] },
 }
@@ -33,9 +34,10 @@ pub struct EntityConfig {
     pub is_solid: bool,
     pub sprite: EntitySprite,
     pub max_health: Option<u32>,
+    pub physical_type: PhysicalTypeConfig,
 }
 
-pub enum MobileOrStructureConfig {
+pub enum PhysicalTypeConfig {
     MovementCooldown(Duration),
     StructureSize([u32; 2]),
 }
@@ -44,17 +46,16 @@ impl Entity {
     pub fn new(
         config: EntityConfig,
         position: [u32; 2],
-        mobile_or_structure: MobileOrStructureConfig,
         team: Team,
         training_action: Option<TrainingActionComponent>,
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
-        let entity_type = match mobile_or_structure {
-            MobileOrStructureConfig::MovementCooldown(cooldown) => {
-                EntityType::Mobile(MovementComponent::new(position, cooldown))
+        let physical_type = match config.physical_type {
+            PhysicalTypeConfig::MovementCooldown(cooldown) => {
+                PhysicalType::Mobile(MovementComponent::new(position, cooldown))
             }
-            MobileOrStructureConfig::StructureSize(size) => EntityType::Structure { size },
+            PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
         let health = config.max_health.map(HealthComponent::new);
         Self {
@@ -62,7 +63,7 @@ impl Entity {
             name: config.name,
             position,
             is_solid: config.is_solid,
-            entity_type,
+            physical_type,
             team,
             sprite: config.sprite,
             health,
@@ -71,9 +72,9 @@ impl Entity {
     }
 
     pub fn size(&self) -> [u32; 2] {
-        match self.entity_type {
-            EntityType::Mobile(_) => [1, 1],
-            EntityType::Structure { size } => size,
+        match self.physical_type {
+            PhysicalType::Mobile(_) => [1, 1],
+            PhysicalType::Structure { size } => size,
         }
     }
 }
@@ -93,7 +94,7 @@ impl HealthComponent {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum Team {
     Player,
     Enemy,
@@ -105,6 +106,7 @@ pub enum EntitySprite {
     PlayerUnit,
     PlayerBuilding,
     Enemy,
+    EnemyBuilding,
     Neutral,
 }
 
@@ -243,14 +245,16 @@ enum MovementDirection {
 pub struct TrainingActionComponent {
     remaining_duration: Option<Duration>,
     total_duration: Duration,
+    trained_entity_type: EntityType,
 }
 
 impl TrainingActionComponent {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new(trained_entity_type: EntityType) -> Self {
         Self {
             remaining_duration: None,
             total_duration: Duration::from_secs(3),
+            trained_entity_type,
         }
     }
 
@@ -269,7 +273,7 @@ impl TrainingActionComponent {
                 let remaining = remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
                 if remaining.is_zero() {
                     println!("Training done!");
-                    TrainingUpdateStatus::Done
+                    TrainingUpdateStatus::Done(self.trained_entity_type)
                 } else {
                     self.remaining_duration = Some(remaining);
                     TrainingUpdateStatus::Ongoing
@@ -289,7 +293,7 @@ impl TrainingActionComponent {
 pub enum TrainingUpdateStatus {
     NothingOngoing,
     Ongoing,
-    Done,
+    Done(EntityType),
 }
 
 #[derive(PartialEq)]

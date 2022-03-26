@@ -14,6 +14,7 @@ pub struct Assets {
     background_around_grid: Vec<Mesh>,
     player_unit: Mesh,
     player_building: Mesh,
+    enemy_building: Mesh,
     pub selection: Mesh,
     pub selection_2x2: Mesh,
     neutral_entity: Mesh,
@@ -70,6 +71,7 @@ impl Assets {
             EntitySprite::Enemy => {
                 self.enemy_entity_batch.add(param);
             }
+            EntitySprite::EnemyBuilding => self.enemy_building.draw(ctx, param)?,
         };
         Ok(())
     }
@@ -136,6 +138,19 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
             Color::new(0.7, 0.5, 0.8, 1.0),
         )?
         .build(ctx)?;
+    let enemy_building_size = [CELL_PIXEL_SIZE[0] * 1.7, CELL_PIXEL_SIZE[1] * 1.7];
+    let enemy_building = MeshBuilder::new()
+        .rectangle(
+            DrawMode::fill(),
+            Rect::new(
+                (CELL_PIXEL_SIZE[0] * 2.0 - enemy_building_size[0]) / 2.0,
+                (CELL_PIXEL_SIZE[1] * 2.0 - enemy_building_size[1]) / 2.0,
+                enemy_building_size[0],
+                enemy_building_size[1],
+            ),
+            Color::new(0.9, 0.4, 0.4, 1.0),
+        )?
+        .build(ctx)?;
 
     // TODO create and cache selection meshes on the fly
     let selection = MeshBuilder::new()
@@ -193,6 +208,7 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         background_around_grid,
         player_unit,
         player_building,
+        enemy_building,
         selection,
         selection_2x2,
         neutral_entity,
