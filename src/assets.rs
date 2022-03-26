@@ -15,8 +15,6 @@ pub struct Assets {
     grid: Mesh,
     grid_border: Mesh,
     background_around_grid: Vec<Mesh>,
-    player_building: Mesh,
-    enemy_building: Mesh,
     selections: HashMap<([u32; 2], Team), Mesh>,
     neutral_entity: Mesh,
     entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
@@ -63,8 +61,6 @@ impl Assets {
     ) -> GameResult {
         let param = DrawParam::new().dest(screen_coords);
         match sprite {
-            EntitySprite::PlayerBuilding => self.player_building.draw(ctx, param)?,
-            EntitySprite::EnemyBuilding => self.enemy_building.draw(ctx, param)?,
             EntitySprite::Neutral => self.neutral_entity.draw(ctx, param)?,
             entity_sprite => {
                 self.entity_batches
@@ -117,33 +113,8 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
     let mut entity_batches = Default::default();
     create_square_unit(ctx, &mut entity_batches)?;
     create_circle_unit(ctx, &mut entity_batches)?;
-
-    let player_building_size = [CELL_PIXEL_SIZE[0] * 1.9, CELL_PIXEL_SIZE[1] * 1.9];
-    let player_building = MeshBuilder::new()
-        .rectangle(
-            DrawMode::fill(),
-            Rect::new(
-                (CELL_PIXEL_SIZE[0] * 2.0 - player_building_size[0]) / 2.0,
-                (CELL_PIXEL_SIZE[1] * 2.0 - player_building_size[1]) / 2.0,
-                player_building_size[0],
-                player_building_size[1],
-            ),
-            Color::new(0.7, 0.5, 0.8, 1.0),
-        )?
-        .build(ctx)?;
-    let enemy_building_size = [CELL_PIXEL_SIZE[0] * 2.9, CELL_PIXEL_SIZE[1] * 1.9];
-    let enemy_building = MeshBuilder::new()
-        .rectangle(
-            DrawMode::fill(),
-            Rect::new(
-                (CELL_PIXEL_SIZE[0] * 3.0 - enemy_building_size[0]) / 2.0,
-                (CELL_PIXEL_SIZE[1] * 2.0 - enemy_building_size[1]) / 2.0,
-                enemy_building_size[0],
-                enemy_building_size[1],
-            ),
-            Color::new(0.9, 0.4, 0.4, 1.0),
-        )?
-        .build(ctx)?;
+    create_small_building(ctx, &mut entity_batches)?;
+    create_large_building(ctx, &mut entity_batches)?;
 
     let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
     let neutral_entity = MeshBuilder::new()
@@ -164,8 +135,6 @@ pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets,
         grid,
         grid_border,
         background_around_grid,
-        player_building,
-        enemy_building,
         selections,
         neutral_entity,
         entity_batches,
@@ -190,7 +159,7 @@ fn create_square_unit(
     ]);
     for (team, color) in colors {
         let mesh = MeshBuilder::new()
-            .rectangle(DrawMode::fill(), rect, color)?
+            .rounded_rectangle(DrawMode::fill(), rect, 5.0, color)?
             .build(ctx)?;
         let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
         sprite_batches.insert((EntitySprite::SquareUnit, team), batch);
@@ -218,6 +187,64 @@ fn create_circle_unit(
             .build(ctx)?;
         let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
         sprite_batches.insert((EntitySprite::CircleUnit, team), batch);
+    }
+    Ok(())
+}
+
+fn create_small_building(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let size = [CELL_PIXEL_SIZE[0] * 1.9, CELL_PIXEL_SIZE[1] * 1.9];
+        let mesh = MeshBuilder::new()
+            .rectangle(
+                DrawMode::fill(),
+                Rect::new(
+                    (CELL_PIXEL_SIZE[0] * 2.0 - size[0]) / 2.0,
+                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
+                    size[0],
+                    size[1],
+                ),
+                color,
+            )?
+            .build(ctx)?;
+
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::SmallBuilding, team), batch);
+    }
+    Ok(())
+}
+
+fn create_large_building(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.5, 0.7, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.7, 0.3, 0.3, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let size = [CELL_PIXEL_SIZE[0] * 2.9, CELL_PIXEL_SIZE[1] * 1.9];
+        let mesh = MeshBuilder::new()
+            .rectangle(
+                DrawMode::fill(),
+                Rect::new(
+                    (CELL_PIXEL_SIZE[0] * 3.0 - size[0]) / 2.0,
+                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
+                    size[0],
+                    size[1],
+                ),
+                color,
+            )?
+            .build(ctx)?;
+
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::LargeBuilding, team), batch);
     }
     Ok(())
 }

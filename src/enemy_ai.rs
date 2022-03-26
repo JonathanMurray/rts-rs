@@ -38,16 +38,16 @@ impl EnemyPlayerAi {
                         PhysicalType::Mobile(movement) => {
                             movement.pathfinder.find_path(&entity.position, [x, y]);
                         }
-                        PhysicalType::Structure { .. } => {
-                            if let Some(training) = &mut entity.training {
-                                let cost = training.cost();
-                                if team_state.resources >= cost {
-                                    if let TrainingPerformStatus::NewTrainingStarted =
-                                        training.start()
-                                    {
-                                        team_state.resources -= cost;
-                                    }
-                                }
+                        PhysicalType::Structure { .. } => {}
+                    }
+                    if let Some(training) = &mut entity.training {
+                        let cost = training.cost();
+                        if team_state.resources >= cost {
+                            let trained_entity_type = *training.options().next().unwrap();
+                            if let TrainingPerformStatus::NewTrainingStarted =
+                                training.start(trained_entity_type)
+                            {
+                                team_state.resources -= cost;
                             }
                         }
                     }

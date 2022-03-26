@@ -12,12 +12,12 @@ pub enum MapType {
     LoadTest,
 }
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
     SquareUnit,
-    PlayerBuilding,
+    SmallBuilding,
     CircleUnit,
-    EnemyBuilding,
+    LargeBuilding,
 }
 
 pub struct Map {
@@ -27,21 +27,11 @@ pub struct Map {
 
 impl Map {
     pub fn new(map_type: MapType) -> Self {
-        let player_unit = create_entity(EntityType::SquareUnit, [4, 4], Team::Player);
-        let player_building = Entity::new(
-            EntityConfig {
-                name: "Player building",
-                is_solid: true,
-                sprite: EntitySprite::PlayerBuilding,
-                max_health: Some(3),
-                physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
-            },
-            [2, 1],
-            Team::Player,
-            [Some(ActionType::Train(EntityType::SquareUnit)), None, None],
-        );
-
-        let mut entities = vec![];
+        let mut entities = vec![
+            create_entity(EntityType::SquareUnit, [4, 4], Team::Player),
+            create_entity(EntityType::SmallBuilding, [2, 1], Team::Player),
+            create_entity(EntityType::LargeBuilding, [1, 7], Team::Player),
+        ];
 
         if map_type != MapType::Empty {
             let neutral_entity = Entity::new(
@@ -59,9 +49,6 @@ impl Map {
             entities.push(neutral_entity);
         }
 
-        entities.push(player_unit);
-        entities.push(player_building);
-
         match map_type {
             MapType::Empty => {
                 let dimensions = [30, 20];
@@ -77,7 +64,11 @@ impl Map {
                 entities.push(create_entity(EntityType::CircleUnit, [3, 0], Team::Enemy));
                 entities.push(create_entity(EntityType::CircleUnit, [0, 4], Team::Enemy));
                 entities.push(create_entity(EntityType::CircleUnit, [3, 4], Team::Enemy));
-                entities.push(create_enemy_building([8, 4]));
+                entities.push(create_entity(
+                    EntityType::LargeBuilding,
+                    [8, 4],
+                    Team::Enemy,
+                ));
                 Self {
                     dimensions,
                     entities,
@@ -112,21 +103,6 @@ impl Map {
     }
 }
 
-fn create_enemy_building(position: [u32; 2]) -> Entity {
-    Entity::new(
-        EntityConfig {
-            name: "Enemy building",
-            is_solid: true,
-            sprite: EntitySprite::EnemyBuilding,
-            max_health: Some(2),
-            physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
-        },
-        position,
-        Team::Enemy,
-        [Some(ActionType::Train(EntityType::CircleUnit)), None, None],
-    )
-}
-
 pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) -> Entity {
     let (config, actions) = match entity_type {
         EntityType::SquareUnit => (
@@ -153,7 +129,30 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
             },
             [Some(ActionType::Move), Some(ActionType::Harm), None],
         ),
-        _ => panic!("Unhandled entity type: {:?}", entity_type),
+        EntityType::SmallBuilding => (
+            EntityConfig {
+                name: "Small building",
+                is_solid: true,
+                sprite: EntitySprite::SmallBuilding,
+                max_health: Some(3),
+                physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
+            },
+            [Some(ActionType::Train(EntityType::SquareUnit)), None, None],
+        ),
+        EntityType::LargeBuilding => (
+            EntityConfig {
+                name: "Large building",
+                is_solid: true,
+                sprite: EntitySprite::LargeBuilding,
+                max_health: Some(5),
+                physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
+            },
+            [
+                Some(ActionType::Train(EntityType::CircleUnit)),
+                Some(ActionType::Train(EntityType::SquareUnit)),
+                None,
+            ],
+        ),
     };
     Entity::new(config, position, team, actions)
 }

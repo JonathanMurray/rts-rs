@@ -1,4 +1,5 @@
 use std::cmp::{min, Ordering};
+use std::collections::HashMap;
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Duration;
 
@@ -15,7 +16,7 @@ pub struct EntityId(usize);
 #[derive(Debug, PartialEq)]
 pub enum EntityState {
     Idle,
-    TrainingUnit,
+    TrainingUnit(EntityType),
     Moving,
 }
 
@@ -69,13 +70,23 @@ impl Entity {
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
         let health = config.max_health.map(HealthComponent::new);
-        // TODO: handle multiple training actions on one entity
-        let training = actions.iter().find_map(|action| match action {
-            Some(ActionType::Train(trained_entity_type)) => {
-                Some(TrainingComponent::new(*trained_entity_type))
+        let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
+        for action in actions.into_iter().flatten() {
+            if let ActionType::Train(entity_type) = action {
+                // TODO
+                training_options.insert(
+                    entity_type,
+                    TrainingConfig {
+                        duration: Duration::from_secs(3),
+                    },
+                );
             }
-            _ => None,
-        });
+        }
+        let training = if !training_options.is_empty() {
+            Some(TrainingComponent::new(training_options))
+        } else {
+            None
+        };
         Self {
             id,
             name: config.name,
@@ -134,9 +145,9 @@ pub enum Team {
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub enum EntitySprite {
     SquareUnit,
-    PlayerBuilding,
+    SmallBuilding,
     CircleUnit,
-    EnemyBuilding,
+    LargeBuilding,
     Neutral,
 }
 
@@ -273,17 +284,26 @@ enum MovementDirection {
 
 #[derive(Debug)]
 pub struct TrainingComponent {
-    remaining_duration: Option<Duration>,
-    total_duration: Duration,
-    pub trained_entity_type: EntityType,
+    ongoing: Option<OngoingTraining>,
+    options: HashMap<EntityType, TrainingConfig>,
+}
+
+#[derive(Debug)]
+struct TrainingConfig {
+    duration: Duration,
+}
+
+#[derive(Debug)]
+struct OngoingTraining {
+    remaining: Duration,
+    entity_type: EntityType,
 }
 
 impl TrainingComponent {
-    pub fn new(trained_entity_type: EntityType) -> Self {
+    fn new(options: HashMap<EntityType, TrainingConfig>) -> Self {
         Self {
-            remaining_duration: None,
-            total_duration: Duration::from_secs(3),
-            trained_entity_type,
+            ongoing: None,
+            options,
         }
     }
 
@@ -292,24 +312,27 @@ impl TrainingComponent {
     }
 
     #[must_use]
-    pub fn start(&mut self) -> TrainingPerformStatus {
-        if self.remaining_duration.is_some() {
+    pub fn start(&mut self, trained_entity_type: EntityType) -> TrainingPerformStatus {
+        if self.ongoing.is_some() {
             TrainingPerformStatus::AlreadyOngoing
         } else {
-            self.remaining_duration = Some(self.total_duration);
+            self.ongoing = Some(OngoingTraining {
+                remaining: self.options.get(&trained_entity_type).unwrap().duration,
+                entity_type: trained_entity_type,
+            });
             TrainingPerformStatus::NewTrainingStarted
         }
     }
 
     pub fn update(&mut self, dt: Duration) -> TrainingUpdateStatus {
-        match self.remaining_duration.take() {
-            Some(remaining) => {
-                let remaining = remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
-                if remaining.is_zero() {
+        match self.ongoing.take() {
+            Some(mut ongoing) => {
+                ongoing.remaining = ongoing.remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
+                if ongoing.remaining.is_zero() {
                     println!("Training done!");
-                    TrainingUpdateStatus::Done(self.trained_entity_type)
+                    TrainingUpdateStatus::Done(ongoing.entity_type)
                 } else {
-                    self.remaining_duration = Some(remaining);
+                    self.ongoing = Some(ongoing);
                     TrainingUpdateStatus::Ongoing
                 }
             }
@@ -318,8 +341,18 @@ impl TrainingComponent {
     }
 
     pub fn progress(&self) -> Option<f32> {
-        self.remaining_duration
-            .map(|remaining| 1.0 - remaining.as_secs_f32() / self.total_duration.as_secs_f32())
+        self.ongoing.as_ref().map(|ongoing_training| {
+            let total = self
+                .options
+                .get(&ongoing_training.entity_type)
+                .unwrap()
+                .duration;
+            1.0 - ongoing_training.remaining.as_secs_f32() / total.as_secs_f32()
+        })
+    }
+
+    pub fn options(&mut self) -> impl Iterator<Item = &EntityType> {
+        self.options.keys()
     }
 }
 

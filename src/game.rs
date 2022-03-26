@@ -260,7 +260,7 @@ impl Game {
 
     fn try_perform_player_action(&mut self, ctx: &mut Context, action_type: ActionType) {
         match action_type {
-            ActionType::Train(_trained_entity_type) => {
+            ActionType::Train(trained_entity_type) => {
                 let resources = self.teams.get(&Team::Player).unwrap().resources;
                 let entity = self
                     .selected_entity_mut()
@@ -271,8 +271,10 @@ impl Game {
                     .expect("Selected entity must be able to train");
                 let cost = training.cost();
                 if resources >= cost {
-                    if training.start() == TrainingPerformStatus::NewTrainingStarted {
-                        entity.state = EntityState::TrainingUnit;
+                    if training.start(trained_entity_type)
+                        == TrainingPerformStatus::NewTrainingStarted
+                    {
+                        entity.state = EntityState::TrainingUnit(trained_entity_type);
                         self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
                     };
                 } else {

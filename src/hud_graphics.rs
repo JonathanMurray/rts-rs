@@ -97,8 +97,10 @@ impl HudGraphics {
                     if let Some(action_type) = action {
                         button_states[i].shown = true;
                         match action_type {
-                            ActionType::Train(_) => {
-                                if selected_entity.state == EntityState::TrainingUnit {
+                            ActionType::Train(trained_entity_type) => {
+                                if selected_entity.state
+                                    == EntityState::TrainingUnit(*trained_entity_type)
+                                {
                                     button_states[i].matches_entity_state = true;
                                 }
                             }
