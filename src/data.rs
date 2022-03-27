@@ -18,8 +18,8 @@ pub enum MapType {
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
     SquareUnit,
-    SmallBuilding,
     CircleUnit,
+    SmallBuilding,
     LargeBuilding,
 }
 
@@ -151,7 +151,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             actions: [
                 Some(Action::Move),
                 Some(Action::Construct(EntityType::SmallBuilding)),
-                None,
+                Some(Action::Construct(EntityType::LargeBuilding)),
             ],
         },
         EntityType::SmallBuilding => EntityConfig {
@@ -162,9 +162,9 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
             actions: [
                 Some(Action::Train(
-                    EntityType::CircleUnit,
+                    EntityType::SquareUnit,
                     TrainingConfig {
-                        duration: Duration::from_secs(3),
+                        duration: Duration::from_secs(7),
                         cost: 1,
                     },
                 )),
@@ -182,17 +182,11 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 Some(Action::Train(
                     EntityType::CircleUnit,
                     TrainingConfig {
-                        duration: Duration::from_secs(3),
+                        duration: Duration::from_secs(4),
                         cost: 1,
                     },
                 )),
-                Some(Action::Train(
-                    EntityType::SquareUnit,
-                    TrainingConfig {
-                        duration: Duration::from_secs(10),
-                        cost: 2,
-                    },
-                )),
+                None,
                 None,
             ],
         },

@@ -212,6 +212,16 @@ fn create_small_building(
                 ),
                 color,
             )?
+            .rectangle(
+                DrawMode::stroke(2.0),
+                Rect::new(
+                    CELL_PIXEL_SIZE[0] * 0.75,
+                    CELL_PIXEL_SIZE[1] * 0.5,
+                    CELL_PIXEL_SIZE[0] * 0.5,
+                    CELL_PIXEL_SIZE[1] * 0.5,
+                ),
+                Color::new(0.0, 0.0, 0.0, 1.0),
+            )?
             .build(ctx)?;
 
         let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
@@ -240,6 +250,13 @@ fn create_large_building(
                     size[1],
                 ),
                 color,
+            )?
+            .circle(
+                DrawMode::stroke(4.0),
+                [CELL_PIXEL_SIZE[0] * 1.5, CELL_PIXEL_SIZE[1] * 0.7],
+                CELL_PIXEL_SIZE[0] * 0.4,
+                0.05,
+                Color::new(0.0, 0.0, 0.0, 1.0),
             )?
             .build(ctx)?;
 
