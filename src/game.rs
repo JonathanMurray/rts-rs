@@ -456,6 +456,18 @@ impl EventHandler for Game {
 
         self.player_state.camera.update(ctx, dt);
 
+        if let Some(hovered_world_pos) =
+            self.screen_to_grid_coordinates(ggez::input::mouse::position(ctx).into())
+        {
+            if self.player_state.cursor_action == CursorAction::Default {
+                if self.entities.iter().any(|e| e.contains(hovered_world_pos)) {
+                    mouse::set_cursor_type(ctx, CursorIcon::Hand);
+                } else {
+                    mouse::set_cursor_type(ctx, CursorIcon::Default);
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -533,6 +545,7 @@ impl EventHandler for Game {
                                                 && e.team == Team::Enemy
                                         }) {
                                             let victim_id = victim.id;
+                                            // TODO: highlight attacked entity temporarily
                                             self.issue_command(
                                                 Command::Attack(entity_id, victim_id),
                                                 Team::Player,
@@ -575,6 +588,7 @@ impl EventHandler for Game {
                             .selected_entity_mut()
                             .expect("Cannot attack without selected entity")
                             .id;
+                        // TODO: highlight attacked entity temporarily
                         self.issue_command(Command::Attack(attacker_id, victim_id), Team::Player);
                     } else {
                         println!("Invalid attack target");
