@@ -10,8 +10,10 @@ fn main() {
         MapType::LoadTest
     } else if args.get(1).map(String::as_str) == Some("empty") {
         MapType::Empty
-    } else {
+    } else if args.get(1).map(String::as_str) == Some("small") {
         MapType::Small
+    } else {
+        MapType::Medium
     };
 
     println!("Running map: {:?}", map_type);

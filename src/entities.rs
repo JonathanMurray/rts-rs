@@ -282,7 +282,7 @@ pub struct TrainingComponent {
     options: HashMap<EntityType, TrainingConfig>,
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub struct TrainingConfig {
     pub duration: Duration,
     pub cost: u32,
@@ -342,7 +342,7 @@ impl TrainingComponent {
         })
     }
 
-    pub fn options(&mut self) -> impl Iterator<Item = (&EntityType, &TrainingConfig)> {
+    pub fn options(&self) -> impl Iterator<Item = (&EntityType, &TrainingConfig)> {
         self.options.iter()
     }
 }
@@ -363,7 +363,7 @@ pub enum TrainingPerformStatus {
 #[derive(Debug)]
 pub struct HealingActionComponent;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ActionType {
     Train(EntityType, TrainingConfig),
     Move,

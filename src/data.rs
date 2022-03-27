@@ -10,6 +10,7 @@ use rand::Rng;
 pub enum MapType {
     Empty,
     Small,
+    Medium,
     LoadTest,
 }
 
@@ -30,6 +31,7 @@ impl Map {
     pub fn new(map_type: MapType) -> Self {
         let mut entities = vec![
             create_entity(EntityType::SquareUnit, [4, 4], Team::Player),
+            create_entity(EntityType::CircleUnit, [6, 2], Team::Player),
             create_entity(EntityType::SmallBuilding, [2, 1], Team::Player),
             create_entity(EntityType::LargeBuilding, [1, 7], Team::Player),
         ];
@@ -51,14 +53,18 @@ impl Map {
         }
 
         match map_type {
-            MapType::Empty => {
-                let dimensions = [30, 20];
+            MapType::Empty => Self {
+                dimensions: [30, 20],
+                entities,
+            },
+            MapType::Small => {
+                entities.push(create_entity(EntityType::CircleUnit, [7, 7], Team::Enemy));
                 Self {
-                    dimensions,
+                    dimensions: [30, 20],
                     entities,
                 }
             }
-            MapType::Small => {
+            MapType::Medium => {
                 let dimensions = [30, 20];
 
                 entities.push(create_entity(EntityType::CircleUnit, [5, 2], Team::Enemy));
@@ -126,7 +132,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 is_solid: true,
                 sprite: EntitySprite::CircleUnit,
                 max_health: Some(2),
-                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(800)),
+                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(1500)),
             },
             [Some(ActionType::Move), Some(ActionType::Harm), None],
         ),
