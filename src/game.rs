@@ -393,6 +393,8 @@ impl EventHandler for Game {
             let attacker_pos = self.entity_mut(attacker_id).position;
             if let Some(victim) = self.entities.iter_mut().find(|e| e.id == victim_id) {
                 let victim_pos = victim.position;
+                // TODO: This doesn't work for structures that are larger than 1x1
+                //       Distance calculation is only done from upper-left corner
                 let within_range = square_distance(attacker_pos, victim_pos) <= 2;
                 if within_range {
                     let health = victim.health.as_mut().expect("victim without health");
@@ -516,21 +518,29 @@ impl EventHandler for Game {
                         self.player_state.selected_entity_id = self
                             .entities
                             .iter()
-                            .find(|e| {
-                                let [w, h] = e.size();
-                                clicked_world_pos[0] >= e.position[0]
-                                    && clicked_world_pos[0] < e.position[0] + w
-                                    && clicked_world_pos[1] >= e.position[1]
-                                    && clicked_world_pos[1] < e.position[1] + h
-                            })
+                            .find(|e| e.contains(clicked_world_pos))
                             .map(|e| e.id);
                     } else if let Some(entity) = self.selected_entity_mut() {
                         if entity.team == Team::Player {
                             match &mut entity.physical_type {
-                                // TODO: If combat unit is selected and enemy is clicked, an attack
-                                //       command should be issued, rather than a move command.
-                                PhysicalType::Unit(..) => {
+                                PhysicalType::Unit(unit) => {
                                     let entity_id = entity.id;
+
+                                    if unit.combat.is_some() {
+                                        if let Some(victim) = self.entities.iter().find(|e| {
+                                            e.contains(clicked_world_pos)
+                                                && e.health.is_some()
+                                                && e.team == Team::Enemy
+                                        }) {
+                                            let victim_id = victim.id;
+                                            self.issue_command(
+                                                Command::Attack(entity_id, victim_id),
+                                                Team::Player,
+                                            );
+                                            return;
+                                        }
+                                    }
+
                                     self.issue_command(
                                         Command::Move(entity_id, clicked_world_pos),
                                         Team::Player,
@@ -557,11 +567,8 @@ impl EventHandler for Game {
                 }
 
                 CursorAction::Attack => {
-                    // TODO this only works for structures' top-left corner
                     if let Some(victim) = self.entities.iter_mut().find(|e| {
-                        e.position == clicked_world_pos
-                            && e.health.is_some()
-                            && e.team == Team::Enemy
+                        e.contains(clicked_world_pos) && e.health.is_some() && e.team == Team::Enemy
                     }) {
                         let victim_id = victim.id;
                         let attacker_id = self
