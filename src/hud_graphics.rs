@@ -4,10 +4,10 @@ use ggez::graphics::{
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
-use crate::entities::{Action, Entity, EntityState, Team, NUM_UNIT_ACTIONS};
+use crate::entities::{Action, Entity, EntityState, Team, NUM_ENTITY_ACTIONS};
 use crate::game::{CursorAction, TeamState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 
-const NUM_BUTTONS: usize = NUM_UNIT_ACTIONS;
+const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 
 pub struct HudGraphics {
     position_on_screen: [f32; 2],
@@ -126,12 +126,22 @@ impl HudGraphics {
                                         );
                                     }
                                 }
+                                Action::Construct(structure_type) => {
+                                    if selected_entity.state
+                                        == EntityState::Constructing(*structure_type)
+                                    {
+                                        button_states[i].matches_entity_state = true;
+                                    }
+                                    if hovered_button_i == Some(i) {
+                                        tooltip_text = format!("Construct {:?}", structure_type,);
+                                    }
+                                }
                                 Action::Move => {
                                     if selected_entity.state == EntityState::Moving {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Move";
-                                    if cursor_action == CursorAction::IssueMovement {
+                                    if cursor_action == CursorAction::SelectMovementDestination {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
@@ -149,7 +159,7 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Attack";
-                                    if cursor_action == CursorAction::Attack {
+                                    if cursor_action == CursorAction::SelectAttackTarget {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }

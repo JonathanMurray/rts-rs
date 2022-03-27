@@ -1,10 +1,11 @@
+use rand::Rng;
+use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::entities::{
     Action, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
-    NUM_UNIT_ACTIONS,
+    NUM_ENTITY_ACTIONS,
 };
-use rand::Rng;
 
 #[derive(Debug, PartialEq)]
 pub enum MapType {
@@ -22,12 +23,12 @@ pub enum EntityType {
     LargeBuilding,
 }
 
-pub struct Map {
+pub struct WorldInitData {
     pub dimensions: [u32; 2],
     pub entities: Vec<Entity>,
 }
 
-impl Map {
+impl WorldInitData {
     pub fn new(map_type: MapType) -> Self {
         let mut entities = vec![
             create_entity(EntityType::SquareUnit, [4, 4], Team::Player),
@@ -44,10 +45,10 @@ impl Map {
                     sprite: EntitySprite::Neutral,
                     max_health: Some(5),
                     physical_type: PhysicalTypeConfig::StructureSize([1, 1]), //TODO
+                    actions: [None; NUM_ENTITY_ACTIONS],
                 },
                 [1, 3],
                 Team::Neutral,
-                [None; NUM_UNIT_ACTIONS],
             );
             entities.push(neutral_entity);
         }
@@ -111,36 +112,55 @@ impl Map {
 }
 
 pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) -> Entity {
-    let (config, actions) = match entity_type {
-        EntityType::SquareUnit => (
-            EntityConfig {
-                name: "Square",
-                is_solid: true,
-                sprite: EntitySprite::SquareUnit,
-                max_health: Some(3),
-                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
-            },
-            [Some(Action::Move), Some(Action::Attack), None],
-        ),
-        EntityType::CircleUnit => (
-            EntityConfig {
-                name: "Circle",
-                is_solid: true,
-                sprite: EntitySprite::CircleUnit,
-                max_health: Some(5),
-                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
-            },
-            [Some(Action::Move), Some(Action::Attack), None],
-        ),
-        EntityType::SmallBuilding => (
-            EntityConfig {
-                name: "Small building",
-                is_solid: true,
-                sprite: EntitySprite::SmallBuilding,
-                max_health: Some(3),
-                physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
-            },
-            [
+    let config = entity_config(entity_type);
+    Entity::new(config, position, team)
+}
+
+pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
+    let mut map: HashMap<EntityType, [u32; 2]> = Default::default();
+    let structure_types = [EntityType::SmallBuilding, EntityType::LargeBuilding];
+    for structure_type in structure_types {
+        let config = entity_config(structure_type);
+        let size = match config.physical_type {
+            PhysicalTypeConfig::MovementCooldown(_) => {
+                panic!("{:?} is not a structure", structure_type)
+            }
+            PhysicalTypeConfig::StructureSize(size) => size,
+        };
+        map.insert(structure_type, size);
+    }
+    map
+}
+
+fn entity_config(entity_type: EntityType) -> EntityConfig {
+    match entity_type {
+        EntityType::SquareUnit => EntityConfig {
+            name: "Square",
+            is_solid: true,
+            sprite: EntitySprite::SquareUnit,
+            max_health: Some(3),
+            physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
+            actions: [Some(Action::Move), Some(Action::Attack), None],
+        },
+        EntityType::CircleUnit => EntityConfig {
+            name: "Circle",
+            is_solid: true,
+            sprite: EntitySprite::CircleUnit,
+            max_health: Some(5),
+            physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
+            actions: [
+                Some(Action::Move),
+                Some(Action::Construct(EntityType::SmallBuilding)),
+                None,
+            ],
+        },
+        EntityType::SmallBuilding => EntityConfig {
+            name: "Small building",
+            is_solid: true,
+            sprite: EntitySprite::SmallBuilding,
+            max_health: Some(3),
+            physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
+            actions: [
                 Some(Action::Train(
                     EntityType::CircleUnit,
                     TrainingConfig {
@@ -151,16 +171,14 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 None,
                 None,
             ],
-        ),
-        EntityType::LargeBuilding => (
-            EntityConfig {
-                name: "Large building",
-                is_solid: true,
-                sprite: EntitySprite::LargeBuilding,
-                max_health: Some(5),
-                physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
-            },
-            [
+        },
+        EntityType::LargeBuilding => EntityConfig {
+            name: "Large building",
+            is_solid: true,
+            sprite: EntitySprite::LargeBuilding,
+            max_health: Some(5),
+            physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
+            actions: [
                 Some(Action::Train(
                     EntityType::CircleUnit,
                     TrainingConfig {
@@ -177,7 +195,6 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 )),
                 None,
             ],
-        ),
-    };
-    Entity::new(config, position, team, actions)
+        },
+    }
 }

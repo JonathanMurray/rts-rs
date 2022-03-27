@@ -8,7 +8,7 @@ use crate::game;
 
 static NEXT_ENTITY_ID: AtomicUsize = AtomicUsize::new(1);
 
-pub const NUM_UNIT_ACTIONS: usize = 3;
+pub const NUM_ENTITY_ACTIONS: usize = 3;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct EntityId(usize);
@@ -16,7 +16,10 @@ pub struct EntityId(usize);
 #[derive(Debug, PartialEq)]
 pub enum EntityState {
     Idle,
+    // TODO for training/constructing, we store data here that also exists in their respective
+    //      entity components. Is that needed? We don't do it for moving/attacking.
     TrainingUnit(EntityType),
+    Constructing(EntityType),
     Moving,
     Attacking,
 }
@@ -32,7 +35,7 @@ pub struct Entity {
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
     pub training: Option<TrainingComponent>,
-    pub actions: [Option<Action>; NUM_UNIT_ACTIONS],
+    pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
     pub state: EntityState,
 }
 
@@ -48,6 +51,7 @@ pub struct EntityConfig {
     pub sprite: EntitySprite,
     pub max_health: Option<u32>,
     pub physical_type: PhysicalTypeConfig,
+    pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
 }
 
 pub enum PhysicalTypeConfig {
@@ -56,40 +60,31 @@ pub enum PhysicalTypeConfig {
 }
 
 impl Entity {
-    pub fn new(
-        config: EntityConfig,
-        position: [u32; 2],
-        team: Team,
-        actions: [Option<Action>; NUM_UNIT_ACTIONS],
-    ) -> Self {
+    pub fn new(config: EntityConfig, position: [u32; 2], team: Team) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
 
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
-        let mut has_combat = false;
-        for action in actions.into_iter().flatten() {
+        let mut can_fight = false;
+        let mut can_construct = false;
+        for action in config.actions.into_iter().flatten() {
             match action {
                 Action::Train(entity_type, config) => {
                     training_options.insert(entity_type, config);
                 }
-                Action::Attack => has_combat = true,
+                Action::Attack => can_fight = true,
+                Action::Construct(_) => can_construct = true,
                 _ => {}
             }
         }
-        let training = if !training_options.is_empty() {
-            Some(TrainingComponent::new(training_options))
-        } else {
-            None
-        };
+        let training =
+            (!training_options.is_empty()).then(|| TrainingComponent::new(training_options));
         let physical_type = match config.physical_type {
             PhysicalTypeConfig::MovementCooldown(cooldown) => {
-                let combat = if has_combat {
-                    Some(Combat::new())
-                } else {
-                    None
-                };
-                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat))
+                let combat = can_fight.then(Combat::new);
+                let constructing = can_construct.then(Constructing::new);
+                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat, constructing))
             }
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
@@ -104,7 +99,7 @@ impl Entity {
             sprite: config.sprite,
             health,
             training,
-            actions,
+            actions: config.actions,
             state: EntityState::Idle,
         }
     }
@@ -178,14 +173,21 @@ pub struct UnitComponent {
     pub sub_cell_movement: SubCellMovement,
     pub pathfinder: Pathfinder,
     pub combat: Option<Combat>,
+    pub constructing: Option<Constructing>,
 }
 
 impl UnitComponent {
-    pub fn new(position: [u32; 2], movement_cooldown: Duration, combat: Option<Combat>) -> Self {
+    pub fn new(
+        position: [u32; 2],
+        movement_cooldown: Duration,
+        combat: Option<Combat>,
+        constructing: Option<Constructing>,
+    ) -> Self {
         Self {
             sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
             pathfinder: Pathfinder::new(),
             combat,
+            constructing,
         }
     }
 }
@@ -419,11 +421,25 @@ impl Combat {
 }
 
 #[derive(Debug)]
+pub struct Constructing {
+    pub current_structure_type: Option<EntityType>,
+}
+
+impl Constructing {
+    fn new() -> Self {
+        Self {
+            current_structure_type: None,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct HealingActionComponent;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Action {
     Train(EntityType, TrainingConfig),
+    Construct(EntityType),
     Move,
     Heal,
     Attack,

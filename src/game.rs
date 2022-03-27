@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use crate::assets::{self, Assets};
 use crate::camera::Camera;
-use crate::data::{self, EntityType, Map, MapType};
+use crate::data::{self, EntityType, MapType, WorldInitData};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
     Action, Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig,
@@ -49,8 +49,9 @@ pub fn run(map_type: MapType) -> GameResult {
 #[derive(PartialEq, Copy, Clone)]
 pub enum CursorAction {
     Default,
-    Attack,
-    IssueMovement,
+    SelectAttackTarget,
+    SelectMovementDestination,
+    PlaceStructure(EntityType),
 }
 
 struct PlayerState {
@@ -63,8 +64,11 @@ impl PlayerState {
     fn set_cursor_action(&mut self, ctx: &mut Context, cursor_action: CursorAction) {
         match cursor_action {
             CursorAction::Default => mouse::set_cursor_type(ctx, CursorIcon::Default),
-            CursorAction::Attack => mouse::set_cursor_type(ctx, CursorIcon::Crosshair),
-            CursorAction::IssueMovement => mouse::set_cursor_type(ctx, CursorIcon::Move),
+            CursorAction::SelectAttackTarget => mouse::set_cursor_type(ctx, CursorIcon::Crosshair),
+            CursorAction::SelectMovementDestination => {
+                mouse::set_cursor_type(ctx, CursorIcon::Move)
+            }
+            CursorAction::PlaceStructure(_) => mouse::set_cursor_type(ctx, CursorIcon::Grabbing),
         }
         self.cursor_action = cursor_action;
     }
@@ -84,14 +88,15 @@ struct Game {
     entity_grid: EntityGrid,
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
+    structure_sizes: HashMap<EntityType, [u32; 2]>,
 }
 
 impl Game {
     fn new(ctx: &mut Context, map_type: MapType) -> Result<Self, GameError> {
-        let Map {
+        let WorldInitData {
             dimensions: map_dimensions,
             entities,
-        } = Map::new(map_type);
+        } = WorldInitData::new(map_type);
 
         println!("Created {} entities", entities.len());
 
@@ -130,6 +135,8 @@ impl Game {
         let hud = HudGraphics::new(ctx, hud_pos, font)?;
         let minimap = MinimapGraphics::new(ctx, minimap_pos, map_dimensions)?;
 
+        let structure_sizes = data::structure_sizes();
+
         Ok(Self {
             assets,
             hud,
@@ -140,6 +147,7 @@ impl Game {
             entity_grid,
             enemy_player_ai,
             rng,
+            structure_sizes,
         })
     }
 
@@ -196,9 +204,7 @@ impl Game {
         for x in left..right + 1 {
             for y in top..bot + 1 {
                 if !self.entity_grid.get(&[x, y]) {
-                    let new_entity = data::create_entity(entity_type, [x, y], team);
-                    self.entities.push(new_entity);
-                    self.entity_grid.set(&[x, y], true);
+                    self.add_entity(entity_type, [x, y], team);
                     return Some([x, y]);
                 }
             }
@@ -206,29 +212,40 @@ impl Game {
         None
     }
 
+    fn add_entity(&mut self, entity_type: EntityType, position: [u32; 2], team: Team) {
+        let new_entity = data::create_entity(entity_type, position, team);
+        let size = new_entity.size();
+        self.entities.push(new_entity);
+        self.entity_grid.set_area(&position, &size, true);
+    }
+
     fn handle_player_entity_action(
         &mut self,
         ctx: &mut Context,
-        entity_id: EntityId,
+        actor_id: EntityId,
         action: Action,
     ) {
         match action {
-            Action::Train(trained_entity_type, training_config) => {
+            Action::Train(unit_type, training_config) => {
                 self.issue_command(
-                    Command::Train(entity_id, trained_entity_type, training_config),
+                    Command::Train(actor_id, unit_type, training_config),
                     Team::Player,
                 );
             }
+            Action::Construct(structure_type) => {
+                self.player_state
+                    .set_cursor_action(ctx, CursorAction::PlaceStructure(structure_type));
+            }
             Action::Move => {
                 self.player_state
-                    .set_cursor_action(ctx, CursorAction::IssueMovement);
+                    .set_cursor_action(ctx, CursorAction::SelectMovementDestination);
             }
             Action::Heal => {
-                self.issue_command(Command::Heal(entity_id), Team::Player);
+                self.issue_command(Command::Heal(actor_id), Team::Player);
             }
             Action::Attack => {
                 self.player_state
-                    .set_cursor_action(ctx, CursorAction::Attack);
+                    .set_cursor_action(ctx, CursorAction::SelectAttackTarget);
             }
         }
     }
@@ -251,6 +268,19 @@ impl Game {
                         self.teams.get_mut(&issuing_team).unwrap().resources -= config.cost;
                     }
                 }
+            }
+            Command::Construct(builder_id, construction_position, construction_type) => {
+                let builder = self.entity_mut(builder_id);
+                let builder_pos = builder.position;
+                builder.state = EntityState::Constructing(construction_type);
+                assert_eq!(builder.team, issuing_team);
+                let unit = builder.unit_mut();
+                unit.constructing
+                    .as_mut()
+                    .expect("Construction command was issued for entity that can't construct")
+                    .current_structure_type = Some(construction_type);
+                unit.pathfinder
+                    .find_path(&builder_pos, construction_position);
             }
             Command::Move(active_entity_id, destination) => {
                 let entity = self.entity_mut(active_entity_id);
@@ -320,30 +350,6 @@ impl EventHandler for Game {
                 self.issue_command(command, Team::Enemy);
             }
         }
-
-        //-------------------------------
-        //            DEATH
-        //-------------------------------
-        self.entities.retain(|entity| {
-            let is_dead = entity
-                .health
-                .as_ref()
-                .map(|health| health.current == 0)
-                .unwrap_or(false);
-            if is_dead {
-                if entity.is_solid {
-                    self.entity_grid
-                        .set_area(&entity.position, &entity.size(), false);
-                }
-                if self.player_state.selected_entity_id == Some(entity.id) {
-                    self.player_state.selected_entity_id = None;
-                    self.player_state
-                        .set_cursor_action(ctx, CursorAction::Default);
-                }
-            }
-
-            !is_dead
-        });
 
         //-------------------------------
         //          MOVEMENT
@@ -427,6 +433,78 @@ impl EventHandler for Game {
         }
 
         //-------------------------------
+        //       CONSTRUCTION 1
+        //-------------------------------
+        let mut builders_to_remove = Vec::new();
+        let mut structures_to_add = Vec::new();
+        for entity in &mut self.entities {
+            if let EntityState::Constructing(structure_type) = entity.state {
+                if entity.unit_mut().pathfinder.peek_path().is_none() {
+                    let position = entity.position;
+                    let size = self.structure_sizes.get(&structure_type).unwrap();
+                    let mut sufficient_space = true;
+                    for x in position[0]..position[0] + size[0] {
+                        for y in position[1]..position[1] + size[1] {
+                            if [x, y] != position {
+                                // Don't check for collision on the cell that the builder stands on,
+                                // since it will be removed when structure is added.
+                                if self.entity_grid.get(&[x, y]) {
+                                    sufficient_space = false;
+                                }
+                            }
+                        }
+                    }
+                    if sufficient_space {
+                        builders_to_remove.push(entity.id);
+                        structures_to_add.push((entity.team, position, structure_type));
+                    } else {
+                        println!("There's not enough space for the structure, so builder goes back to idling");
+                        entity.state = EntityState::Idle;
+                    }
+                }
+            }
+        }
+
+        //-------------------------------
+        //       ENTITY REMOVAL
+        //-------------------------------
+        self.entities.retain(|entity| {
+            let is_dead = entity
+                .health
+                .as_ref()
+                .map(|health| health.current == 0)
+                .unwrap_or(false);
+            let is_transforming_into_structure = builders_to_remove.contains(&entity.id);
+            if is_transforming_into_structure {
+                println!("{:?} is transforming into a structure", entity.id);
+            }
+            let should_be_removed = is_dead || is_transforming_into_structure;
+
+            if should_be_removed {
+                if entity.is_solid {
+                    self.entity_grid
+                        .set_area(&entity.position, &entity.size(), false);
+                }
+                if self.player_state.selected_entity_id == Some(entity.id) {
+                    self.player_state.selected_entity_id = None;
+                    self.player_state
+                        .set_cursor_action(ctx, CursorAction::Default);
+                }
+            }
+
+            !should_be_removed
+        });
+
+        //-------------------------------
+        //       CONSTRUCTION 2
+        //-------------------------------
+        // Now that the builder has been removed, and no longer occupies a cell, the structure can
+        // be placed.
+        for (team, position, structure_type) in structures_to_add {
+            self.add_entity(structure_type, position, team);
+        }
+
+        //-------------------------------
         //          TRAINING
         //-------------------------------
         let mut completed_trainings = Vec::new();
@@ -484,6 +562,19 @@ impl EventHandler for Game {
             WORLD_VIEWPORT.x - self.player_state.camera.position_in_world[0],
             WORLD_VIEWPORT.y - self.player_state.camera.position_in_world[1],
         ];
+
+        if let CursorAction::PlaceStructure(structure_type) = self.player_state.cursor_action {
+            if let Some(hovered_world_pos) =
+                self.screen_to_grid_coordinates(ggez::input::mouse::position(ctx).into())
+            {
+                let size = *self.structure_sizes.get(&structure_type).unwrap();
+                let pixel_pos = grid_to_pixel_position(hovered_world_pos);
+                let screen_coords = [offset[0] + pixel_pos[0], offset[1] + pixel_pos[1]];
+                // TODO: Draw transparent filled rect instead of selection outline
+                self.assets
+                    .draw_selection(ctx, size, Team::Player, screen_coords)?;
+            }
+        }
 
         for entity in &self.entities {
             let pixel_pos = match &entity.physical_type {
@@ -569,7 +660,7 @@ impl EventHandler for Game {
                     }
                 }
 
-                CursorAction::IssueMovement => {
+                CursorAction::SelectMovementDestination => {
                     let entity = self
                         .selected_entity_mut()
                         .expect("Cannot issue movement without selected entity");
@@ -579,7 +670,20 @@ impl EventHandler for Game {
                         .set_cursor_action(ctx, CursorAction::Default);
                 }
 
-                CursorAction::Attack => {
+                CursorAction::PlaceStructure(structure_type) => {
+                    let entity = self
+                        .selected_entity_mut()
+                        .expect("Cannot issue construction without selected entity");
+                    let entity_id = entity.id;
+                    self.issue_command(
+                        Command::Construct(entity_id, clicked_world_pos, structure_type),
+                        Team::Player,
+                    );
+                    self.player_state
+                        .set_cursor_action(ctx, CursorAction::Default);
+                }
+
+                CursorAction::SelectAttackTarget => {
                     if let Some(victim) = self.entities.iter_mut().find(|e| {
                         e.contains(clicked_world_pos) && e.health.is_some() && e.team == Team::Enemy
                     }) {
@@ -658,6 +762,7 @@ pub fn grid_to_pixel_position(grid_position: [u32; 2]) -> [f32; 2] {
 #[derive(Debug)]
 pub enum Command {
     Train(EntityId, EntityType, TrainingConfig),
+    Construct(EntityId, [u32; 2], EntityType),
     Move(EntityId, [u32; 2]),
     Heal(EntityId),
     Attack(EntityId, EntityId),

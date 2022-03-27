@@ -1,4 +1,6 @@
 pub struct EntityGrid {
+    // TODO Store EntityId's instead, to get constant position->entity_id lookup?
+    //      (although entity_id->entity is still not constant currently)
     grid: Vec<bool>,
     pub dimensions: [u32; 2],
 }
