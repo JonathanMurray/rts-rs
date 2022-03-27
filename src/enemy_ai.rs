@@ -2,8 +2,8 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::time::Duration;
 
+use crate::core::Command;
 use crate::entities::{Action, Entity, Team};
-use crate::game::Command;
 
 pub struct EnemyPlayerAi {
     timer_s: f32,

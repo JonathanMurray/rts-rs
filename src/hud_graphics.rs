@@ -4,8 +4,9 @@ use ggez::graphics::{
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
+use crate::core::TeamState;
 use crate::entities::{Action, Entity, EntityState, Team, NUM_ENTITY_ACTIONS};
-use crate::game::{CursorAction, TeamState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
+use crate::game::{CursorAction, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 

@@ -6,6 +6,7 @@ pub mod game;
 
 mod assets;
 mod camera;
+mod core;
 mod enemy_ai;
 mod entities;
 mod grid;
