@@ -1,7 +1,7 @@
 use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event::EventHandler;
-use ggez::graphics::{Color, Font};
+use ggez::graphics::{Color, Font, Rect};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
@@ -24,11 +24,12 @@ pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
 const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 1200.0];
 pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
-const WORLD_POSITION_ON_SCREEN: [f32; 2] = [100.0, 100.0];
-pub const CAMERA_SIZE: [f32; 2] = [
-    WINDOW_DIMENSIONS[0] - WORLD_POSITION_ON_SCREEN[0] * 2.0,
-    650.0,
-];
+pub const WORLD_VIEWPORT: Rect = Rect {
+    x: 50.0,
+    y: 50.0,
+    w: WINDOW_DIMENSIONS[0] - 100.0,
+    h: 650.0,
+};
 
 const TITLE: &str = "RTS";
 
@@ -128,7 +129,7 @@ impl Game {
 
         println!("Created {} entities", entities.len());
 
-        let assets = assets::create_assets(ctx, CAMERA_SIZE)?;
+        let assets = assets::create_assets(ctx, [WORLD_VIEWPORT.w, WORLD_VIEWPORT.h])?;
 
         let rng = rand::thread_rng();
 
@@ -154,8 +155,8 @@ impl Game {
         teams.insert(Team::Enemy, TeamState { resources: 5 });
 
         let max_camera_position = [
-            map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - CAMERA_SIZE[0],
-            map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1] - CAMERA_SIZE[1],
+            map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - WORLD_VIEWPORT.w,
+            map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1] - WORLD_VIEWPORT.h,
         ];
         let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState {
@@ -164,10 +165,7 @@ impl Game {
             camera,
         };
 
-        let hud_pos = [
-            WORLD_POSITION_ON_SCREEN[0],
-            WORLD_POSITION_ON_SCREEN[1] + CAMERA_SIZE[1] + 25.0,
-        ];
+        let hud_pos = [WORLD_VIEWPORT.x, WORLD_VIEWPORT.y + WORLD_VIEWPORT.h + 25.0];
         let minimap_pos = [900.0, hud_pos[1] + 100.0];
         let hud = HudGraphics::new(ctx, hud_pos, font)?;
         let minimap = MinimapGraphics::new(ctx, minimap_pos, map_dimensions)?;
@@ -187,18 +185,16 @@ impl Game {
 
     fn screen_to_grid_coordinates(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
         let [x, y] = coordinates;
-        if x < WORLD_POSITION_ON_SCREEN[0] || y < WORLD_POSITION_ON_SCREEN[1] {
+        if x < WORLD_VIEWPORT.x || y < WORLD_VIEWPORT.y {
             return None;
         }
-        if x >= WORLD_POSITION_ON_SCREEN[0] + CAMERA_SIZE[0]
-            || y >= WORLD_POSITION_ON_SCREEN[1] + CAMERA_SIZE[1]
-        {
+        if x >= WORLD_VIEWPORT.x + WORLD_VIEWPORT.w || y >= WORLD_VIEWPORT.y + WORLD_VIEWPORT.h {
             return None;
         }
 
         let camera_pos = self.player_state.camera.position_in_world;
-        let grid_x = (x - WORLD_POSITION_ON_SCREEN[0] + camera_pos[0]) / CELL_PIXEL_SIZE[0];
-        let grid_y = (y - WORLD_POSITION_ON_SCREEN[1] + camera_pos[1]) / CELL_PIXEL_SIZE[1];
+        let grid_x = (x - WORLD_VIEWPORT.x + camera_pos[0]) / CELL_PIXEL_SIZE[0];
+        let grid_y = (y - WORLD_VIEWPORT.y + camera_pos[1]) / CELL_PIXEL_SIZE[1];
         let grid_x = grid_x as u32;
         let grid_y = grid_y as u32;
         if grid_x < self.entity_grid.map_dimensions[0]
@@ -405,13 +401,13 @@ impl EventHandler for Game {
 
         self.assets.draw_grid(
             ctx,
-            WORLD_POSITION_ON_SCREEN,
+            WORLD_VIEWPORT.point().into(),
             self.player_state.camera.position_in_world,
         )?;
 
         let offset = [
-            WORLD_POSITION_ON_SCREEN[0] - self.player_state.camera.position_in_world[0],
-            WORLD_POSITION_ON_SCREEN[1] - self.player_state.camera.position_in_world[1],
+            WORLD_VIEWPORT.x - self.player_state.camera.position_in_world[0],
+            WORLD_VIEWPORT.y - self.player_state.camera.position_in_world[1],
         ];
 
         for entity in &self.entities {
@@ -435,7 +431,7 @@ impl EventHandler for Game {
         self.assets.flush_entity_sprite_batch(ctx)?;
 
         self.assets
-            .draw_background_around_grid(ctx, WORLD_POSITION_ON_SCREEN)?;
+            .draw_background_around_grid(ctx, WORLD_VIEWPORT.point().into())?;
 
         let selected_entity = self.selected_entity();
         self.hud.draw(
@@ -506,7 +502,6 @@ impl EventHandler for Game {
                         .set_cursor_action(ctx, CursorAction::Default);
                 }
                 CursorAction::IssueMovement => {
-                    //TODO deduplicate
                     let entity = self
                         .selected_entity_mut()
                         .expect("Cannot issue movement without selected entity");
@@ -532,11 +527,11 @@ impl EventHandler for Game {
                     ((x - minimap.x) / minimap.w)
                         * self.entity_grid.map_dimensions[0] as f32
                         * CELL_PIXEL_SIZE[0]
-                        - CAMERA_SIZE[0] / 2.0,
+                        - WORLD_VIEWPORT.w / 2.0,
                     ((y - minimap.y) / minimap.h)
                         * self.entity_grid.map_dimensions[1] as f32
                         * CELL_PIXEL_SIZE[1]
-                        - CAMERA_SIZE[1] / 2.0,
+                        - WORLD_VIEWPORT.h / 2.0,
                 ];
             }
 

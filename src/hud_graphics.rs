@@ -5,7 +5,7 @@ use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
 use crate::entities::{ActionType, Entity, EntityState, Team, NUM_UNIT_ACTIONS};
-use crate::game::{CursorAction, TeamState, CAMERA_SIZE, CELL_PIXEL_SIZE};
+use crate::game::{CursorAction, TeamState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 
 const NUM_BUTTONS: usize = NUM_UNIT_ACTIONS;
 
@@ -262,8 +262,8 @@ impl MinimapGraphics {
                 Rect::new(
                     position[0],
                     position[1],
-                    CAMERA_SIZE[0] * camera_scale[0],
-                    CAMERA_SIZE[1] * camera_scale[1],
+                    WORLD_VIEWPORT.w * camera_scale[0],
+                    WORLD_VIEWPORT.h * camera_scale[1],
                 ),
                 Color::new(1.0, 1.0, 1.0, 1.0),
             )?
