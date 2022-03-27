@@ -2,7 +2,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::time::Duration;
 
-use crate::entities::{Action, Entity, PhysicalType, Team};
+use crate::entities::{Action, Entity, Team};
 use crate::game::Command;
 
 pub struct EnemyPlayerAi {
@@ -23,33 +23,28 @@ impl EnemyPlayerAi {
         self.timer_s -= dt.as_secs_f32();
 
         if self.timer_s <= 0.0 {
-            self.timer_s = 2.0;
+            self.timer_s = 5.0;
             for entity in entities {
                 if entity.team == Team::Enemy && rng.gen_bool(0.5) {
-                    let command = match &entity.physical_type {
-                        PhysicalType::Mobile(..) => {
-                            let x: u32 = rng.gen_range(0..self.map_dimensions[0]);
-                            let y: u32 = rng.gen_range(0..self.map_dimensions[1]);
-                            Some(Command::Move(entity.id, [x, y]))
-                        }
-                        PhysicalType::Structure { .. } => {
-                            entity.training.as_ref().map(|training| {
-                                let (&entity_type, &config) = training.options().next().unwrap();
-                                Command::Train(entity.id, entity_type, config)
-                            })
-                        }
-                    };
                     for action in entity.actions.iter().flatten() {
-                        if action == &Action::Harm && rng.gen_bool(0.8) {
+                        if action == &Action::Attack && rng.gen_bool(0.8) {
                             if let Some(player_entity) =
                                 entities.iter().find(|e| e.team == Team::Player)
                             {
-                                commands.push(Command::DealDamage(entity.id, player_entity.id));
+                                commands.push(Command::Attack(entity.id, player_entity.id));
+                                break;
                             }
                         }
-                    }
-                    if let Some(command) = command {
-                        commands.push(command);
+                        if action == &Action::Move && rng.gen_bool(0.3) {
+                            let x: u32 = rng.gen_range(0..self.map_dimensions[0]);
+                            let y: u32 = rng.gen_range(0..self.map_dimensions[1]);
+                            commands.push(Command::Move(entity.id, [x, y]));
+                            break;
+                        }
+                        if let &Action::Train(entity_type, config) = action {
+                            commands.push(Command::Train(entity.id, entity_type, config));
+                            break;
+                        }
                     }
                 }
             }

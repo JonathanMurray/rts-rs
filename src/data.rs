@@ -120,17 +120,17 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 max_health: Some(3),
                 physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
             },
-            [Some(Action::Move), Some(Action::Harm), Some(Action::Heal)],
+            [Some(Action::Move), Some(Action::Attack), None],
         ),
         EntityType::CircleUnit => (
             EntityConfig {
                 name: "Circle",
                 is_solid: true,
                 sprite: EntitySprite::CircleUnit,
-                max_health: Some(2),
-                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(1500)),
+                max_health: Some(5),
+                physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
             },
-            [Some(Action::Move), Some(Action::Harm), None],
+            [Some(Action::Move), Some(Action::Attack), None],
         ),
         EntityType::SmallBuilding => (
             EntityConfig {

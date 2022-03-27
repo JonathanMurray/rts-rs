@@ -18,6 +18,7 @@ pub enum EntityState {
     Idle,
     TrainingUnit(EntityType),
     Moving,
+    Attacking,
 }
 
 #[derive(Debug)]
@@ -37,7 +38,7 @@ pub struct Entity {
 
 #[derive(Debug)]
 pub enum PhysicalType {
-    Mobile(MovementComponent),
+    Unit(UnitComponent),
     Structure { size: [u32; 2] },
 }
 
@@ -63,17 +64,17 @@ impl Entity {
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
-        let physical_type = match config.physical_type {
-            PhysicalTypeConfig::MovementCooldown(cooldown) => {
-                PhysicalType::Mobile(MovementComponent::new(position, cooldown))
-            }
-            PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
-        };
+
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
+        let mut has_combat = false;
         for action in actions.into_iter().flatten() {
-            if let Action::Train(entity_type, config) = action {
-                training_options.insert(entity_type, config);
+            match action {
+                Action::Train(entity_type, config) => {
+                    training_options.insert(entity_type, config);
+                }
+                Action::Attack => has_combat = true,
+                _ => {}
             }
         }
         let training = if !training_options.is_empty() {
@@ -81,6 +82,18 @@ impl Entity {
         } else {
             None
         };
+        let physical_type = match config.physical_type {
+            PhysicalTypeConfig::MovementCooldown(cooldown) => {
+                let combat = if has_combat {
+                    Some(Combat::new())
+                } else {
+                    None
+                };
+                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat))
+            }
+            PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
+        };
+
         Self {
             id,
             name: config.name,
@@ -98,8 +111,15 @@ impl Entity {
 
     pub fn size(&self) -> [u32; 2] {
         match self.physical_type {
-            PhysicalType::Mobile(_) => [1, 1],
+            PhysicalType::Unit(_) => [1, 1],
             PhysicalType::Structure { size } => size,
+        }
+    }
+
+    pub fn unit_mut(&mut self) -> &mut UnitComponent {
+        match &mut self.physical_type {
+            PhysicalType::Unit(unit) => unit,
+            PhysicalType::Structure { .. } => panic!("Not a unit"),
         }
     }
 }
@@ -146,16 +166,18 @@ pub enum EntitySprite {
 }
 
 #[derive(Debug)]
-pub struct MovementComponent {
+pub struct UnitComponent {
     pub sub_cell_movement: SubCellMovement,
     pub pathfinder: Pathfinder,
+    pub combat: Option<Combat>,
 }
 
-impl MovementComponent {
-    pub fn new(position: [u32; 2], movement_cooldown: Duration) -> Self {
+impl UnitComponent {
+    pub fn new(position: [u32; 2], movement_cooldown: Duration, combat: Option<Combat>) -> Self {
         Self {
             sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
             pathfinder: Pathfinder::new(),
+            combat,
         }
     }
 }
@@ -199,6 +221,10 @@ impl Pathfinder {
 
     pub fn advance_path(&mut self) -> [u32; 2] {
         self.movement_plan.pop().expect("Can't advance empty path")
+    }
+
+    pub fn clear(&mut self) {
+        self.movement_plan.clear();
     }
 }
 
@@ -361,6 +387,30 @@ pub enum TrainingPerformStatus {
 }
 
 #[derive(Debug)]
+pub struct Combat {
+    pub target_entity_id: Option<EntityId>,
+    cooldown: Duration,
+}
+
+impl Combat {
+    fn new() -> Self {
+        Self {
+            target_entity_id: None,
+            cooldown: Duration::ZERO,
+        }
+    }
+
+    pub fn count_down_cooldown(&mut self, dt: Duration) -> bool {
+        self.cooldown = self.cooldown.checked_sub(dt).unwrap_or(Duration::ZERO);
+        self.cooldown.is_zero()
+    }
+
+    pub fn start_cooldown(&mut self) {
+        self.cooldown = Duration::from_secs(3);
+    }
+}
+
+#[derive(Debug)]
 pub struct HealingActionComponent;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -368,5 +418,5 @@ pub enum Action {
     Train(EntityType, TrainingConfig),
     Move,
     Heal,
-    Harm,
+    Attack,
 }

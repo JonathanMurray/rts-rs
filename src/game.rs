@@ -49,7 +49,7 @@ pub fn run(map_type: MapType) -> GameResult {
 #[derive(PartialEq, Copy, Clone)]
 pub enum CursorAction {
     Default,
-    DealDamage,
+    Attack,
     IssueMovement,
 }
 
@@ -63,7 +63,7 @@ impl PlayerState {
     fn set_cursor_action(&mut self, ctx: &mut Context, cursor_action: CursorAction) {
         match cursor_action {
             CursorAction::Default => mouse::set_cursor_type(ctx, CursorIcon::Default),
-            CursorAction::DealDamage => mouse::set_cursor_type(ctx, CursorIcon::Crosshair),
+            CursorAction::Attack => mouse::set_cursor_type(ctx, CursorIcon::Crosshair),
             CursorAction::IssueMovement => mouse::set_cursor_type(ctx, CursorIcon::Move),
         }
         self.cursor_action = cursor_action;
@@ -226,9 +226,9 @@ impl Game {
             Action::Heal => {
                 self.issue_command(Command::Heal(entity_id), Team::Player);
             }
-            Action::Harm => {
+            Action::Attack => {
                 self.player_state
-                    .set_cursor_action(ctx, CursorAction::DealDamage);
+                    .set_cursor_action(ctx, CursorAction::Attack);
             }
         }
     }
@@ -256,14 +256,11 @@ impl Game {
                 let entity = self.entity_mut(active_entity_id);
                 assert_eq!(entity.team, issuing_team);
                 let current_pos = entity.position;
-                match &mut entity.physical_type {
-                    PhysicalType::Mobile(movement) => {
-                        movement.pathfinder.find_path(&current_pos, destination);
-                    }
-                    PhysicalType::Structure { .. } => {
-                        panic!("Move command was issued for structure")
-                    }
-                }
+                entity
+                    .unit_mut()
+                    .pathfinder
+                    .find_path(&current_pos, destination);
+                entity.state = EntityState::Moving;
             }
             Command::Heal(active_entity_id) => {
                 let entity = self.entity_mut(active_entity_id);
@@ -276,21 +273,21 @@ impl Game {
                 let health = entity.health.as_mut().unwrap();
                 health.receive_healing(1);
             }
-            Command::DealDamage(active_entity_id, target_entity_id) => {
-                let dealer_entity = self.entity_mut(active_entity_id);
-                assert_eq!(dealer_entity.team, issuing_team);
-                dealer_entity
-                    .actions
-                    .iter()
-                    .find(|action| **action == Some(Action::Harm))
-                    .expect("Heal command was issued for entity that doesn't have a Harm action");
-                let target_entity = self.entity_mut(target_entity_id);
-                let health = target_entity
-                    .health
+            Command::Attack(attacker_id, victim_id) => {
+                let victim = self.entity_mut(victim_id);
+                assert_ne!(victim.team, issuing_team);
+                let victim_pos = victim.position;
+                let attacker = self.entity_mut(attacker_id);
+
+                assert_eq!(attacker.team, issuing_team);
+                attacker.state = EntityState::Attacking;
+                let attacker_pos = attacker.position;
+                let unit = attacker.unit_mut();
+                unit.combat
                     .as_mut()
-                    .expect("Damage command was targeted at entity that has no health");
-                health.receive_damage(1);
-                println!("Reduced health down to {}/{}", health.current, health.max)
+                    .expect("Attack command was issued for non-combat unit")
+                    .target_entity_id = Some(victim_id);
+                unit.pathfinder.find_path(&attacker_pos, victim_pos);
             }
         }
     }
@@ -310,6 +307,9 @@ impl EventHandler for Game {
 
         let dt = ggez::timer::delta(ctx);
 
+        //-------------------------------
+        //             AI
+        //-------------------------------
         let enemy_commands = self
             .enemy_player_ai
             .run(dt, &self.entities[..], &mut self.rng);
@@ -321,7 +321,9 @@ impl EventHandler for Game {
             }
         }
 
-        // Remove dead entities
+        //-------------------------------
+        //            DEATH
+        //-------------------------------
         self.entities.retain(|entity| {
             let is_dead = entity
                 .health
@@ -343,33 +345,88 @@ impl EventHandler for Game {
             !is_dead
         });
 
+        //-------------------------------
+        //          MOVEMENT
+        //-------------------------------
         for entity in &mut self.entities {
-            if let PhysicalType::Mobile(movement) = &mut entity.physical_type {
-                if movement.sub_cell_movement.is_ready() {
-                    if let Some(next_pos) = movement.pathfinder.peek_path() {
-                        entity.state = EntityState::Moving;
+            if let PhysicalType::Unit(unit) = &mut entity.physical_type {
+                unit.sub_cell_movement.update(dt, entity.position);
+                if unit.sub_cell_movement.is_ready() {
+                    if let Some(next_pos) = unit.pathfinder.peek_path() {
                         let occupied = self.entity_grid.get(next_pos);
                         if !occupied {
                             let old_pos = entity.position;
-                            let new_pos = movement.pathfinder.advance_path();
+                            let new_pos = unit.pathfinder.advance_path();
                             self.entity_grid.set(&old_pos, false);
-                            movement.sub_cell_movement.set_moving(old_pos, new_pos);
+                            unit.sub_cell_movement.set_moving(old_pos, new_pos);
                             entity.position = new_pos;
                             self.entity_grid.set(&new_pos, true);
                         }
-                    } else {
+                    } else if entity.state == EntityState::Moving {
                         entity.state = EntityState::Idle;
                     }
                 }
             }
         }
 
-        for entity in &mut self.entities {
-            if let PhysicalType::Mobile(movement) = &mut entity.physical_type {
-                movement.sub_cell_movement.update(dt, entity.position);
+        //-------------------------------
+        //           COMBAT
+        //-------------------------------
+        let mut attacks = vec![];
+        for entity in self
+            .entities
+            .iter_mut()
+            .filter(|e| e.state == EntityState::Attacking)
+        {
+            let attacker_id = entity.id;
+            let combat = entity
+                .unit_mut()
+                .combat
+                .as_mut()
+                .expect("non-combat attacker");
+            if combat.count_down_cooldown(dt) {
+                let victim_id = combat.target_entity_id.expect("attack without target");
+                attacks.push((attacker_id, 1, victim_id));
+            }
+        }
+        for (attacker_id, damage_amount, victim_id) in attacks {
+            let attacker_pos = self.entity_mut(attacker_id).position;
+            if let Some(victim) = self.entities.iter_mut().find(|e| e.id == victim_id) {
+                let victim_pos = victim.position;
+                let within_range = square_distance(attacker_pos, victim_pos) <= 2;
+                if within_range {
+                    let health = victim.health.as_mut().expect("victim without health");
+                    health.receive_damage(damage_amount);
+                    println!(
+                        "{:?} --[{} dmg]--> {:?}",
+                        attacker_id, damage_amount, victim_id
+                    );
+                    self.entity_mut(attacker_id)
+                        .unit_mut()
+                        .combat
+                        .as_mut()
+                        .unwrap()
+                        .start_cooldown();
+                } else {
+                    let attacker = self.entity_mut(attacker_id).unit_mut();
+                    if attacker.pathfinder.peek_path().is_none() {
+                        attacker.pathfinder.find_path(&attacker_pos, victim_pos);
+                    }
+                }
+            } else {
+                let attacker = self.entity_mut(attacker_id);
+                attacker.state = EntityState::Idle;
+                attacker.unit_mut().pathfinder.clear();
+                println!(
+                    "{:?} doesn't exist so {:?} went back to idling",
+                    victim_id, attacker_id
+                );
             }
         }
 
+        //-------------------------------
+        //          TRAINING
+        //-------------------------------
         let mut completed_trainings = Vec::new();
         for entity in &mut self.entities {
             let status = entity.training.as_mut().map(|training| training.update(dt));
@@ -383,7 +440,6 @@ impl EventHandler for Game {
                 ));
             }
         }
-
         for (entity_type, team, source_position, source_size) in completed_trainings {
             if self
                 .try_add_trained_entity(entity_type, team, source_position, source_size)
@@ -417,9 +473,7 @@ impl EventHandler for Game {
 
         for entity in &self.entities {
             let pixel_pos = match &entity.physical_type {
-                PhysicalType::Mobile(movement) => {
-                    movement.sub_cell_movement.pixel_position(entity.position)
-                }
+                PhysicalType::Unit(unit) => unit.sub_cell_movement.pixel_position(entity.position),
                 PhysicalType::Structure { .. } => grid_to_pixel_position(entity.position),
             };
 
@@ -473,7 +527,9 @@ impl EventHandler for Game {
                     } else if let Some(entity) = self.selected_entity_mut() {
                         if entity.team == Team::Player {
                             match &mut entity.physical_type {
-                                PhysicalType::Mobile(..) => {
+                                // TODO: If combat unit is selected and enemy is clicked, an attack
+                                //       command should be issued, rather than a move command.
+                                PhysicalType::Unit(..) => {
                                     let entity_id = entity.id;
                                     self.issue_command(
                                         Command::Move(entity_id, clicked_world_pos),
@@ -489,42 +545,32 @@ impl EventHandler for Game {
                         println!("No entity is selected");
                     }
                 }
-                CursorAction::DealDamage => {
-                    // TODO this only works for structures' top-left corner
-                    if let Some(target_entity) = self
-                        .entities
-                        .iter_mut()
-                        .find(|e| e.position == clicked_world_pos && e.health.is_some())
-                    {
-                        let target_entity_id = target_entity.id;
-                        let dealer_entity_id = self
-                            .player_state
-                            .selected_entity_id
-                            .expect("Can't deal damage without selected entity");
-                        self.issue_command(
-                            Command::DealDamage(dealer_entity_id, target_entity_id),
-                            Team::Player,
-                        );
-                    }
-                    self.player_state
-                        .set_cursor_action(ctx, CursorAction::Default);
-                }
+
                 CursorAction::IssueMovement => {
                     let entity = self
                         .selected_entity_mut()
                         .expect("Cannot issue movement without selected entity");
-                    assert_eq!(entity.team, Team::Player);
-                    match &mut entity.physical_type {
-                        PhysicalType::Mobile(..) => {
-                            let entity_id = entity.id;
-                            self.issue_command(
-                                Command::Move(entity_id, clicked_world_pos),
-                                Team::Player,
-                            );
-                        }
-                        PhysicalType::Structure { .. } => {
-                            panic!("Cannot issue movement for structure")
-                        }
+                    let entity_id = entity.id;
+                    self.issue_command(Command::Move(entity_id, clicked_world_pos), Team::Player);
+                    self.player_state
+                        .set_cursor_action(ctx, CursorAction::Default);
+                }
+
+                CursorAction::Attack => {
+                    // TODO this only works for structures' top-left corner
+                    if let Some(victim) = self.entities.iter_mut().find(|e| {
+                        e.position == clicked_world_pos
+                            && e.health.is_some()
+                            && e.team == Team::Enemy
+                    }) {
+                        let victim_id = victim.id;
+                        let attacker_id = self
+                            .selected_entity_mut()
+                            .expect("Cannot attack without selected entity")
+                            .id;
+                        self.issue_command(Command::Attack(attacker_id, victim_id), Team::Player);
+                    } else {
+                        println!("Invalid attack target");
                     }
                     self.player_state
                         .set_cursor_action(ctx, CursorAction::Default);
@@ -593,5 +639,9 @@ pub enum Command {
     Train(EntityId, EntityType, TrainingConfig),
     Move(EntityId, [u32; 2]),
     Heal(EntityId),
-    DealDamage(EntityId, EntityId),
+    Attack(EntityId, EntityId),
+}
+
+fn square_distance(a: [u32; 2], b: [u32; 2]) -> u32 {
+    ((a[0] as i32 - b[0] as i32).pow(2) + (a[1] as i32 - b[1] as i32).pow(2)) as u32
 }

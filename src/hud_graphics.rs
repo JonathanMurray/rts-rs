@@ -130,12 +130,13 @@ impl HudGraphics {
                                     if selected_entity.state == EntityState::Moving {
                                         button_states[i].matches_entity_state = true;
                                     }
+                                    const TEXT: &str = "Move";
                                     if cursor_action == CursorAction::IssueMovement {
                                         button_states[i].matches_cursor_action = true;
-                                        tooltip_text = "Move".to_string();
+                                        tooltip_text = TEXT.to_string();
                                     }
                                     if hovered_button_i == Some(i) {
-                                        tooltip_text = "Move".to_string();
+                                        tooltip_text = TEXT.to_string();
                                     }
                                 }
                                 Action::Heal => {
@@ -143,13 +144,17 @@ impl HudGraphics {
                                         tooltip_text = "Heal".to_string();
                                     }
                                 }
-                                Action::Harm => {
-                                    if cursor_action == CursorAction::DealDamage {
+                                Action::Attack => {
+                                    if selected_entity.state == EntityState::Attacking {
+                                        button_states[i].matches_entity_state = true;
+                                    }
+                                    const TEXT: &str = "Attack";
+                                    if cursor_action == CursorAction::Attack {
                                         button_states[i].matches_cursor_action = true;
-                                        tooltip_text = "Deal damage".to_string();
+                                        tooltip_text = TEXT.to_string();
                                     }
                                     if hovered_button_i == Some(i) {
-                                        tooltip_text = "Deal damage".to_string();
+                                        tooltip_text = TEXT.to_string();
                                     }
                                 }
                             }
