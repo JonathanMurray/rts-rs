@@ -15,7 +15,7 @@ use crate::camera::Camera;
 use crate::data::{self, EntityType, Map, MapType};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
-    ActionType, Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig,
+    Action, Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig,
     TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::grid::EntityGrid;
@@ -145,10 +145,7 @@ impl Game {
 
     fn screen_to_grid_coordinates(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
         let [x, y] = coordinates;
-        if x < WORLD_VIEWPORT.x || y < WORLD_VIEWPORT.y {
-            return None;
-        }
-        if x >= WORLD_VIEWPORT.x + WORLD_VIEWPORT.w || y >= WORLD_VIEWPORT.y + WORLD_VIEWPORT.h {
+        if !WORLD_VIEWPORT.contains(coordinates) {
             return None;
         }
 
@@ -209,37 +206,34 @@ impl Game {
         None
     }
 
-    fn try_perform_player_action(&mut self, ctx: &mut Context, action_type: ActionType) {
-        match action_type {
-            ActionType::Train(trained_entity_type, training_config) => {
-                let entity_id = self
-                    .player_state
-                    .selected_entity_id
-                    .expect("Need selected entity to train");
-                self.apply_command(
+    fn handle_player_entity_action(
+        &mut self,
+        ctx: &mut Context,
+        entity_id: EntityId,
+        action: Action,
+    ) {
+        match action {
+            Action::Train(trained_entity_type, training_config) => {
+                self.issue_command(
                     Command::Train(entity_id, trained_entity_type, training_config),
                     Team::Player,
                 );
             }
-            ActionType::Move => {
+            Action::Move => {
                 self.player_state
                     .set_cursor_action(ctx, CursorAction::IssueMovement);
             }
-            ActionType::Heal => {
-                let entity_id = self
-                    .player_state
-                    .selected_entity_id
-                    .expect("Need selected entity to health");
-                self.apply_command(Command::Heal(entity_id), Team::Player);
+            Action::Heal => {
+                self.issue_command(Command::Heal(entity_id), Team::Player);
             }
-            ActionType::Harm => {
+            Action::Harm => {
                 self.player_state
                     .set_cursor_action(ctx, CursorAction::DealDamage);
             }
         }
     }
 
-    fn apply_command(&mut self, command: Command, issuing_team: Team) {
+    fn issue_command(&mut self, command: Command, issuing_team: Team) {
         match command {
             Command::Train(active_entity_id, trained_entity_type, config) => {
                 let resources = self.teams.get(&issuing_team).unwrap().resources;
@@ -258,9 +252,10 @@ impl Game {
                     }
                 }
             }
-            Command::Move(active_entity_id, current_pos, destination) => {
+            Command::Move(active_entity_id, destination) => {
                 let entity = self.entity_mut(active_entity_id);
                 assert_eq!(entity.team, issuing_team);
+                let current_pos = entity.position;
                 match &mut entity.physical_type {
                     PhysicalType::Mobile(movement) => {
                         movement.pathfinder.find_path(&current_pos, destination);
@@ -276,7 +271,7 @@ impl Game {
                 entity
                     .actions
                     .iter()
-                    .find(|action| **action == Some(ActionType::Heal))
+                    .find(|action| **action == Some(Action::Heal))
                     .expect("Heal command was issued for entity that doesn't have a Heal action");
                 let health = entity.health.as_mut().unwrap();
                 health.receive_healing(1);
@@ -287,7 +282,7 @@ impl Game {
                 dealer_entity
                     .actions
                     .iter()
-                    .find(|action| **action == Some(ActionType::Harm))
+                    .find(|action| **action == Some(Action::Harm))
                     .expect("Heal command was issued for entity that doesn't have a Harm action");
                 let target_entity = self.entity_mut(target_entity_id);
                 let health = target_entity
@@ -319,10 +314,10 @@ impl EventHandler for Game {
             .enemy_player_ai
             .run(dt, &self.entities[..], &mut self.rng);
         if !enemy_commands.is_empty() {
-            println!("Applying {} AI commands:", enemy_commands.len());
+            println!("Issuing {} AI commands:", enemy_commands.len());
             for command in enemy_commands {
                 println!("  {:?}", command);
-                self.apply_command(command, Team::Enemy);
+                self.issue_command(command, Team::Enemy);
             }
         }
 
@@ -475,18 +470,13 @@ impl EventHandler for Game {
                                     && clicked_world_pos[1] < e.position[1] + h
                             })
                             .map(|e| e.id);
-                        println!(
-                            "Selected entity index: {:?}",
-                            self.player_state.selected_entity_id
-                        );
                     } else if let Some(entity) = self.selected_entity_mut() {
                         if entity.team == Team::Player {
                             match &mut entity.physical_type {
                                 PhysicalType::Mobile(..) => {
                                     let entity_id = entity.id;
-                                    let current_pos = entity.position;
-                                    self.apply_command(
-                                        Command::Move(entity_id, current_pos, clicked_world_pos),
+                                    self.issue_command(
+                                        Command::Move(entity_id, clicked_world_pos),
                                         Team::Player,
                                     );
                                 }
@@ -511,7 +501,7 @@ impl EventHandler for Game {
                             .player_state
                             .selected_entity_id
                             .expect("Can't deal damage without selected entity");
-                        self.apply_command(
+                        self.issue_command(
                             Command::DealDamage(dealer_entity_id, target_entity_id),
                             Team::Player,
                         );
@@ -527,9 +517,8 @@ impl EventHandler for Game {
                     match &mut entity.physical_type {
                         PhysicalType::Mobile(..) => {
                             let entity_id = entity.id;
-                            let current_pos = entity.position;
-                            self.apply_command(
-                                Command::Move(entity_id, current_pos, clicked_world_pos),
+                            self.issue_command(
+                                Command::Move(entity_id, clicked_world_pos),
                                 Team::Player,
                             );
                         }
@@ -542,6 +531,8 @@ impl EventHandler for Game {
                 }
             }
         } else {
+            self.player_state
+                .set_cursor_action(ctx, CursorAction::Default);
             let minimap = self.minimap.rect();
             if minimap.contains([x, y]) {
                 self.player_state.camera.position_in_world = [
@@ -558,8 +549,9 @@ impl EventHandler for Game {
 
             if let Some(entity) = self.selected_entity() {
                 if entity.team == Team::Player {
-                    if let Some(action_type) = self.hud.on_mouse_click([x, y], entity) {
-                        self.try_perform_player_action(ctx, action_type);
+                    if let Some(action) = self.hud.on_mouse_click([x, y], entity) {
+                        let entity_id = entity.id;
+                        self.handle_player_entity_action(ctx, entity_id, action);
                     }
                 }
             }
@@ -578,8 +570,9 @@ impl EventHandler for Game {
             _ => {
                 if let Some(entity) = self.selected_entity() {
                     if entity.team == Team::Player {
-                        if let Some(action_type) = self.hud.on_button_click(keycode, entity) {
-                            self.try_perform_player_action(ctx, action_type);
+                        if let Some(action) = self.hud.on_button_click(keycode, entity) {
+                            let entity_id = entity.id;
+                            self.handle_player_entity_action(ctx, entity_id, action);
                         }
                     }
                 }
@@ -598,7 +591,7 @@ pub fn grid_to_pixel_position(grid_position: [u32; 2]) -> [f32; 2] {
 #[derive(Debug)]
 pub enum Command {
     Train(EntityId, EntityType, TrainingConfig),
-    Move(EntityId, [u32; 2], [u32; 2]),
+    Move(EntityId, [u32; 2]),
     Heal(EntityId),
     DealDamage(EntityId, EntityId),
 }

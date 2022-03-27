@@ -4,7 +4,7 @@ use ggez::graphics::{
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
-use crate::entities::{ActionType, Entity, EntityState, Team, NUM_UNIT_ACTIONS};
+use crate::entities::{Action, Entity, EntityState, Team, NUM_UNIT_ACTIONS};
 use crate::game::{CursorAction, TeamState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 
 const NUM_BUTTONS: usize = NUM_UNIT_ACTIONS;
@@ -108,10 +108,10 @@ impl HudGraphics {
                         .position(|button| button.rect.contains(mouse_position));
                     let mut tooltip_text = String::new();
                     for (i, action) in selected_entity.actions.iter().enumerate() {
-                        if let Some(action_type) = action {
+                        if let Some(action) = action {
                             button_states[i].shown = true;
-                            match action_type {
-                                ActionType::Train(trained_entity_type, training_config) => {
+                            match action {
+                                Action::Train(trained_entity_type, training_config) => {
                                     if selected_entity.state
                                         == EntityState::TrainingUnit(*trained_entity_type)
                                     {
@@ -126,7 +126,7 @@ impl HudGraphics {
                                         );
                                     }
                                 }
-                                ActionType::Move => {
+                                Action::Move => {
                                     if selected_entity.state == EntityState::Moving {
                                         button_states[i].matches_entity_state = true;
                                     }
@@ -138,12 +138,12 @@ impl HudGraphics {
                                         tooltip_text = "Move".to_string();
                                     }
                                 }
-                                ActionType::Heal => {
+                                Action::Heal => {
                                     if hovered_button_i == Some(i) {
                                         tooltip_text = "Heal".to_string();
                                     }
                                 }
-                                ActionType::Harm => {
+                                Action::Harm => {
                                     if cursor_action == CursorAction::DealDamage {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = "Deal damage".to_string();
@@ -173,7 +173,7 @@ impl HudGraphics {
         &self,
         mouse_position: [f32; 2],
         selected_player_entity: &Entity,
-    ) -> Option<ActionType> {
+    ) -> Option<Action> {
         for (button_i, button) in self.buttons.iter().enumerate() {
             if button.rect.contains(mouse_position) {
                 return selected_player_entity.actions[button_i];
@@ -187,7 +187,7 @@ impl HudGraphics {
         &self,
         keycode: KeyCode,
         selected_player_entity: &Entity,
-    ) -> Option<ActionType> {
+    ) -> Option<Action> {
         if keycode == KeyCode::C {
             return selected_player_entity.actions[0];
         }

@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::entities::{
-    ActionType, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
+    Action, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
     NUM_UNIT_ACTIONS,
 };
 use rand::Rng;
@@ -120,11 +120,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 max_health: Some(3),
                 physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
             },
-            [
-                Some(ActionType::Move),
-                Some(ActionType::Harm),
-                Some(ActionType::Heal),
-            ],
+            [Some(Action::Move), Some(Action::Harm), Some(Action::Heal)],
         ),
         EntityType::CircleUnit => (
             EntityConfig {
@@ -134,7 +130,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 max_health: Some(2),
                 physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(1500)),
             },
-            [Some(ActionType::Move), Some(ActionType::Harm), None],
+            [Some(Action::Move), Some(Action::Harm), None],
         ),
         EntityType::SmallBuilding => (
             EntityConfig {
@@ -145,7 +141,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
             },
             [
-                Some(ActionType::Train(
+                Some(Action::Train(
                     EntityType::CircleUnit,
                     TrainingConfig {
                         duration: Duration::from_secs(3),
@@ -165,14 +161,14 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
             },
             [
-                Some(ActionType::Train(
+                Some(Action::Train(
                     EntityType::CircleUnit,
                     TrainingConfig {
                         duration: Duration::from_secs(3),
                         cost: 1,
                     },
                 )),
-                Some(ActionType::Train(
+                Some(Action::Train(
                     EntityType::SquareUnit,
                     TrainingConfig {
                         duration: Duration::from_secs(10),

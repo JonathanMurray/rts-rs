@@ -31,7 +31,7 @@ pub struct Entity {
     pub sprite: EntitySprite,
     pub health: Option<HealthComponent>,
     pub training: Option<TrainingComponent>,
-    pub actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
+    pub actions: [Option<Action>; NUM_UNIT_ACTIONS],
     pub state: EntityState,
 }
 
@@ -59,7 +59,7 @@ impl Entity {
         config: EntityConfig,
         position: [u32; 2],
         team: Team,
-        actions: [Option<ActionType>; NUM_UNIT_ACTIONS],
+        actions: [Option<Action>; NUM_UNIT_ACTIONS],
     ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
@@ -72,7 +72,7 @@ impl Entity {
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
         for action in actions.into_iter().flatten() {
-            if let ActionType::Train(entity_type, config) = action {
+            if let Action::Train(entity_type, config) = action {
                 training_options.insert(entity_type, config);
             }
         }
@@ -364,7 +364,7 @@ pub enum TrainingPerformStatus {
 pub struct HealingActionComponent;
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub enum ActionType {
+pub enum Action {
     Train(EntityType, TrainingConfig),
     Move,
     Heal,

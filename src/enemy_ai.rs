@@ -2,7 +2,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::time::Duration;
 
-use crate::entities::{ActionType, Entity, PhysicalType, Team};
+use crate::entities::{Action, Entity, PhysicalType, Team};
 use crate::game::Command;
 
 pub struct EnemyPlayerAi {
@@ -30,7 +30,7 @@ impl EnemyPlayerAi {
                         PhysicalType::Mobile(..) => {
                             let x: u32 = rng.gen_range(0..self.map_dimensions[0]);
                             let y: u32 = rng.gen_range(0..self.map_dimensions[1]);
-                            Some(Command::Move(entity.id, entity.position, [x, y]))
+                            Some(Command::Move(entity.id, [x, y]))
                         }
                         PhysicalType::Structure { .. } => {
                             entity.training.as_ref().map(|training| {
@@ -40,7 +40,7 @@ impl EnemyPlayerAi {
                         }
                     };
                     for action in entity.actions.iter().flatten() {
-                        if action == &ActionType::Harm && rng.gen_bool(0.8) {
+                        if action == &Action::Harm && rng.gen_bool(0.8) {
                             if let Some(player_entity) =
                                 entities.iter().find(|e| e.team == Team::Player)
                             {
