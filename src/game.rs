@@ -18,6 +18,7 @@ use crate::entities::{
     ActionType, Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig,
     TrainingPerformStatus, TrainingUpdateStatus,
 };
+use crate::grid::EntityGrid;
 use crate::hud_graphics::{HudGraphics, MinimapGraphics};
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -43,41 +44,6 @@ pub fn run(map_type: MapType) -> GameResult {
 
     let game = Game::new(&mut ctx, map_type)?;
     ggez::event::run(ctx, event_loop, game)
-}
-
-struct EntityGrid {
-    grid: Vec<bool>,
-    map_dimensions: [u32; 2],
-}
-
-impl EntityGrid {
-    fn new(map_dimensions: [u32; 2]) -> Self {
-        let grid = vec![false; (map_dimensions[0] * map_dimensions[1]) as usize];
-        Self {
-            grid,
-            map_dimensions,
-        }
-    }
-
-    fn set(&mut self, position: &[u32; 2], occupied: bool) {
-        let i = self.index(position);
-        // Protect against bugs where two entities occupy same cell or we "double free" a cell
-        assert_ne!(
-            self.grid[i], occupied,
-            "Trying to set grid{:?}={} but it already has that value!",
-            position, occupied
-        );
-        self.grid[i] = occupied;
-    }
-
-    fn get(&self, position: &[u32; 2]) -> bool {
-        self.grid[self.index(position)]
-    }
-
-    fn index(&self, position: &[u32; 2]) -> usize {
-        let [x, y] = position;
-        (y * self.map_dimensions[0] + x) as usize
-    }
 }
 
 #[derive(PartialEq, Copy, Clone)]
@@ -136,13 +102,7 @@ impl Game {
         let mut entity_grid = EntityGrid::new(map_dimensions);
         for entity in &entities {
             if entity.is_solid {
-                // TODO set area?
-                let [w, h] = entity.size();
-                for x in entity.position[0]..entity.position[0] + w {
-                    for y in entity.position[1]..entity.position[1] + h {
-                        entity_grid.set(&[x, y], true);
-                    }
-                }
+                entity_grid.set_area(&entity.position, &entity.size(), true);
             }
         }
 
@@ -197,9 +157,7 @@ impl Game {
         let grid_y = (y - WORLD_VIEWPORT.y + camera_pos[1]) / CELL_PIXEL_SIZE[1];
         let grid_x = grid_x as u32;
         let grid_y = grid_y as u32;
-        if grid_x < self.entity_grid.map_dimensions[0]
-            && grid_y < self.entity_grid.map_dimensions[1]
-        {
+        if grid_x < self.entity_grid.dimensions[0] && grid_y < self.entity_grid.dimensions[1] {
             Some([grid_x, grid_y])
         } else {
             None
@@ -232,11 +190,11 @@ impl Game {
         let top = source_position[1].saturating_sub(1);
         let right = min(
             source_position[0] + source_size[0],
-            self.entity_grid.map_dimensions[0] - 1,
+            self.entity_grid.dimensions[0] - 1,
         );
         let bot = min(
             source_position[1] + source_size[1],
-            self.entity_grid.map_dimensions[1] - 1,
+            self.entity_grid.dimensions[1] - 1,
         );
         for x in left..right + 1 {
             for y in top..bot + 1 {
@@ -377,17 +335,13 @@ impl EventHandler for Game {
                 .unwrap_or(false);
             if is_dead {
                 if entity.is_solid {
-                    // TODO set area?
-                    let [w, h] = entity.size();
-                    for x in entity.position[0]..entity.position[0] + w {
-                        for y in entity.position[1]..entity.position[1] + h {
-                            self.entity_grid.set(&[x, y], false);
-                        }
-                    }
+                    self.entity_grid
+                        .set_area(&entity.position, &entity.size(), false);
                 }
                 if self.player_state.selected_entity_id == Some(entity.id) {
                     self.player_state.selected_entity_id = None;
-                    self.player_state.set_cursor_action(ctx, CursorAction::Default);
+                    self.player_state
+                        .set_cursor_action(ctx, CursorAction::Default);
                 }
             }
 
@@ -592,11 +546,11 @@ impl EventHandler for Game {
             if minimap.contains([x, y]) {
                 self.player_state.camera.position_in_world = [
                     ((x - minimap.x) / minimap.w)
-                        * self.entity_grid.map_dimensions[0] as f32
+                        * self.entity_grid.dimensions[0] as f32
                         * CELL_PIXEL_SIZE[0]
                         - WORLD_VIEWPORT.w / 2.0,
                     ((y - minimap.y) / minimap.h)
-                        * self.entity_grid.map_dimensions[1] as f32
+                        * self.entity_grid.dimensions[1] as f32
                         * CELL_PIXEL_SIZE[1]
                         - WORLD_VIEWPORT.h / 2.0,
                 ];
