@@ -72,14 +72,8 @@ impl Entity {
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
         for action in actions.into_iter().flatten() {
-            if let ActionType::Train(entity_type) = action {
-                // TODO
-                training_options.insert(
-                    entity_type,
-                    TrainingConfig {
-                        duration: Duration::from_secs(3),
-                    },
-                );
+            if let ActionType::Train(entity_type, config) = action {
+                training_options.insert(entity_type, config);
             }
         }
         let training = if !training_options.is_empty() {
@@ -288,9 +282,10 @@ pub struct TrainingComponent {
     options: HashMap<EntityType, TrainingConfig>,
 }
 
-#[derive(Debug)]
-struct TrainingConfig {
-    duration: Duration,
+#[derive(Debug, Copy, Clone)]
+pub struct TrainingConfig {
+    pub duration: Duration,
+    pub cost: u32,
 }
 
 #[derive(Debug)]
@@ -305,10 +300,6 @@ impl TrainingComponent {
             ongoing: None,
             options,
         }
-    }
-
-    pub fn cost(&self) -> u32 {
-        1 // TODO dynamic costs
     }
 
     #[must_use]
@@ -351,8 +342,8 @@ impl TrainingComponent {
         })
     }
 
-    pub fn options(&mut self) -> impl Iterator<Item = &EntityType> {
-        self.options.keys()
+    pub fn options(&mut self) -> impl Iterator<Item = (&EntityType, &TrainingConfig)> {
+        self.options.iter()
     }
 }
 
@@ -374,7 +365,7 @@ pub struct HealingActionComponent;
 
 #[derive(Debug, Copy, Clone)]
 pub enum ActionType {
-    Train(EntityType),
+    Train(EntityType, TrainingConfig),
     Move,
     Heal,
     Harm,

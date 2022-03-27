@@ -27,7 +27,7 @@ pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
 const WORLD_POSITION_ON_SCREEN: [f32; 2] = [100.0, 100.0];
 pub const CAMERA_SIZE: [f32; 2] = [
     WINDOW_DIMENSIONS[0] - WORLD_POSITION_ON_SCREEN[0] * 2.0,
-    700.0,
+    650.0,
 ];
 
 const TITLE: &str = "RTS";
@@ -260,7 +260,7 @@ impl Game {
 
     fn try_perform_player_action(&mut self, ctx: &mut Context, action_type: ActionType) {
         match action_type {
-            ActionType::Train(trained_entity_type) => {
+            ActionType::Train(trained_entity_type, training_config) => {
                 let resources = self.teams.get(&Team::Player).unwrap().resources;
                 let entity = self
                     .selected_entity_mut()
@@ -269,13 +269,13 @@ impl Game {
                     .training
                     .as_mut()
                     .expect("Selected entity must be able to train");
-                let cost = training.cost();
-                if resources >= cost {
+                if resources >= training_config.cost {
                     if training.start(trained_entity_type)
                         == TrainingPerformStatus::NewTrainingStarted
                     {
                         entity.state = EntityState::TrainingUnit(trained_entity_type);
-                        self.teams.get_mut(&Team::Player).unwrap().resources -= cost;
+                        self.teams.get_mut(&Team::Player).unwrap().resources -=
+                            training_config.cost;
                     };
                 } else {
                     println!("Not enough resources!");
@@ -443,6 +443,7 @@ impl EventHandler for Game {
             self.teams.get(&Team::Player).unwrap(),
             selected_entity,
             self.player_state.cursor_action,
+            ggez::input::mouse::position(ctx).into(),
         )?;
         self.minimap
             .draw(ctx, self.player_state.camera.position_in_world)?;

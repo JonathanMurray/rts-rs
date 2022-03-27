@@ -41,13 +41,12 @@ impl EnemyPlayerAi {
                         PhysicalType::Structure { .. } => {}
                     }
                     if let Some(training) = &mut entity.training {
-                        let cost = training.cost();
-                        if team_state.resources >= cost {
-                            let trained_entity_type = *training.options().next().unwrap();
+                        let (&entity_type, &training_config) = training.options().next().unwrap();
+                        if team_state.resources >= training_config.cost {
                             if let TrainingPerformStatus::NewTrainingStarted =
-                                training.start(trained_entity_type)
+                                training.start(entity_type)
                             {
-                                team_state.resources -= cost;
+                                team_state.resources -= training_config.cost;
                             }
                         }
                     }

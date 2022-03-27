@@ -39,21 +39,25 @@ impl HudGraphics {
         player_team_state: &TeamState,
         selected_entity: Option<&Entity>,
         cursor_action: CursorAction,
+        mouse_position: [f32; 2],
     ) -> GameResult {
         let x = 0.0;
         let resources_y = 5.0;
         let name_y = 48.0;
         let health_y = 130.0;
-        let action_y = 180.0;
+        let training_status_y = 240.0;
+        let progress_y = 290.0;
+        let tooltip_y = 380.0;
 
-        let small_font = 30.0;
+        let small_font = 20.0;
+        let medium_font = 30.0;
         let large_font = 40.0;
 
         self.draw_text(
             ctx,
             [x, resources_y],
             format!("Resources: {}", player_team_state.resources),
-            small_font,
+            medium_font,
         )?;
 
         if let Some(selected_entity) = selected_entity {
@@ -65,67 +69,99 @@ impl HudGraphics {
                     "=".repeat(health.current as usize),
                     " ".repeat((health.max - health.current) as usize)
                 );
-                self.draw_text(ctx, [x, health_y], health, small_font)?;
+                self.draw_text(ctx, [x, health_y], health, medium_font)?;
             }
 
             self.draw_text(
                 ctx,
                 [x + 200.0, health_y],
-                format!("STATE: {:?}", selected_entity.state),
+                format!("({:?})", selected_entity.state),
                 small_font,
             )?;
 
             if selected_entity.team == Team::Player {
+                let mut is_training = false;
                 let mut button_states = [ButtonState {
                     shown: false,
                     matches_entity_state: false,
                     matches_cursor_action: false,
                 }; NUM_BUTTONS];
-                if let Some(training) = &selected_entity.training {
-                    if let Some(progress) = training.progress() {
-                        let progress_w = 20.0;
-                        let progress_bar = format!(
-                            "[{}{}]",
-                            "=".repeat((progress * progress_w) as usize),
-                            " ".repeat(((1.0 - progress) * progress_w) as usize)
-                        );
-                        self.draw_text(ctx, [x, action_y + 35.0], progress_bar, small_font)?;
-                    }
+                if let EntityState::TrainingUnit(trained_entity_type) = selected_entity.state {
+                    is_training = true;
+                    let training = selected_entity.training.as_ref().unwrap();
+                    let progress = training.progress().unwrap();
+                    let training_status = format!("Training {:?}", trained_entity_type);
+                    self.draw_text(ctx, [x, training_status_y], training_status, medium_font)?;
+                    let progress_w = 20.0;
+                    let progress_bar = format!(
+                        "[{}{}]",
+                        "=".repeat((progress * progress_w) as usize),
+                        " ".repeat(((1.0 - progress) * progress_w) as usize)
+                    );
+                    self.draw_text(ctx, [x, progress_y], progress_bar, medium_font)?;
                 }
-                let mut action_text = String::new();
-                for (i, action) in selected_entity.actions.iter().enumerate() {
-                    if let Some(action_type) = action {
-                        button_states[i].shown = true;
-                        match action_type {
-                            ActionType::Train(trained_entity_type) => {
-                                if selected_entity.state
-                                    == EntityState::TrainingUnit(*trained_entity_type)
-                                {
-                                    button_states[i].matches_entity_state = true;
+
+                if !is_training {
+                    let hovered_button_i = self
+                        .buttons
+                        .iter()
+                        .position(|button| button.rect.contains(mouse_position));
+                    let mut tooltip_text = String::new();
+                    for (i, action) in selected_entity.actions.iter().enumerate() {
+                        if let Some(action_type) = action {
+                            button_states[i].shown = true;
+                            match action_type {
+                                ActionType::Train(trained_entity_type, training_config) => {
+                                    if selected_entity.state
+                                        == EntityState::TrainingUnit(*trained_entity_type)
+                                    {
+                                        button_states[i].matches_entity_state = true;
+                                    }
+                                    if hovered_button_i == Some(i) {
+                                        tooltip_text = format!(
+                                            "Train {:?} [cost {}, {}s]",
+                                            trained_entity_type,
+                                            training_config.cost,
+                                            training_config.duration.as_secs()
+                                        );
+                                    }
                                 }
-                            }
-                            ActionType::Move => {
-                                if selected_entity.state == EntityState::Moving {
-                                    button_states[i].matches_entity_state = true;
+                                ActionType::Move => {
+                                    if selected_entity.state == EntityState::Moving {
+                                        button_states[i].matches_entity_state = true;
+                                    }
+                                    if cursor_action == CursorAction::IssueMovement {
+                                        button_states[i].matches_cursor_action = true;
+                                        tooltip_text = "Move".to_string();
+                                    }
+                                    if hovered_button_i == Some(i) {
+                                        tooltip_text = "Move".to_string();
+                                    }
                                 }
-                                if cursor_action == CursorAction::IssueMovement {
-                                    button_states[i].matches_cursor_action = true;
+                                ActionType::Heal => {
+                                    if hovered_button_i == Some(i) {
+                                        tooltip_text = "Heal".to_string();
+                                    }
                                 }
-                            }
-                            ActionType::Heal => {}
-                            ActionType::Harm => {
-                                if cursor_action == CursorAction::DealDamage {
-                                    button_states[i].matches_cursor_action = true;
+                                ActionType::Harm => {
+                                    if cursor_action == CursorAction::DealDamage {
+                                        button_states[i].matches_cursor_action = true;
+                                        tooltip_text = "Deal damage".to_string();
+                                    }
+                                    if hovered_button_i == Some(i) {
+                                        tooltip_text = "Deal damage".to_string();
+                                    }
                                 }
                             }
                         }
-                        action_text.push_str(&format!("{:?} ", action_type));
                     }
-                }
-                self.draw_text(ctx, [x, action_y], action_text, small_font)?;
 
-                for (button_i, button) in self.buttons.iter().enumerate() {
-                    button.draw(ctx, button_states[button_i])?;
+                    for (button_i, button) in self.buttons.iter().enumerate() {
+                        button.draw(ctx, button_states[button_i])?;
+                    }
+                    if !tooltip_text.is_empty() {
+                        self.draw_text(ctx, [x, tooltip_y], tooltip_text, medium_font)?;
+                    }
                 }
             }
         }

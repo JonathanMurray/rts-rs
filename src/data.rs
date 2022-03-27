@@ -1,7 +1,8 @@
 use std::time::Duration;
 
 use crate::entities::{
-    ActionType, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, NUM_UNIT_ACTIONS,
+    ActionType, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
+    NUM_UNIT_ACTIONS,
 };
 use rand::Rng;
 
@@ -137,7 +138,17 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 max_health: Some(3),
                 physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
             },
-            [Some(ActionType::Train(EntityType::SquareUnit)), None, None],
+            [
+                Some(ActionType::Train(
+                    EntityType::CircleUnit,
+                    TrainingConfig {
+                        duration: Duration::from_secs(3),
+                        cost: 1,
+                    },
+                )),
+                None,
+                None,
+            ],
         ),
         EntityType::LargeBuilding => (
             EntityConfig {
@@ -148,8 +159,20 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
                 physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
             },
             [
-                Some(ActionType::Train(EntityType::CircleUnit)),
-                Some(ActionType::Train(EntityType::SquareUnit)),
+                Some(ActionType::Train(
+                    EntityType::CircleUnit,
+                    TrainingConfig {
+                        duration: Duration::from_secs(3),
+                        cost: 1,
+                    },
+                )),
+                Some(ActionType::Train(
+                    EntityType::SquareUnit,
+                    TrainingConfig {
+                        duration: Duration::from_secs(10),
+                        cost: 2,
+                    },
+                )),
                 None,
             ],
         ),
