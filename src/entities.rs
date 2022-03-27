@@ -16,12 +16,10 @@ pub struct EntityId(usize);
 #[derive(Debug, PartialEq)]
 pub enum EntityState {
     Idle,
-    // TODO for training/constructing, we store data here that also exists in their respective
-    //      entity components. Is that needed? We don't do it for moving/attacking.
     TrainingUnit(EntityType),
     Constructing(EntityType),
     Moving,
-    Attacking,
+    Attacking(EntityId),
 }
 
 #[derive(Debug)]
@@ -67,14 +65,12 @@ impl Entity {
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
         let mut can_fight = false;
-        let mut can_construct = false;
         for action in config.actions.into_iter().flatten() {
             match action {
                 Action::Train(entity_type, config) => {
                     training_options.insert(entity_type, config);
                 }
                 Action::Attack => can_fight = true,
-                Action::Construct(_) => can_construct = true,
                 _ => {}
             }
         }
@@ -83,8 +79,7 @@ impl Entity {
         let physical_type = match config.physical_type {
             PhysicalTypeConfig::MovementCooldown(cooldown) => {
                 let combat = can_fight.then(Combat::new);
-                let constructing = can_construct.then(Constructing::new);
-                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat, constructing))
+                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat))
             }
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
@@ -173,21 +168,14 @@ pub struct UnitComponent {
     pub sub_cell_movement: SubCellMovement,
     pub pathfinder: Pathfinder,
     pub combat: Option<Combat>,
-    pub constructing: Option<Constructing>,
 }
 
 impl UnitComponent {
-    pub fn new(
-        position: [u32; 2],
-        movement_cooldown: Duration,
-        combat: Option<Combat>,
-        constructing: Option<Constructing>,
-    ) -> Self {
+    pub fn new(position: [u32; 2], movement_cooldown: Duration, combat: Option<Combat>) -> Self {
         Self {
             sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
             pathfinder: Pathfinder::new(),
             combat,
-            constructing,
         }
     }
 }
@@ -327,7 +315,6 @@ pub struct TrainingConfig {
 #[derive(Debug)]
 struct OngoingTraining {
     remaining: Duration,
-    entity_type: EntityType,
 }
 
 impl TrainingComponent {
@@ -339,13 +326,12 @@ impl TrainingComponent {
     }
 
     #[must_use]
-    pub fn start(&mut self, trained_entity_type: EntityType) -> TrainingPerformStatus {
+    pub fn try_start(&mut self, trained_entity_type: EntityType) -> TrainingPerformStatus {
         if self.ongoing.is_some() {
             TrainingPerformStatus::AlreadyOngoing
         } else {
             self.ongoing = Some(OngoingTraining {
                 remaining: self.options.get(&trained_entity_type).unwrap().duration,
-                entity_type: trained_entity_type,
             });
             TrainingPerformStatus::NewTrainingStarted
         }
@@ -357,7 +343,7 @@ impl TrainingComponent {
                 ongoing.remaining = ongoing.remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
                 if ongoing.remaining.is_zero() {
                     println!("Training done!");
-                    TrainingUpdateStatus::Done(ongoing.entity_type)
+                    TrainingUpdateStatus::Done
                 } else {
                     self.ongoing = Some(ongoing);
                     TrainingUpdateStatus::Ongoing
@@ -367,13 +353,9 @@ impl TrainingComponent {
         }
     }
 
-    pub fn progress(&self) -> Option<f32> {
+    pub fn progress(&self, trained_entity_type: EntityType) -> Option<f32> {
         self.ongoing.as_ref().map(|ongoing_training| {
-            let total = self
-                .options
-                .get(&ongoing_training.entity_type)
-                .unwrap()
-                .duration;
+            let total = self.options.get(&trained_entity_type).unwrap().duration;
             1.0 - ongoing_training.remaining.as_secs_f32() / total.as_secs_f32()
         })
     }
@@ -387,7 +369,7 @@ impl TrainingComponent {
 pub enum TrainingUpdateStatus {
     NothingOngoing,
     Ongoing,
-    Done(EntityType),
+    Done,
 }
 
 #[derive(PartialEq)]
@@ -398,14 +380,12 @@ pub enum TrainingPerformStatus {
 
 #[derive(Debug)]
 pub struct Combat {
-    pub target_entity_id: Option<EntityId>,
     cooldown: Duration,
 }
 
 impl Combat {
     fn new() -> Self {
         Self {
-            target_entity_id: None,
             cooldown: Duration::ZERO,
         }
     }
@@ -417,19 +397,6 @@ impl Combat {
 
     pub fn start_cooldown(&mut self) {
         self.cooldown = Duration::from_secs(3);
-    }
-}
-
-#[derive(Debug)]
-pub struct Constructing {
-    pub current_structure_type: Option<EntityType>,
-}
-
-impl Constructing {
-    fn new() -> Self {
-        Self {
-            current_structure_type: None,
-        }
     }
 }
 

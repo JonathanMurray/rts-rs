@@ -89,7 +89,7 @@ impl HudGraphics {
                 if let EntityState::TrainingUnit(trained_entity_type) = selected_entity.state {
                     is_training = true;
                     let training = selected_entity.training.as_ref().unwrap();
-                    let progress = training.progress().unwrap();
+                    let progress = training.progress(trained_entity_type).unwrap();
                     let training_status = format!("Training {:?}", trained_entity_type);
                     self.draw_text(ctx, [x, training_status_y], training_status, medium_font)?;
                     let progress_w = 20.0;
@@ -155,7 +155,7 @@ impl HudGraphics {
                                     }
                                 }
                                 Action::Attack => {
-                                    if selected_entity.state == EntityState::Attacking {
+                                    if let EntityState::Attacking(_) = selected_entity.state {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Attack";

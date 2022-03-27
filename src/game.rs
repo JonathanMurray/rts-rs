@@ -252,55 +252,52 @@ impl Game {
 
     fn issue_command(&mut self, command: Command, issuing_team: Team) {
         match command {
-            Command::Train(active_entity_id, trained_entity_type, config) => {
+            Command::Train(trainer_id, trained_entity_type, config) => {
                 let resources = self.teams.get(&issuing_team).unwrap().resources;
-                let entity = self.entity_mut(active_entity_id);
-                assert_eq!(entity.team, issuing_team);
-                let training = entity
+                let trainer = self.entity_mut(trainer_id);
+                assert_eq!(trainer.team, issuing_team);
+                let training = trainer
                     .training
                     .as_mut()
                     .expect("Training command was issued for entity that can't train");
                 if resources >= config.cost {
                     if let TrainingPerformStatus::NewTrainingStarted =
-                        training.start(trained_entity_type)
+                        training.try_start(trained_entity_type)
                     {
-                        entity.state = EntityState::TrainingUnit(trained_entity_type);
+                        trainer.state = EntityState::TrainingUnit(trained_entity_type);
                         self.teams.get_mut(&issuing_team).unwrap().resources -= config.cost;
                     }
                 }
             }
             Command::Construct(builder_id, construction_position, construction_type) => {
                 let builder = self.entity_mut(builder_id);
+                assert_eq!(builder.team, issuing_team);
                 let builder_pos = builder.position;
                 builder.state = EntityState::Constructing(construction_type);
-                assert_eq!(builder.team, issuing_team);
-                let unit = builder.unit_mut();
-                unit.constructing
-                    .as_mut()
-                    .expect("Construction command was issued for entity that can't construct")
-                    .current_structure_type = Some(construction_type);
-                unit.pathfinder
+                builder
+                    .unit_mut()
+                    .pathfinder
                     .find_path(&builder_pos, construction_position);
             }
-            Command::Move(active_entity_id, destination) => {
-                let entity = self.entity_mut(active_entity_id);
-                assert_eq!(entity.team, issuing_team);
-                let current_pos = entity.position;
-                entity
+            Command::Move(mover_id, destination) => {
+                let mover = self.entity_mut(mover_id);
+                assert_eq!(mover.team, issuing_team);
+                let current_pos = mover.position;
+                mover.state = EntityState::Moving;
+                mover
                     .unit_mut()
                     .pathfinder
                     .find_path(&current_pos, destination);
-                entity.state = EntityState::Moving;
             }
-            Command::Heal(active_entity_id) => {
-                let entity = self.entity_mut(active_entity_id);
-                assert_eq!(entity.team, issuing_team);
-                entity
+            Command::Heal(healer_id) => {
+                let healer = self.entity_mut(healer_id);
+                assert_eq!(healer.team, issuing_team);
+                healer
                     .actions
                     .iter()
                     .find(|action| **action == Some(Action::Heal))
                     .expect("Heal command was issued for entity that doesn't have a Heal action");
-                let health = entity.health.as_mut().unwrap();
+                let health = healer.health.as_mut().unwrap();
                 health.receive_healing(1);
             }
             Command::Attack(attacker_id, victim_id) => {
@@ -308,16 +305,13 @@ impl Game {
                 assert_ne!(victim.team, issuing_team);
                 let victim_pos = victim.position;
                 let attacker = self.entity_mut(attacker_id);
-
                 assert_eq!(attacker.team, issuing_team);
-                attacker.state = EntityState::Attacking;
+                attacker.state = EntityState::Attacking(victim_id);
                 let attacker_pos = attacker.position;
-                let unit = attacker.unit_mut();
-                unit.combat
-                    .as_mut()
-                    .expect("Attack command was issued for non-combat unit")
-                    .target_entity_id = Some(victim_id);
-                unit.pathfinder.find_path(&attacker_pos, victim_pos);
+                attacker
+                    .unit_mut()
+                    .pathfinder
+                    .find_path(&attacker_pos, victim_pos);
             }
         }
     }
@@ -379,20 +373,17 @@ impl EventHandler for Game {
         //           COMBAT
         //-------------------------------
         let mut attacks = vec![];
-        for entity in self
-            .entities
-            .iter_mut()
-            .filter(|e| e.state == EntityState::Attacking)
-        {
-            let attacker_id = entity.id;
-            let combat = entity
-                .unit_mut()
-                .combat
-                .as_mut()
-                .expect("non-combat attacker");
-            if combat.count_down_cooldown(dt) {
-                let victim_id = combat.target_entity_id.expect("attack without target");
-                attacks.push((attacker_id, 1, victim_id));
+        for entity in &mut self.entities {
+            if let EntityState::Attacking(victim_id) = entity.state {
+                let attacker_id = entity.id;
+                let combat = entity
+                    .unit_mut()
+                    .combat
+                    .as_mut()
+                    .expect("non-combat attacker");
+                if combat.count_down_cooldown(dt) {
+                    attacks.push((attacker_id, 1, victim_id));
+                }
             }
         }
         for (attacker_id, damage_amount, victim_id) in attacks {
@@ -509,15 +500,17 @@ impl EventHandler for Game {
         //-------------------------------
         let mut completed_trainings = Vec::new();
         for entity in &mut self.entities {
-            let status = entity.training.as_mut().map(|training| training.update(dt));
-            if let Some(TrainingUpdateStatus::Done(trained_entity_type)) = status {
-                entity.state = EntityState::Idle;
-                completed_trainings.push((
-                    trained_entity_type,
-                    entity.team,
-                    entity.position,
-                    entity.size(),
-                ));
+            if let EntityState::TrainingUnit(trained_entity_type) = entity.state {
+                let status = entity.training.as_mut().map(|training| training.update(dt));
+                if let Some(TrainingUpdateStatus::Done) = status {
+                    entity.state = EntityState::Idle;
+                    completed_trainings.push((
+                        trained_entity_type,
+                        entity.team,
+                        entity.position,
+                        entity.size(),
+                    ));
+                }
             }
         }
         for (entity_type, team, source_position, source_size) in completed_trainings {
