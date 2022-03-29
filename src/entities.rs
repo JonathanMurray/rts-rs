@@ -106,6 +106,13 @@ impl Entity {
         }
     }
 
+    pub fn world_pixel_position(&self) -> [f32; 2] {
+        match &self.physical_type {
+            PhysicalType::Unit(unit) => unit.sub_cell_movement.pixel_position(self.position),
+            PhysicalType::Structure { .. } => game::grid_to_world(self.position),
+        }
+    }
+
     pub fn contains(&self, position: [u32; 2]) -> bool {
         let [w, h] = self.size();
         position[0] >= self.position[0]
@@ -251,9 +258,9 @@ impl SubCellMovement {
         }
     }
 
-    pub fn pixel_position(&self, position: [u32; 2]) -> [f32; 2] {
-        let prev_pos = game::grid_to_pixel_position(self.previous_position);
-        let pos = game::grid_to_pixel_position(position);
+    fn pixel_position(&self, position: [u32; 2]) -> [f32; 2] {
+        let prev_pos = game::grid_to_world(self.previous_position);
+        let pos = game::grid_to_world(position);
         let progress = match SubCellMovement::direction(self.previous_position, position) {
             MovementDirection::Straight => {
                 self.remaining.as_secs_f32() / self.straight_movement_cooldown.as_secs_f32()

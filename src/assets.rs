@@ -18,9 +18,64 @@ pub struct Assets {
     selections: HashMap<([u32; 2], Team), Mesh>,
     neutral_entity: Mesh,
     entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
+    movement_command_indicator: Mesh,
 }
 
 impl Assets {
+    pub fn new(ctx: &mut Context, camera_size: [f32; 2]) -> GameResult<Assets> {
+        let grid = build_grid(ctx, camera_size)?;
+        let grid_border = MeshBuilder::new()
+            .rectangle(
+                DrawMode::stroke(3.0),
+                Rect::new(0.0, 0.0, camera_size[0], camera_size[1]),
+                Color::new(6.0, 3.0, 6.0, 1.0),
+            )?
+            .build(ctx)?;
+        let background_around_grid = build_background_around_grid(ctx, camera_size)?;
+
+        let mut entity_batches = Default::default();
+        create_square_unit(ctx, &mut entity_batches)?;
+        create_circle_unit(ctx, &mut entity_batches)?;
+        create_small_building(ctx, &mut entity_batches)?;
+        create_large_building(ctx, &mut entity_batches)?;
+
+        let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
+        let neutral_entity = MeshBuilder::new()
+            .rectangle(
+                DrawMode::fill(),
+                Rect::new(
+                    (CELL_PIXEL_SIZE[0] - neutral_size[0]) / 2.0,
+                    (CELL_PIXEL_SIZE[1] - neutral_size[1]) / 2.0,
+                    neutral_size[0],
+                    neutral_size[1],
+                ),
+                Color::new(0.8, 0.6, 0.2, 1.0),
+            )?
+            .build(ctx)?;
+
+        let movement_command_indicator = MeshBuilder::new()
+            .circle(
+                DrawMode::stroke(2.0),
+                [0.0, 0.0],
+                25.0,
+                0.01,
+                Color::new(0.6, 1.0, 0.6, 1.0),
+            )?
+            .build(ctx)?;
+
+        let selections = Default::default();
+        let assets = Assets {
+            grid,
+            grid_border,
+            background_around_grid,
+            selections,
+            neutral_entity,
+            entity_batches,
+            movement_command_indicator,
+        };
+        Ok(assets)
+    }
+
     pub fn draw_selection(
         &mut self,
         ctx: &mut Context,
@@ -33,6 +88,18 @@ impl Assets {
             Entry::Vacant(v) => v.insert(create_selection_mesh(ctx, size, team)?),
         };
         mesh.draw(ctx, DrawParam::new().dest(screen_coords))
+    }
+
+    pub fn draw_movement_command_indicator(
+        &self,
+        ctx: &mut Context,
+        screen_coords: [f32; 2],
+        scale: f32,
+    ) -> GameResult {
+        self.movement_command_indicator.draw(
+            ctx,
+            DrawParam::new().dest(screen_coords).scale([scale, scale]),
+        )
     }
 
     pub fn draw_grid(
@@ -97,49 +164,6 @@ impl Assets {
         }
         Ok(())
     }
-}
-
-pub fn create_assets(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Assets, GameError> {
-    let grid = build_grid(ctx, camera_size)?;
-    let grid_border = MeshBuilder::new()
-        .rectangle(
-            DrawMode::stroke(3.0),
-            Rect::new(0.0, 0.0, camera_size[0], camera_size[1]),
-            Color::new(6.0, 3.0, 6.0, 1.0),
-        )?
-        .build(ctx)?;
-    let background_around_grid = build_background_around_grid(ctx, camera_size)?;
-
-    let mut entity_batches = Default::default();
-    create_square_unit(ctx, &mut entity_batches)?;
-    create_circle_unit(ctx, &mut entity_batches)?;
-    create_small_building(ctx, &mut entity_batches)?;
-    create_large_building(ctx, &mut entity_batches)?;
-
-    let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
-    let neutral_entity = MeshBuilder::new()
-        .rectangle(
-            DrawMode::fill(),
-            Rect::new(
-                (CELL_PIXEL_SIZE[0] - neutral_size[0]) / 2.0,
-                (CELL_PIXEL_SIZE[1] - neutral_size[1]) / 2.0,
-                neutral_size[0],
-                neutral_size[1],
-            ),
-            Color::new(0.8, 0.6, 0.2, 1.0),
-        )?
-        .build(ctx)?;
-
-    let selections = Default::default();
-    let assets = Assets {
-        grid,
-        grid_border,
-        background_around_grid,
-        selections,
-        neutral_entity,
-        entity_batches,
-    };
-    Ok(assets)
 }
 
 fn create_square_unit(
