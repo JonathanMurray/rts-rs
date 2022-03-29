@@ -202,6 +202,14 @@ impl Game {
             .find(|e| e.contains(clicked_world_pos) && e.health.is_some() && e.team == Team::Enemy)
             .map(|e| e.id)
     }
+
+    fn set_selected_entity(&mut self, entity_id: Option<EntityId>) {
+        self.player_state.selected_entity_id = entity_id;
+        if let Some(entity) = self.selected_entity() {
+            let actions = entity.actions;
+            self.hud.set_entity_actions(actions);
+        }
+    }
 }
 
 impl EventHandler for Game {
@@ -226,7 +234,7 @@ impl EventHandler for Game {
 
         for removed_entity_id in removed_entity_ids {
             if self.player_state.selected_entity_id == Some(removed_entity_id) {
-                self.player_state.selected_entity_id = None;
+                self.set_selected_entity(None);
                 self.player_state
                     .set_cursor_action(ctx, CursorAction::Default);
             }
@@ -319,12 +327,13 @@ impl EventHandler for Game {
                 CursorAction::Default => {
                     if button == MouseButton::Left {
                         // TODO (bug) Don't select neutral entity when player unit is on top of it
-                        self.player_state.selected_entity_id = self
+                        let selected_entity_id = self
                             .core
                             .entities()
                             .iter()
                             .find(|e| e.contains(clicked_world_pos))
                             .map(|e| e.id);
+                        self.set_selected_entity(selected_entity_id);
                     } else if let Some(entity) = self.selected_player_entity() {
                         match &entity.physical_type {
                             PhysicalType::Unit(unit) => {

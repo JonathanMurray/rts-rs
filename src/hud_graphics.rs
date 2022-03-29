@@ -5,7 +5,10 @@ use ggez::input::keyboard::KeyCode;
 use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
+use std::collections::HashMap;
+
 use crate::core::TeamState;
+use crate::data::EntityType;
 use crate::entities::{Action, Entity, EntityState, Team, NUM_ENTITY_ACTIONS};
 use crate::game::{CursorAction, PlayerState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 
@@ -17,6 +20,8 @@ pub struct HudGraphics {
     buttons: [Button; NUM_BUTTONS],
     minimap: Minimap,
     hovered_button_index: Option<usize>,
+    entity_actions: [Option<Action>; NUM_ENTITY_ACTIONS],
+    keycode_labels: HashMap<KeyCode, Text>,
 }
 
 impl HudGraphics {
@@ -28,16 +33,18 @@ impl HudGraphics {
     ) -> GameResult<Self> {
         let w = 80.0;
         let button_1_rect = Rect::new(position[0] + 5.0, position[1] + 270.0, w, w);
-        let button_1 = Button::new(ctx, button_1_rect, "C", font)?;
+        let button_1 = Button::new(ctx, button_1_rect)?;
         let button_margin = 5.0;
         let button_2_rect = Rect::new(button_1_rect.x + w + button_margin, button_1_rect.y, w, w);
-        let button_2 = Button::new(ctx, button_2_rect, "V", font)?;
+        let button_2 = Button::new(ctx, button_2_rect)?;
         let button_3_rect = Rect::new(button_2_rect.x + w + button_margin, button_1_rect.y, w, w);
-        let button_3 = Button::new(ctx, button_3_rect, "B", font)?;
+        let button_3 = Button::new(ctx, button_3_rect)?;
         let buttons = [button_1, button_2, button_3];
 
         let minimap_pos = [900.0, position[1] + 100.0];
         let minimap = Minimap::new(ctx, minimap_pos, world_dimensions)?;
+
+        let keycode_labels = create_keycode_labels(font);
 
         Ok(Self {
             position_on_screen: position,
@@ -45,6 +52,8 @@ impl HudGraphics {
             buttons,
             minimap,
             hovered_button_index: None,
+            entity_actions: [None; NUM_ENTITY_ACTIONS],
+            keycode_labels,
         })
     }
 
@@ -98,7 +107,7 @@ impl HudGraphics {
             if selected_entity.team == Team::Player {
                 let mut is_training = false;
                 let mut button_states = [ButtonState {
-                    shown: false,
+                    text: None,
                     matches_entity_state: false,
                     matches_cursor_action: false,
                 }; NUM_BUTTONS];
@@ -121,7 +130,7 @@ impl HudGraphics {
                     let mut tooltip_text = String::new();
                     for (i, action) in selected_entity.actions.iter().enumerate() {
                         if let Some(action) = action {
-                            button_states[i].shown = true;
+                            button_states[i].text = Some(self.action_label(action));
                             match action {
                                 Action::Train(trained_entity_type, training_config) => {
                                     if selected_entity.state
@@ -189,9 +198,11 @@ impl HudGraphics {
                         }
                     }
 
+                    let mut button_states = button_states.into_iter();
                     for (button_i, button) in self.buttons.iter().enumerate() {
                         let is_hovered = self.hovered_button_index == Some(button_i);
-                        button.draw(ctx, button_states[button_i], is_hovered)?;
+                        let button_state = button_states.next().unwrap();
+                        button.draw(ctx, button_state, is_hovered)?;
                     }
                     if !tooltip_text.is_empty() {
                         self.draw_text(ctx, [x, tooltip_y], tooltip_text, medium_font)?;
@@ -204,6 +215,13 @@ impl HudGraphics {
             .draw(ctx, player_state.camera.position_in_world)?;
 
         Ok(())
+    }
+
+    fn action_label(&self, action: &Action) -> &Text {
+        let keycode = action_keycode(action);
+        self.keycode_labels
+            .get(&keycode)
+            .unwrap_or_else(|| panic!("No button label for action with keycode: {:?}", keycode))
     }
 
     pub fn on_mouse_button_down(
@@ -239,16 +257,18 @@ impl HudGraphics {
     }
 
     pub fn on_key_down(&self, keycode: KeyCode) -> Option<PlayerInput> {
-        if keycode == KeyCode::C {
-            return Some(PlayerInput::UseEntityAction(0));
-        }
-        if keycode == KeyCode::V {
-            return Some(PlayerInput::UseEntityAction(1));
-        }
-        if keycode == KeyCode::B {
-            return Some(PlayerInput::UseEntityAction(2));
+        for (i, action) in self.entity_actions.iter().enumerate() {
+            if let Some(action) = action {
+                if action_keycode(action) == keycode {
+                    return Some(PlayerInput::UseEntityAction(i));
+                }
+            }
         }
         None
+    }
+
+    pub fn set_entity_actions(&mut self, actions: [Option<Action>; NUM_ENTITY_ACTIONS]) {
+        self.entity_actions = actions;
     }
 
     fn draw_text(
@@ -271,8 +291,8 @@ impl HudGraphics {
 }
 
 #[derive(Copy, Clone)]
-struct ButtonState {
-    shown: bool,
+struct ButtonState<'a> {
+    text: Option<&'a Text>,
     matches_entity_state: bool,
     matches_cursor_action: bool,
 }
@@ -386,11 +406,10 @@ pub struct Button {
     border: Mesh,
     highlight_entity_state: Mesh,
     highlight: Mesh,
-    text: Text,
 }
 
 impl Button {
-    fn new(ctx: &mut Context, rect: Rect, text: &str, font: Font) -> GameResult<Button> {
+    fn new(ctx: &mut Context, rect: Rect) -> GameResult<Button> {
         let border = MeshBuilder::new()
             .rectangle(DrawMode::stroke(1.0), rect, Color::new(0.7, 0.7, 0.7, 1.0))?
             .build(ctx)?;
@@ -404,20 +423,19 @@ impl Button {
         let highlight = MeshBuilder::new()
             .rectangle(DrawMode::fill(), rect, Color::new(1.0, 1.0, 0.6, 0.05))?
             .build(ctx)?;
-        let text = Text::new((text, font, 40.0));
+
         Ok(Self {
             rect,
             border,
             highlight_entity_state,
             highlight,
-            text,
         })
     }
 
     fn draw(&self, ctx: &mut Context, state: ButtonState, is_hovered: bool) -> GameResult {
         self.border.draw(ctx, DrawParam::default())?;
-        if state.shown {
-            self.text.draw(
+        if let Some(text) = state.text {
+            text.draw(
                 ctx,
                 DrawParam::default().dest([self.rect.x + 30.0, self.rect.y + 20.0]),
             )?;
@@ -437,4 +455,33 @@ impl Button {
 pub enum PlayerInput {
     UseEntityAction(usize),
     SetCameraPositionRelativeToWorldDimension([f32; 2]),
+}
+
+fn action_keycode(action: &Action) -> KeyCode {
+    match action {
+        Action::Train(EntityType::CircleUnit, _) => KeyCode::C,
+        Action::Train(EntityType::SquareUnit, _) => KeyCode::S,
+        Action::Train(unit_type, _) => panic!("No keycode for training {:?}", unit_type),
+        Action::Construct(EntityType::SmallBuilding) => KeyCode::S,
+        Action::Construct(EntityType::LargeBuilding) => KeyCode::L,
+        Action::Construct(structure_type) => {
+            panic!("No keycode for constructing {:?}", structure_type)
+        }
+        Action::Move => KeyCode::M,
+        Action::Heal => KeyCode::H,
+        Action::Attack => KeyCode::A,
+    }
+}
+
+fn create_keycode_labels(font: Font) -> HashMap<KeyCode, Text> {
+    [
+        (KeyCode::A, "A"),
+        (KeyCode::C, "C"),
+        (KeyCode::H, "H"),
+        (KeyCode::L, "L"),
+        (KeyCode::M, "M"),
+        (KeyCode::S, "S"),
+    ]
+    .map(|(keycode, text)| (keycode, Text::new((text, font, 30.0))))
+    .into()
 }
