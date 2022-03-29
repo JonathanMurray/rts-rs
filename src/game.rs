@@ -307,7 +307,6 @@ impl EventHandler for Game {
             self.core.team_state(&Team::Player),
             self.selected_entity(),
             &self.player_state,
-            ggez::input::mouse::position(ctx).into(),
         )?;
 
         graphics::present(ctx)?;

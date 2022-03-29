@@ -16,6 +16,7 @@ pub struct HudGraphics {
     font: Font,
     buttons: [Button; NUM_BUTTONS],
     minimap: Minimap,
+    hovered_button_index: Option<usize>,
 }
 
 impl HudGraphics {
@@ -43,6 +44,7 @@ impl HudGraphics {
             font,
             buttons,
             minimap,
+            hovered_button_index: None,
         })
     }
 
@@ -52,7 +54,6 @@ impl HudGraphics {
         player_team_state: &TeamState,
         selected_entity: Option<&Entity>,
         player_state: &PlayerState,
-        mouse_position: [f32; 2],
     ) -> GameResult {
         let x = 0.0;
         let resources_y = 5.0;
@@ -117,10 +118,6 @@ impl HudGraphics {
                 }
 
                 if !is_training {
-                    let hovered_button_i = self
-                        .buttons
-                        .iter()
-                        .position(|button| button.rect.contains(mouse_position));
                     let mut tooltip_text = String::new();
                     for (i, action) in selected_entity.actions.iter().enumerate() {
                         if let Some(action) = action {
@@ -132,7 +129,7 @@ impl HudGraphics {
                                     {
                                         button_states[i].matches_entity_state = true;
                                     }
-                                    if hovered_button_i == Some(i) {
+                                    if self.hovered_button_index == Some(i) {
                                         tooltip_text = format!(
                                             "Train {:?} [cost {}, {}s]",
                                             trained_entity_type,
@@ -147,7 +144,7 @@ impl HudGraphics {
                                     {
                                         button_states[i].matches_entity_state = true;
                                     }
-                                    if hovered_button_i == Some(i) {
+                                    if self.hovered_button_index == Some(i) {
                                         tooltip_text = format!("Construct {:?}", structure_type,);
                                     }
                                 }
@@ -160,12 +157,12 @@ impl HudGraphics {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
-                                    if hovered_button_i == Some(i) {
+                                    if self.hovered_button_index == Some(i) {
                                         tooltip_text = TEXT.to_string();
                                     }
                                 }
                                 Action::Heal => {
-                                    if hovered_button_i == Some(i) {
+                                    if self.hovered_button_index == Some(i) {
                                         tooltip_text = "Heal".to_string();
                                     }
                                 }
@@ -178,7 +175,7 @@ impl HudGraphics {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
-                                    if hovered_button_i == Some(i) {
+                                    if self.hovered_button_index == Some(i) {
                                         tooltip_text = TEXT.to_string();
                                     }
                                 }
@@ -187,7 +184,8 @@ impl HudGraphics {
                     }
 
                     for (button_i, button) in self.buttons.iter().enumerate() {
-                        button.draw(ctx, button_states[button_i])?;
+                        let is_hovered = self.hovered_button_index == Some(button_i);
+                        button.draw(ctx, button_states[button_i], is_hovered)?;
                     }
                     if !tooltip_text.is_empty() {
                         self.draw_text(ctx, [x, tooltip_y], tooltip_text, medium_font)?;
@@ -220,6 +218,11 @@ impl HudGraphics {
     }
 
     pub fn on_mouse_motion(&mut self, x: f32, y: f32) -> Option<PlayerInput> {
+        self.hovered_button_index = self
+            .buttons
+            .iter()
+            .position(|button| button.rect.contains([x, y]));
+
         self.minimap
             .on_mouse_motion(x, y)
             .map(PlayerInput::SetCameraPositionRelativeToWorldDimension)
@@ -376,7 +379,7 @@ pub struct Button {
     rect: Rect,
     border: Mesh,
     highlight_entity_state: Mesh,
-    highlight_cursor_action: Mesh,
+    highlight: Mesh,
     text: Text,
 }
 
@@ -392,7 +395,7 @@ impl Button {
                 Color::new(0.4, 0.95, 0.4, 1.0),
             )?
             .build(ctx)?;
-        let highlight_cursor_action = MeshBuilder::new()
+        let highlight = MeshBuilder::new()
             .rectangle(DrawMode::fill(), rect, Color::new(1.0, 1.0, 0.6, 0.05))?
             .build(ctx)?;
         let text = Text::new((text, font, 40.0));
@@ -400,13 +403,12 @@ impl Button {
             rect,
             border,
             highlight_entity_state,
-            highlight_cursor_action,
+            highlight,
             text,
         })
     }
 
-    fn draw(&self, ctx: &mut Context, state: ButtonState) -> GameResult {
-        // TODO draw it differently if hovered
+    fn draw(&self, ctx: &mut Context, state: ButtonState, is_hovered: bool) -> GameResult {
         self.border.draw(ctx, DrawParam::default())?;
         if state.shown {
             self.text.draw(
@@ -418,9 +420,8 @@ impl Button {
             self.highlight_entity_state
                 .draw(ctx, DrawParam::default())?;
         }
-        if state.matches_cursor_action {
-            self.highlight_cursor_action
-                .draw(ctx, DrawParam::default())?;
+        if state.matches_cursor_action || is_hovered {
+            self.highlight.draw(ctx, DrawParam::default())?;
         }
         Ok(())
     }
