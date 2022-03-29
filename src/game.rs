@@ -14,7 +14,7 @@ use crate::core::{Command, Core};
 use crate::data::{EntityType, MapType, WorldInitData};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{Action, Entity, EntityId, PhysicalType, Team};
-use crate::hud_graphics::{HudGraphics, MinimapGraphics};
+use crate::hud_graphics::{HudGraphics, Minimap};
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
@@ -72,7 +72,7 @@ impl PlayerState {
 struct Game {
     assets: Assets,
     hud: HudGraphics,
-    minimap: MinimapGraphics,
+    minimap: Minimap,
     player_state: PlayerState,
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
@@ -110,7 +110,7 @@ impl Game {
         let hud_pos = [WORLD_VIEWPORT.x, WORLD_VIEWPORT.y + WORLD_VIEWPORT.h + 25.0];
         let minimap_pos = [900.0, hud_pos[1] + 100.0];
         let hud = HudGraphics::new(ctx, hud_pos, font)?;
-        let minimap = MinimapGraphics::new(ctx, minimap_pos, map_dimensions)?;
+        let minimap = Minimap::new(ctx, minimap_pos, map_dimensions)?;
 
         let core = Core::new(entities, map_dimensions);
 
@@ -183,6 +183,15 @@ impl Game {
                     .set_cursor_action(ctx, CursorAction::SelectAttackTarget);
             }
         }
+    }
+
+    fn set_player_camera_position(&mut self, x_ratio: f32, y_ratio: f32) {
+        self.player_state.camera.position_in_world = [
+            x_ratio * self.core.dimensions()[0] as f32 * CELL_PIXEL_SIZE[0]
+                - WORLD_VIEWPORT.w / 2.0,
+            y_ratio * self.core.dimensions()[1] as f32 * CELL_PIXEL_SIZE[1]
+                - WORLD_VIEWPORT.h / 2.0,
+        ];
     }
 
     fn enemy_at_position(&mut self, clicked_world_pos: [u32; 2]) -> Option<EntityId> {
@@ -394,16 +403,9 @@ impl EventHandler for Game {
         } else {
             self.player_state
                 .set_cursor_action(ctx, CursorAction::Default);
-            let minimap = self.minimap.rect();
-            if minimap.contains([x, y]) {
-                let dim = self.core.dimensions();
-                self.player_state.camera.position_in_world = [
-                    ((x - minimap.x) / minimap.w) * dim[0] as f32 * CELL_PIXEL_SIZE[0]
-                        - WORLD_VIEWPORT.w / 2.0,
-                    ((y - minimap.y) / minimap.h) * dim[1] as f32 * CELL_PIXEL_SIZE[1]
-                        - WORLD_VIEWPORT.h / 2.0,
-                ];
-            }
+            if let Some([x_ratio, y_ratio]) = self.minimap.on_mouse_button_down(button, x, y) {
+                self.set_player_camera_position(x_ratio, y_ratio);
+            };
 
             if let Some(entity) = self.selected_entity() {
                 if entity.team == Team::Player {
@@ -414,6 +416,16 @@ impl EventHandler for Game {
                 }
             }
         }
+    }
+
+    fn mouse_button_up_event(&mut self, _ctx: &mut Context, button: MouseButton, _x: f32, _y: f32) {
+        self.minimap.on_mouse_button_up(button);
+    }
+
+    fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
+        if let Some([x_ratio, y_ratio]) = self.minimap.on_mouse_motion(x, y) {
+            self.set_player_camera_position(x_ratio, y_ratio);
+        };
     }
 
     fn key_down_event(

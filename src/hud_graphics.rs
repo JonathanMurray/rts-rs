@@ -2,6 +2,7 @@ use ggez::graphics::{
     self, Color, DrawMode, DrawParam, Drawable, Font, Mesh, MeshBuilder, Rect, Text,
 };
 use ggez::input::keyboard::KeyCode;
+use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
 use crate::core::TeamState;
@@ -242,14 +243,15 @@ struct ButtonState {
     matches_cursor_action: bool,
 }
 
-pub struct MinimapGraphics {
+pub struct Minimap {
     border_mesh: Mesh,
     camera_mesh: Mesh,
     camera_scale: [f32; 2],
     rect: Rect,
+    is_mouse_dragging: bool,
 }
 
-impl MinimapGraphics {
+impl Minimap {
     pub fn new(
         ctx: &mut Context,
         position: [f32; 2],
@@ -290,6 +292,7 @@ impl MinimapGraphics {
             camera_mesh,
             camera_scale,
             rect,
+            is_mouse_dragging: false,
         })
     }
 
@@ -306,9 +309,51 @@ impl MinimapGraphics {
         Ok(())
     }
 
-    pub fn rect(&self) -> &Rect {
-        &self.rect
+    pub fn on_mouse_button_down(
+        &mut self,
+        button: MouseButton,
+        x: f32,
+        y: f32,
+    ) -> Option<[f32; 2]> {
+        if button == MouseButton::Left && self.rect.contains([x, y]) {
+            self.is_mouse_dragging = true;
+            Some(clamped_ratio(x, y, &self.rect))
+        } else {
+            None
+        }
     }
+
+    pub fn on_mouse_motion(&mut self, x: f32, y: f32) -> Option<[f32; 2]> {
+        if self.is_mouse_dragging {
+            Some(clamped_ratio(x, y, &self.rect))
+        } else {
+            None
+        }
+    }
+
+    pub fn on_mouse_button_up(&mut self, button: MouseButton) {
+        if button == MouseButton::Left {
+            self.is_mouse_dragging = false;
+        }
+    }
+}
+
+fn clamped_ratio(x: f32, y: f32, rect: &Rect) -> [f32; 2] {
+    let x_ratio = if x < rect.x {
+        0.0
+    } else if x > rect.right() {
+        1.0
+    } else {
+        (x - rect.x) / rect.w
+    };
+    let y_ratio = if y < rect.y {
+        0.0
+    } else if y > rect.bottom() {
+        1.0
+    } else {
+        (y - rect.y) / rect.h
+    };
+    [x_ratio, y_ratio]
 }
 
 pub struct Button {
