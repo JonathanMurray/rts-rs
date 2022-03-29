@@ -144,8 +144,14 @@ impl HudGraphics {
                                     {
                                         button_states[i].matches_entity_state = true;
                                     }
+                                    if cursor_action
+                                        == &CursorAction::PlaceStructure(*structure_type)
+                                    {
+                                        button_states[i].matches_cursor_action = true;
+                                        tooltip_text = format!("Construct {:?}", structure_type);
+                                    }
                                     if self.hovered_button_index == Some(i) {
-                                        tooltip_text = format!("Construct {:?}", structure_type,);
+                                        tooltip_text = format!("Construct {:?}", structure_type);
                                     }
                                 }
                                 Action::Move => {
