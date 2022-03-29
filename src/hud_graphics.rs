@@ -7,7 +7,7 @@ use ggez::{Context, GameResult};
 
 use crate::core::TeamState;
 use crate::entities::{Action, Entity, EntityState, Team, NUM_ENTITY_ACTIONS};
-use crate::game::{CursorAction, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
+use crate::game::{CursorAction, PlayerState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 
@@ -15,10 +15,16 @@ pub struct HudGraphics {
     position_on_screen: [f32; 2],
     font: Font,
     buttons: [Button; NUM_BUTTONS],
+    minimap: Minimap,
 }
 
 impl HudGraphics {
-    pub fn new(ctx: &mut Context, position: [f32; 2], font: Font) -> GameResult<Self> {
+    pub fn new(
+        ctx: &mut Context,
+        position: [f32; 2],
+        font: Font,
+        world_dimensions: [u32; 2],
+    ) -> GameResult<Self> {
         let w = 80.0;
         let button_1_rect = Rect::new(position[0] + 5.0, position[1] + 270.0, w, w);
         let button_1 = Button::new(ctx, button_1_rect, "C", font)?;
@@ -28,10 +34,15 @@ impl HudGraphics {
         let button_3_rect = Rect::new(button_2_rect.x + w + button_margin, button_1_rect.y, w, w);
         let button_3 = Button::new(ctx, button_3_rect, "B", font)?;
         let buttons = [button_1, button_2, button_3];
+
+        let minimap_pos = [900.0, position[1] + 100.0];
+        let minimap = Minimap::new(ctx, minimap_pos, world_dimensions)?;
+
         Ok(Self {
             position_on_screen: position,
             font,
             buttons,
+            minimap,
         })
     }
 
@@ -40,7 +51,7 @@ impl HudGraphics {
         ctx: &mut Context,
         player_team_state: &TeamState,
         selected_entity: Option<&Entity>,
-        cursor_action: CursorAction,
+        player_state: &PlayerState,
         mouse_position: [f32; 2],
     ) -> GameResult {
         let x = 0.0;
@@ -54,6 +65,8 @@ impl HudGraphics {
         let small_font = 20.0;
         let medium_font = 30.0;
         let large_font = 40.0;
+
+        let cursor_action = &player_state.cursor_action;
 
         self.draw_text(
             ctx,
@@ -143,7 +156,7 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Move";
-                                    if cursor_action == CursorAction::SelectMovementDestination {
+                                    if cursor_action == &CursorAction::SelectMovementDestination {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
@@ -161,7 +174,7 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Attack";
-                                    if cursor_action == CursorAction::SelectAttackTarget {
+                                    if cursor_action == &CursorAction::SelectAttackTarget {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
@@ -183,36 +196,48 @@ impl HudGraphics {
             }
         }
 
+        self.minimap
+            .draw(ctx, player_state.camera.position_in_world)?;
+
         Ok(())
     }
 
-    pub fn on_mouse_click(
-        &self,
-        mouse_position: [f32; 2],
-        selected_player_entity: &Entity,
-    ) -> Option<Action> {
-        for (button_i, button) in self.buttons.iter().enumerate() {
-            if button.rect.contains(mouse_position) {
-                return selected_player_entity.actions[button_i];
+    pub fn on_mouse_button_down(
+        &mut self,
+        button: MouseButton,
+        x: f32,
+        y: f32,
+    ) -> Option<PlayerInput> {
+        for (i, button) in self.buttons.iter().enumerate() {
+            if button.rect.contains([x, y]) {
+                return Some(PlayerInput::UseEntityAction(i));
             }
         }
 
-        None
+        self.minimap
+            .on_mouse_button_down(button, x, y)
+            .map(PlayerInput::SetCameraPositionRelativeToWorldDimension)
     }
 
-    pub fn on_button_click(
-        &self,
-        keycode: KeyCode,
-        selected_player_entity: &Entity,
-    ) -> Option<Action> {
+    pub fn on_mouse_motion(&mut self, x: f32, y: f32) -> Option<PlayerInput> {
+        self.minimap
+            .on_mouse_motion(x, y)
+            .map(PlayerInput::SetCameraPositionRelativeToWorldDimension)
+    }
+
+    pub fn on_mouse_button_up(&mut self, button: MouseButton) {
+        self.minimap.on_mouse_button_up(button);
+    }
+
+    pub fn on_key_down(&self, keycode: KeyCode) -> Option<PlayerInput> {
         if keycode == KeyCode::C {
-            return selected_player_entity.actions[0];
+            return Some(PlayerInput::UseEntityAction(0));
         }
         if keycode == KeyCode::V {
-            return selected_player_entity.actions[1];
+            return Some(PlayerInput::UseEntityAction(1));
         }
         if keycode == KeyCode::B {
-            return selected_player_entity.actions[2];
+            return Some(PlayerInput::UseEntityAction(2));
         }
         None
     }
@@ -243,7 +268,7 @@ struct ButtonState {
     matches_cursor_action: bool,
 }
 
-pub struct Minimap {
+struct Minimap {
     border_mesh: Mesh,
     camera_mesh: Mesh,
     camera_scale: [f32; 2],
@@ -252,18 +277,14 @@ pub struct Minimap {
 }
 
 impl Minimap {
-    pub fn new(
-        ctx: &mut Context,
-        position: [f32; 2],
-        map_dimensions: [u32; 2],
-    ) -> GameResult<Self> {
+    fn new(ctx: &mut Context, position: [f32; 2], world_dimensions: [u32; 2]) -> GameResult<Self> {
         let cell_pixel_size_in_minimap = 8.0;
 
         let rect = Rect::new(
             position[0],
             position[1],
-            map_dimensions[0] as f32 * cell_pixel_size_in_minimap,
-            map_dimensions[1] as f32 * cell_pixel_size_in_minimap,
+            world_dimensions[0] as f32 * cell_pixel_size_in_minimap,
+            world_dimensions[1] as f32 * cell_pixel_size_in_minimap,
         );
 
         let border_mesh = MeshBuilder::new()
@@ -296,7 +317,7 @@ impl Minimap {
         })
     }
 
-    pub fn draw(&self, ctx: &mut Context, camera_position_in_world: [f32; 2]) -> GameResult {
+    fn draw(&self, ctx: &mut Context, camera_position_in_world: [f32; 2]) -> GameResult {
         ggez::graphics::draw(ctx, &self.border_mesh, DrawParam::default())?;
         ggez::graphics::draw(
             ctx,
@@ -309,12 +330,7 @@ impl Minimap {
         Ok(())
     }
 
-    pub fn on_mouse_button_down(
-        &mut self,
-        button: MouseButton,
-        x: f32,
-        y: f32,
-    ) -> Option<[f32; 2]> {
+    fn on_mouse_button_down(&mut self, button: MouseButton, x: f32, y: f32) -> Option<[f32; 2]> {
         if button == MouseButton::Left && self.rect.contains([x, y]) {
             self.is_mouse_dragging = true;
             Some(clamped_ratio(x, y, &self.rect))
@@ -323,7 +339,7 @@ impl Minimap {
         }
     }
 
-    pub fn on_mouse_motion(&mut self, x: f32, y: f32) -> Option<[f32; 2]> {
+    fn on_mouse_motion(&mut self, x: f32, y: f32) -> Option<[f32; 2]> {
         if self.is_mouse_dragging {
             Some(clamped_ratio(x, y, &self.rect))
         } else {
@@ -331,7 +347,7 @@ impl Minimap {
         }
     }
 
-    pub fn on_mouse_button_up(&mut self, button: MouseButton) {
+    fn on_mouse_button_up(&mut self, button: MouseButton) {
         if button == MouseButton::Left {
             self.is_mouse_dragging = false;
         }
@@ -408,4 +424,10 @@ impl Button {
         }
         Ok(())
     }
+}
+
+#[derive(Debug)]
+pub enum PlayerInput {
+    UseEntityAction(usize),
+    SetCameraPositionRelativeToWorldDimension([f32; 2]),
 }

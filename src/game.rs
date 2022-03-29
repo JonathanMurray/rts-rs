@@ -14,7 +14,7 @@ use crate::core::{Command, Core};
 use crate::data::{EntityType, MapType, WorldInitData};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{Action, Entity, EntityId, PhysicalType, Team};
-use crate::hud_graphics::{HudGraphics, Minimap};
+use crate::hud_graphics::{HudGraphics, PlayerInput};
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
@@ -49,10 +49,10 @@ pub enum CursorAction {
     PlaceStructure(EntityType),
 }
 
-struct PlayerState {
+pub struct PlayerState {
     selected_entity_id: Option<EntityId>,
-    cursor_action: CursorAction,
-    camera: Camera,
+    pub cursor_action: CursorAction, //TODO
+    pub camera: Camera,              //TODO
 }
 
 impl PlayerState {
@@ -72,7 +72,6 @@ impl PlayerState {
 struct Game {
     assets: Assets,
     hud: HudGraphics,
-    minimap: Minimap,
     player_state: PlayerState,
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
@@ -82,7 +81,7 @@ struct Game {
 impl Game {
     fn new(ctx: &mut Context, map_type: MapType) -> Result<Self, GameError> {
         let WorldInitData {
-            dimensions: map_dimensions,
+            dimensions: world_dimensions,
             entities,
         } = WorldInitData::new(map_type);
 
@@ -92,13 +91,13 @@ impl Game {
 
         let rng = rand::thread_rng();
 
-        let enemy_player_ai = EnemyPlayerAi::new(map_dimensions);
+        let enemy_player_ai = EnemyPlayerAi::new(world_dimensions);
 
         let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
 
         let max_camera_position = [
-            map_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - WORLD_VIEWPORT.w,
-            map_dimensions[1] as f32 * CELL_PIXEL_SIZE[1] - WORLD_VIEWPORT.h,
+            world_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - WORLD_VIEWPORT.w,
+            world_dimensions[1] as f32 * CELL_PIXEL_SIZE[1] - WORLD_VIEWPORT.h,
         ];
         let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState {
@@ -108,16 +107,13 @@ impl Game {
         };
 
         let hud_pos = [WORLD_VIEWPORT.x, WORLD_VIEWPORT.y + WORLD_VIEWPORT.h + 25.0];
-        let minimap_pos = [900.0, hud_pos[1] + 100.0];
-        let hud = HudGraphics::new(ctx, hud_pos, font)?;
-        let minimap = Minimap::new(ctx, minimap_pos, map_dimensions)?;
+        let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions)?;
 
-        let core = Core::new(entities, map_dimensions);
+        let core = Core::new(entities, world_dimensions);
 
         Ok(Self {
             assets,
             hud,
-            minimap,
             player_state,
             enemy_player_ai,
             rng,
@@ -151,6 +147,11 @@ impl Game {
                 .find(|e| e.id == id)
                 .expect("selected entity must exist")
         })
+    }
+
+    fn selected_player_entity(&self) -> Option<&Entity> {
+        self.selected_entity()
+            .filter(|entity| entity.team == Team::Player)
     }
 
     fn handle_player_entity_action(
@@ -305,11 +306,9 @@ impl EventHandler for Game {
             ctx,
             self.core.team_state(&Team::Player),
             self.selected_entity(),
-            self.player_state.cursor_action,
+            &self.player_state,
             ggez::input::mouse::position(ctx).into(),
         )?;
-        self.minimap
-            .draw(ctx, self.player_state.camera.position_in_world)?;
 
         graphics::present(ctx)?;
         Ok(())
@@ -327,32 +326,30 @@ impl EventHandler for Game {
                             .iter()
                             .find(|e| e.contains(clicked_world_pos))
                             .map(|e| e.id);
-                    } else if let Some(entity) = self.selected_entity() {
-                        if entity.team == Team::Player {
-                            match &entity.physical_type {
-                                PhysicalType::Unit(unit) => {
-                                    let entity_id = entity.id;
-                                    if unit.combat.is_some() {
-                                        if let Some(victim_id) =
-                                            self.enemy_at_position(clicked_world_pos)
-                                        {
-                                            // TODO: highlight attacked entity temporarily
-                                            self.core.issue_command(
-                                                Command::Attack(entity_id, victim_id),
-                                                Team::Player,
-                                            );
-                                            return;
-                                        }
+                    } else if let Some(entity) = self.selected_player_entity() {
+                        match &entity.physical_type {
+                            PhysicalType::Unit(unit) => {
+                                let entity_id = entity.id;
+                                if unit.combat.is_some() {
+                                    if let Some(victim_id) =
+                                        self.enemy_at_position(clicked_world_pos)
+                                    {
+                                        // TODO: highlight attacked entity temporarily
+                                        self.core.issue_command(
+                                            Command::Attack(entity_id, victim_id),
+                                            Team::Player,
+                                        );
+                                        return;
                                     }
+                                }
 
-                                    self.core.issue_command(
-                                        Command::Move(entity_id, clicked_world_pos),
-                                        Team::Player,
-                                    );
-                                }
-                                PhysicalType::Structure { .. } => {
-                                    println!("Selected entity is immobile")
-                                }
+                                self.core.issue_command(
+                                    Command::Move(entity_id, clicked_world_pos),
+                                    Team::Player,
+                                );
+                            }
+                            PhysicalType::Structure { .. } => {
+                                println!("Selected entity is immobile")
                             }
                         }
                     } else {
@@ -403,15 +400,19 @@ impl EventHandler for Game {
         } else {
             self.player_state
                 .set_cursor_action(ctx, CursorAction::Default);
-            if let Some([x_ratio, y_ratio]) = self.minimap.on_mouse_button_down(button, x, y) {
-                self.set_player_camera_position(x_ratio, y_ratio);
-            };
 
-            if let Some(entity) = self.selected_entity() {
-                if entity.team == Team::Player {
-                    if let Some(action) = self.hud.on_mouse_click([x, y], entity) {
-                        let entity_id = entity.id;
-                        self.handle_player_entity_action(ctx, entity_id, action);
+            if let Some(player_input) = self.hud.on_mouse_button_down(button, x, y) {
+                match player_input {
+                    PlayerInput::UseEntityAction(i) => {
+                        if let Some(entity) = self.selected_player_entity() {
+                            if let Some(action) = entity.actions[i] {
+                                let entity_id = entity.id;
+                                self.handle_player_entity_action(ctx, entity_id, action);
+                            }
+                        }
+                    }
+                    PlayerInput::SetCameraPositionRelativeToWorldDimension([x_ratio, y_ratio]) => {
+                        self.set_player_camera_position(x_ratio, y_ratio);
                     }
                 }
             }
@@ -419,13 +420,18 @@ impl EventHandler for Game {
     }
 
     fn mouse_button_up_event(&mut self, _ctx: &mut Context, button: MouseButton, _x: f32, _y: f32) {
-        self.minimap.on_mouse_button_up(button);
+        self.hud.on_mouse_button_up(button);
     }
 
     fn mouse_motion_event(&mut self, _ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
-        if let Some([x_ratio, y_ratio]) = self.minimap.on_mouse_motion(x, y) {
-            self.set_player_camera_position(x_ratio, y_ratio);
-        };
+        if let Some(player_input) = self.hud.on_mouse_motion(x, y) {
+            match player_input {
+                PlayerInput::SetCameraPositionRelativeToWorldDimension([x_ratio, y_ratio]) => {
+                    self.set_player_camera_position(x_ratio, y_ratio);
+                }
+                _ => panic!("Unhandled player input: {:?}", player_input),
+            }
+        }
     }
 
     fn key_down_event(
@@ -438,12 +444,17 @@ impl EventHandler for Game {
         match keycode {
             KeyCode::Escape => ggez::event::quit(ctx),
             _ => {
-                if let Some(entity) = self.selected_entity() {
-                    if entity.team == Team::Player {
-                        if let Some(action) = self.hud.on_button_click(keycode, entity) {
-                            let entity_id = entity.id;
-                            self.handle_player_entity_action(ctx, entity_id, action);
+                if let Some(player_input) = self.hud.on_key_down(keycode) {
+                    match player_input {
+                        PlayerInput::UseEntityAction(i) => {
+                            if let Some(entity) = self.selected_player_entity() {
+                                if let Some(action) = entity.actions[i] {
+                                    let entity_id = entity.id;
+                                    self.handle_player_entity_action(ctx, entity_id, action);
+                                }
+                            }
                         }
+                        _ => panic!("Unhandled player input: {:?}", player_input),
                     }
                 }
             }

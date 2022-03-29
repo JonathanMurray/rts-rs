@@ -17,12 +17,12 @@ pub struct Core {
 }
 
 impl Core {
-    pub fn new(entities: Vec<Entity>, map_dimensions: [u32; 2]) -> Self {
+    pub fn new(entities: Vec<Entity>, world_dimensions: [u32; 2]) -> Self {
         let mut teams = HashMap::new();
         teams.insert(Team::Player, TeamState { resources: 5 });
         teams.insert(Team::Enemy, TeamState { resources: 5 });
 
-        let mut entity_grid = EntityGrid::new(map_dimensions);
+        let mut entity_grid = EntityGrid::new(world_dimensions);
         for entity in &entities {
             if entity.is_solid {
                 entity_grid.set_area(&entity.position, &entity.size(), true);

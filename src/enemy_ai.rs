@@ -7,14 +7,14 @@ use crate::entities::{Action, Entity, Team};
 
 pub struct EnemyPlayerAi {
     timer_s: f32,
-    map_dimensions: [u32; 2],
+    world_dimensions: [u32; 2],
 }
 
 impl EnemyPlayerAi {
-    pub fn new(map_dimensions: [u32; 2]) -> Self {
+    pub fn new(world_dimensions: [u32; 2]) -> Self {
         Self {
             timer_s: 0.0,
-            map_dimensions,
+            world_dimensions,
         }
     }
 
@@ -36,8 +36,8 @@ impl EnemyPlayerAi {
                             }
                         }
                         if action == &Action::Move && rng.gen_bool(0.3) {
-                            let x: u32 = rng.gen_range(0..self.map_dimensions[0]);
-                            let y: u32 = rng.gen_range(0..self.map_dimensions[1]);
+                            let x: u32 = rng.gen_range(0..self.world_dimensions[0]);
+                            let y: u32 = rng.gen_range(0..self.world_dimensions[1]);
                             commands.push(Command::Move(entity.id, [x, y]));
                             break;
                         }
