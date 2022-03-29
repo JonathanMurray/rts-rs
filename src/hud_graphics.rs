@@ -1,11 +1,12 @@
+use std::collections::HashMap;
+use std::time::Duration;
+
 use ggez::graphics::{
     self, Color, DrawMode, DrawParam, Drawable, Font, Mesh, MeshBuilder, Rect, Text,
 };
 use ggez::input::keyboard::KeyCode;
 use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
-
-use std::collections::HashMap;
 
 use crate::core::TeamState;
 use crate::data::EntityType;
@@ -230,8 +231,9 @@ impl HudGraphics {
         x: f32,
         y: f32,
     ) -> Option<PlayerInput> {
-        for (i, button) in self.buttons.iter().enumerate() {
+        for (i, button) in self.buttons.iter_mut().enumerate() {
             if button.rect.contains([x, y]) {
+                button.on_click();
                 return Some(PlayerInput::UseEntityAction(i));
             }
         }
@@ -265,6 +267,12 @@ impl HudGraphics {
             }
         }
         None
+    }
+
+    pub fn update(&mut self, dt: Duration) {
+        for button in &mut self.buttons {
+            button.update(dt);
+        }
     }
 
     pub fn set_entity_actions(&mut self, actions: [Option<Action>; NUM_ENTITY_ACTIONS]) {
@@ -406,22 +414,33 @@ pub struct Button {
     border: Mesh,
     highlight_entity_state: Mesh,
     highlight: Mesh,
+    is_down: bool,
+    cooldown: Duration,
 }
 
 impl Button {
     fn new(ctx: &mut Context, rect: Rect) -> GameResult<Button> {
+        let local_rect = Rect::new(0.0, 0.0, rect.w, rect.h);
         let border = MeshBuilder::new()
-            .rectangle(DrawMode::stroke(1.0), rect, Color::new(0.7, 0.7, 0.7, 1.0))?
+            .rectangle(
+                DrawMode::stroke(1.0),
+                local_rect,
+                Color::new(0.7, 0.7, 0.7, 1.0),
+            )?
             .build(ctx)?;
         let highlight_entity_state = MeshBuilder::new()
             .rectangle(
                 DrawMode::stroke(3.0),
-                Rect::new(rect.x + 2.0, rect.y + 2.0, rect.w - 4.0, rect.h - 4.0),
+                Rect::new(2.0, 2.0, rect.w - 4.0, rect.h - 4.0),
                 Color::new(0.4, 0.95, 0.4, 1.0),
             )?
             .build(ctx)?;
         let highlight = MeshBuilder::new()
-            .rectangle(DrawMode::fill(), rect, Color::new(1.0, 1.0, 0.6, 0.05))?
+            .rectangle(
+                DrawMode::fill(),
+                local_rect,
+                Color::new(1.0, 1.0, 0.6, 0.05),
+            )?
             .build(ctx)?;
 
         Ok(Self {
@@ -429,25 +448,55 @@ impl Button {
             border,
             highlight_entity_state,
             highlight,
+            is_down: false,
+            cooldown: Duration::ZERO,
         })
     }
 
     fn draw(&self, ctx: &mut Context, state: ButtonState, is_hovered: bool) -> GameResult {
-        self.border.draw(ctx, DrawParam::default())?;
+        self.border
+            .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
+        if state.matches_entity_state {
+            self.highlight_entity_state
+                .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
+        }
+
+        let offset = if self.is_down { [4.0, 4.0] } else { [0.0, 0.0] };
+        let scale = if self.is_down { [0.9, 0.9] } else { [1.0, 1.0] };
         if let Some(text) = state.text {
             text.draw(
                 ctx,
-                DrawParam::default().dest([self.rect.x + 30.0, self.rect.y + 20.0]),
+                DrawParam::default()
+                    .dest([
+                        self.rect.x + 30.0 + offset[0],
+                        self.rect.y + 20.0 + offset[1],
+                    ])
+                    .scale(scale),
             )?;
         }
-        if state.matches_entity_state {
-            self.highlight_entity_state
-                .draw(ctx, DrawParam::default())?;
-        }
         if state.matches_cursor_action || is_hovered {
-            self.highlight.draw(ctx, DrawParam::default())?;
+            self.highlight.draw(
+                ctx,
+                DrawParam::default()
+                    .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
+                    .scale(scale),
+            )?;
         }
         Ok(())
+    }
+
+    fn update(&mut self, dt: Duration) {
+        if self.is_down {
+            self.cooldown = self.cooldown.checked_sub(dt).unwrap_or(Duration::ZERO);
+            if self.cooldown.is_zero() {
+                self.is_down = false;
+            }
+        }
+    }
+
+    fn on_click(&mut self) {
+        self.is_down = true;
+        self.cooldown = Duration::from_millis(100);
     }
 }
 

@@ -259,6 +259,8 @@ impl EventHandler for Game {
             }
         }
 
+        self.hud.update(dt);
+
         Ok(())
     }
 
