@@ -83,10 +83,7 @@ impl Core {
             let attacker_pos = self.entity_mut(attacker_id).position;
             if let Some(victim) = self.entities.iter_mut().find(|e| e.id == victim_id) {
                 let victim_pos = victim.position;
-                // TODO: This doesn't work for structures that are larger than 1x1
-                //       Distance calculation is only done from upper-left corner
-                let within_range = square_distance(attacker_pos, victim_pos) <= 2;
-                if within_range {
+                if is_unit_within_melee_range_of(attacker_pos, victim_pos, victim.size()) {
                     let health = victim.health.as_mut().expect("victim without health");
                     health.receive_damage(damage_amount);
                     println!(
@@ -343,6 +340,22 @@ impl Core {
             .find(|e| e.id == id)
             .expect("entity must exist")
     }
+}
+
+fn is_unit_within_melee_range_of(
+    unit_position: [u32; 2],
+    other_position: [u32; 2],
+    other_size: [u32; 2],
+) -> bool {
+    let mut is_attacker_within_range = false;
+    for x in other_position[0]..other_position[0] + other_size[0] {
+        for y in other_position[1]..other_position[1] + other_size[1] {
+            if square_distance(unit_position, [x, y]) <= 2 {
+                is_attacker_within_range = true;
+            }
+        }
+    }
+    is_attacker_within_range
 }
 
 fn square_distance(a: [u32; 2], b: [u32; 2]) -> u32 {
