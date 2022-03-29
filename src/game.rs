@@ -22,7 +22,7 @@ const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 1200.0];
 pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
 pub const WORLD_VIEWPORT: Rect = Rect {
     x: 50.0,
-    y: 50.0,
+    y: 70.0,
     w: WINDOW_DIMENSIONS[0] - 100.0,
     h: 650.0,
 };

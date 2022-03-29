@@ -66,7 +66,6 @@ impl HudGraphics {
         player_state: &PlayerState,
     ) -> GameResult {
         let x = 0.0;
-        let resources_y = 5.0;
         let name_y = 48.0;
         let health_y = 130.0;
         let training_status_y = 240.0;
@@ -79,12 +78,12 @@ impl HudGraphics {
 
         let cursor_action = &player_state.cursor_action;
 
-        self.draw_text(
-            ctx,
-            [x, resources_y],
-            format!("Resources: {}", player_team_state.resources),
+        let resources_text = Text::new((
+            format!("RESOURCES: {}", player_team_state.resources),
+            self.font,
             medium_font,
-        )?;
+        ));
+        resources_text.draw(ctx, DrawParam::new().dest([1200.0, 15.0]))?;
 
         if let Some(selected_entity) = selected_entity {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
