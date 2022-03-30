@@ -20,6 +20,7 @@ pub enum EntityState {
     Constructing(EntityType),
     Moving,
     Attacking(EntityId),
+    Gathering(EntityId),
 }
 
 #[derive(Debug)]
@@ -65,12 +66,14 @@ impl Entity {
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
         let mut can_fight = false;
+        let mut can_gather = false;
         for action in config.actions.into_iter().flatten() {
             match action {
                 Action::Train(entity_type, config) => {
                     training_options.insert(entity_type, config);
                 }
                 Action::Attack => can_fight = true,
+                Action::GatherResource => can_gather = true,
                 _ => {}
             }
         }
@@ -79,7 +82,8 @@ impl Entity {
         let physical_type = match config.physical_type {
             PhysicalTypeConfig::MovementCooldown(cooldown) => {
                 let combat = can_fight.then(Combat::new);
-                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat))
+                let gathering = can_gather.then(Gathering::new);
+                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat, gathering))
             }
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
@@ -175,14 +179,21 @@ pub struct UnitComponent {
     pub sub_cell_movement: SubCellMovement,
     pub pathfinder: Pathfinder,
     pub combat: Option<Combat>,
+    pub gathering: Option<Gathering>,
 }
 
 impl UnitComponent {
-    pub fn new(position: [u32; 2], movement_cooldown: Duration, combat: Option<Combat>) -> Self {
+    pub fn new(
+        position: [u32; 2],
+        movement_cooldown: Duration,
+        combat: Option<Combat>,
+        gathering: Option<Gathering>,
+    ) -> Self {
         Self {
             sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
             pathfinder: Pathfinder::new(),
             combat,
+            gathering,
         }
     }
 }
@@ -408,7 +419,21 @@ impl Combat {
 }
 
 #[derive(Debug)]
-pub struct HealingActionComponent;
+pub struct Gathering(bool);
+
+impl Gathering {
+    fn new() -> Self {
+        Self(false)
+    }
+
+    pub fn carries_resource(&self) -> bool {
+        self.0
+    }
+
+    pub fn pick_up_resource(&mut self) {
+        self.0 = true;
+    }
+}
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Action {
@@ -417,4 +442,5 @@ pub enum Action {
     Move,
     Heal,
     Attack,
+    GatherResource,
 }

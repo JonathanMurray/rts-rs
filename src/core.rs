@@ -114,6 +114,40 @@ impl Core {
         }
 
         //-------------------------------
+        //     RESOURCE GATHERING
+        //-------------------------------
+        let mut gatherers = vec![];
+        for entity in &mut self.entities {
+            if let EntityState::Gathering(resource_id) = entity.state {
+                let gatherer_id = entity.id;
+                gatherers.push((gatherer_id, resource_id));
+            }
+        }
+        for (gatherer_id, resource_id) in gatherers {
+            let gatherer_pos = self.entity_mut(gatherer_id).position;
+            let success =
+                if let Some(resource) = self.entities.iter_mut().find(|e| e.id == resource_id) {
+                    let resource_pos = resource.position;
+                    let resource_size = resource.size();
+                    is_unit_within_melee_range_of(gatherer_pos, resource_pos, resource_size)
+                } else {
+                    panic!("Resource doesn't exist");
+                };
+
+            if success {
+                let gatherer = self.entity_mut(gatherer_id);
+                gatherer
+                    .unit_mut()
+                    .gathering
+                    .as_mut()
+                    .unwrap()
+                    .pick_up_resource();
+                //gatherer.state = EntityState::Idle;
+                //println!("{:?} gathered some resource and is now idling", gatherer.id );
+            }
+        }
+
+        //-------------------------------
         //       CONSTRUCTION 1
         //-------------------------------
         let mut builders_to_remove = Vec::new();
@@ -278,6 +312,19 @@ impl Core {
                     .pathfinder
                     .find_path(&attacker_pos, victim_pos);
             }
+            Command::GatherResource(gatherer_id, resource_id) => {
+                let resource = self.entity_mut(resource_id);
+                assert_eq!(resource.team, Team::Neutral);
+                let resource_pos = resource.position;
+                let gatherer = self.entity_mut(gatherer_id);
+                assert_eq!(gatherer.team, issuing_team);
+                gatherer.state = EntityState::Gathering(resource_id);
+                let gatherer_pos = gatherer.position;
+                gatherer
+                    .unit_mut()
+                    .pathfinder
+                    .find_path(&gatherer_pos, resource_pos);
+            }
         }
     }
 
@@ -369,6 +416,7 @@ pub enum Command {
     Move(EntityId, [u32; 2]),
     Heal(EntityId),
     Attack(EntityId, EntityId),
+    GatherResource(EntityId, EntityId),
 }
 
 pub struct TeamState {

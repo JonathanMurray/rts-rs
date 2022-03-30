@@ -48,6 +48,7 @@ pub enum CursorAction {
     SelectAttackTarget,
     SelectMovementDestination,
     PlaceStructure(EntityType),
+    SelectResourceTarget,
 }
 
 struct MovementCommandIndicator {
@@ -106,6 +107,7 @@ impl PlayerState {
                 mouse::set_cursor_type(ctx, CursorIcon::Move)
             }
             CursorAction::PlaceStructure(_) => mouse::set_cursor_type(ctx, CursorIcon::Grabbing),
+            CursorAction::SelectResourceTarget => mouse::set_cursor_type(ctx, CursorIcon::Grab),
         }
         self.cursor_action = cursor_action;
     }
@@ -230,6 +232,10 @@ impl Game {
                 self.player_state
                     .set_cursor_action(ctx, CursorAction::SelectAttackTarget);
             }
+            Action::GatherResource => {
+                self.player_state
+                    .set_cursor_action(ctx, CursorAction::SelectResourceTarget);
+            }
         }
     }
 
@@ -242,11 +248,20 @@ impl Game {
         ];
     }
 
-    fn enemy_at_position(&mut self, clicked_world_pos: [u32; 2]) -> Option<EntityId> {
+    fn enemy_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<EntityId> {
         self.core
             .entities()
             .iter()
             .find(|e| e.contains(clicked_world_pos) && e.health.is_some() && e.team == Team::Enemy)
+            .map(|e| e.id)
+    }
+
+    fn resource_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<EntityId> {
+        // TODO we assume that all neutral entities are resources for now
+        self.core
+            .entities()
+            .iter()
+            .find(|e| e.contains(clicked_world_pos) && e.team == Team::Neutral)
             .map(|e| e.id)
     }
 
@@ -434,6 +449,17 @@ impl EventHandler for Game {
                                         return;
                                     }
                                 }
+                                if entity.actions.contains(&Some(Action::GatherResource)) {
+                                    if let Some(resource_id) =
+                                        self.resource_at_position(clicked_world_pos)
+                                    {
+                                        self.core.issue_command(
+                                            Command::GatherResource(entity_id, resource_id),
+                                            Team::Player,
+                                        );
+                                        return;
+                                    }
+                                }
                                 self.issue_player_movement_command(
                                     clicked_world_pixel_coords,
                                     entity_id,
@@ -482,6 +508,22 @@ impl EventHandler for Game {
                             .issue_command(Command::Attack(attacker_id, victim_id), Team::Player);
                     } else {
                         println!("Invalid attack target");
+                    }
+                    self.player_state
+                        .set_cursor_action(ctx, CursorAction::Default);
+                }
+                CursorAction::SelectResourceTarget => {
+                    if let Some(resource_id) = self.resource_at_position(clicked_world_pos) {
+                        let gatherer_id = self
+                            .player_state
+                            .selected_entity_id
+                            .expect("Cannot gather without selected entity");
+                        self.core.issue_command(
+                            Command::GatherResource(gatherer_id, resource_id),
+                            Team::Player,
+                        );
+                    } else {
+                        println!("Invalid resource target");
                     }
                     self.player_state
                         .set_cursor_action(ctx, CursorAction::Default);

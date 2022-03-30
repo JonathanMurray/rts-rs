@@ -10,7 +10,7 @@ use ggez::{Context, GameResult};
 
 use crate::core::TeamState;
 use crate::data::EntityType;
-use crate::entities::{Action, Entity, EntityState, Team, NUM_ENTITY_ACTIONS};
+use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
 use crate::game::{CursorAction, PlayerState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
@@ -68,6 +68,7 @@ impl HudGraphics {
         let x = 0.0;
         let name_y = 48.0;
         let health_y = 130.0;
+        let resource_status_y = 200.0;
         let training_status_y = 240.0;
         let progress_y = 290.0;
         let tooltip_y = 380.0;
@@ -124,6 +125,18 @@ impl HudGraphics {
                         " ".repeat(((1.0 - progress) * progress_w) as usize)
                     );
                     self.draw_text(ctx, [x, progress_y], progress_bar, medium_font)?;
+                }
+                if let PhysicalType::Unit(unit) = &selected_entity.physical_type {
+                    if let Some(gathering) = unit.gathering.as_ref() {
+                        if gathering.carries_resource() {
+                            self.draw_text(
+                                ctx,
+                                [x, resource_status_y],
+                                "[HAS RESOURCE]",
+                                medium_font,
+                            )?;
+                        }
+                    }
                 }
 
                 if !is_training {
@@ -187,6 +200,19 @@ impl HudGraphics {
                                     }
                                     const TEXT: &str = "Attack";
                                     if cursor_action == &CursorAction::SelectAttackTarget {
+                                        button_states[i].matches_cursor_action = true;
+                                        tooltip_text = TEXT.to_string();
+                                    }
+                                    if self.hovered_button_index == Some(i) {
+                                        tooltip_text = TEXT.to_string();
+                                    }
+                                }
+                                Action::GatherResource => {
+                                    if let EntityState::Gathering(..) = selected_entity.state {
+                                        button_states[i].matches_entity_state = true;
+                                    }
+                                    const TEXT: &str = "Gather";
+                                    if cursor_action == &CursorAction::SelectResourceTarget {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
@@ -518,6 +544,7 @@ fn action_keycode(action: &Action) -> KeyCode {
         Action::Move => KeyCode::M,
         Action::Heal => KeyCode::H,
         Action::Attack => KeyCode::A,
+        Action::GatherResource => KeyCode::G,
     }
 }
 
@@ -525,6 +552,7 @@ fn create_keycode_labels(font: Font) -> HashMap<KeyCode, Text> {
     [
         (KeyCode::A, "A"),
         (KeyCode::C, "C"),
+        (KeyCode::G, "G"),
         (KeyCode::H, "H"),
         (KeyCode::L, "L"),
         (KeyCode::M, "M"),

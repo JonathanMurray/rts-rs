@@ -40,11 +40,11 @@ impl WorldInitData {
         if map_type != MapType::Empty {
             let neutral_entity = Entity::new(
                 EntityConfig {
-                    name: "Neutral entity",
-                    is_solid: false,
+                    name: "Resource",
+                    is_solid: true,
                     sprite: EntitySprite::Neutral,
-                    max_health: Some(5),
-                    physical_type: PhysicalTypeConfig::StructureSize([1, 1]), //TODO
+                    max_health: None,
+                    physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
                     actions: [None; NUM_ENTITY_ACTIONS],
                 },
                 [1, 3],
@@ -148,11 +148,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             sprite: EntitySprite::CircleUnit,
             max_health: Some(5),
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
-            actions: [
-                Some(Action::Move),
-                Some(Action::Construct(EntityType::SmallBuilding)),
-                Some(Action::Construct(EntityType::LargeBuilding)),
-            ],
+            actions: [Some(Action::Move), Some(Action::GatherResource), None],
         },
         EntityType::SmallBuilding => EntityConfig {
             name: "Small building",
