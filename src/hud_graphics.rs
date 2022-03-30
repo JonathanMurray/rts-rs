@@ -208,7 +208,9 @@ impl HudGraphics {
                                     }
                                 }
                                 Action::GatherResource => {
-                                    if let EntityState::Gathering(..) = selected_entity.state {
+                                    if let EntityState::GatheringResource(..) =
+                                        selected_entity.state
+                                    {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Gather";
@@ -218,6 +220,16 @@ impl HudGraphics {
                                     }
                                     if self.hovered_button_index == Some(i) {
                                         tooltip_text = TEXT.to_string();
+                                    }
+                                }
+                                Action::ReturnResource => {
+                                    if let EntityState::ReturningResource(..) =
+                                        selected_entity.state
+                                    {
+                                        button_states[i].matches_entity_state = true;
+                                    }
+                                    if self.hovered_button_index == Some(i) {
+                                        tooltip_text = "Return".to_string();
                                     }
                                 }
                             }
@@ -545,6 +557,7 @@ fn action_keycode(action: &Action) -> KeyCode {
         Action::Heal => KeyCode::H,
         Action::Attack => KeyCode::A,
         Action::GatherResource => KeyCode::G,
+        Action::ReturnResource => KeyCode::R,
     }
 }
 
@@ -556,6 +569,7 @@ fn create_keycode_labels(font: Font) -> HashMap<KeyCode, Text> {
         (KeyCode::H, "H"),
         (KeyCode::L, "L"),
         (KeyCode::M, "M"),
+        (KeyCode::R, "R"),
         (KeyCode::S, "S"),
     ]
     .map(|(keycode, text)| (keycode, Text::new((text, font, 30.0))))

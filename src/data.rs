@@ -47,7 +47,7 @@ impl WorldInitData {
                     physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
                     actions: [None; NUM_ENTITY_ACTIONS],
                 },
-                [1, 3],
+                [6, 4],
                 Team::Neutral,
             );
             entities.push(neutral_entity);
@@ -148,7 +148,11 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             sprite: EntitySprite::CircleUnit,
             max_health: Some(5),
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
-            actions: [Some(Action::Move), Some(Action::GatherResource), None],
+            actions: [
+                Some(Action::Move),
+                Some(Action::GatherResource),
+                Some(Action::ReturnResource),
+            ],
         },
         EntityType::SmallBuilding => EntityConfig {
             name: "Small building",

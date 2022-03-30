@@ -20,7 +20,8 @@ pub enum EntityState {
     Constructing(EntityType),
     Moving,
     Attacking(EntityId),
-    Gathering(EntityId),
+    GatheringResource(EntityId),
+    ReturningResource(EntityId),
 }
 
 #[derive(Debug)]
@@ -431,7 +432,13 @@ impl Gathering {
     }
 
     pub fn pick_up_resource(&mut self) {
+        assert!(!self.0, "Can only hold one resource at a time");
         self.0 = true;
+    }
+
+    pub fn drop_resource(&mut self) {
+        assert!(self.0, "Can't drop a resource that's not being held");
+        self.0 = false;
     }
 }
 
@@ -443,4 +450,5 @@ pub enum Action {
     Heal,
     Attack,
     GatherResource,
+    ReturnResource,
 }

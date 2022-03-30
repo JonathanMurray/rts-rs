@@ -236,6 +236,10 @@ impl Game {
                 self.player_state
                     .set_cursor_action(ctx, CursorAction::SelectResourceTarget);
             }
+            Action::ReturnResource => {
+                self.core
+                    .issue_command(Command::ReturnResource(actor_id, None), Team::Player);
+            }
         }
     }
 
@@ -253,6 +257,20 @@ impl Game {
             .entities()
             .iter()
             .find(|e| e.contains(clicked_world_pos) && e.health.is_some() && e.team == Team::Enemy)
+            .map(|e| e.id)
+    }
+
+    fn player_structure_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<EntityId> {
+        self.core
+            .entities()
+            .iter()
+            .find(|e| {
+                if let PhysicalType::Structure { .. } = &e.physical_type {
+                    e.contains(clicked_world_pos) && e.team == Team::Player
+                } else {
+                    false
+                }
+            })
             .map(|e| e.id)
     }
 
@@ -455,6 +473,15 @@ impl EventHandler for Game {
                                     {
                                         self.core.issue_command(
                                             Command::GatherResource(entity_id, resource_id),
+                                            Team::Player,
+                                        );
+                                        return;
+                                    }
+                                    if let Some(structure_id) =
+                                        self.player_structure_at_position(clicked_world_pos)
+                                    {
+                                        self.core.issue_command(
+                                            Command::ReturnResource(entity_id, Some(structure_id)),
                                             Team::Player,
                                         );
                                         return;
