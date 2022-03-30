@@ -420,25 +420,31 @@ impl Combat {
 }
 
 #[derive(Debug)]
-pub struct Gathering(bool);
+pub struct Gathering {
+    held_resource: Option<EntityId>,
+}
 
 impl Gathering {
     fn new() -> Self {
-        Self(false)
+        Self { held_resource: None }
     }
 
-    pub fn carries_resource(&self) -> bool {
-        self.0
+    pub fn is_carrying(&self) -> bool {
+        self.held_resource.is_some()
     }
 
-    pub fn pick_up_resource(&mut self) {
-        assert!(!self.0, "Can only hold one resource at a time");
-        self.0 = true;
+    pub fn pick_up_resource(&mut self, resource_id: EntityId) {
+        assert!(
+            self.held_resource.is_none(),
+            "Can only hold one resource at a time"
+        );
+        self.held_resource = Some(resource_id);
     }
 
-    pub fn drop_resource(&mut self) {
-        assert!(self.0, "Can't drop a resource that's not being held");
-        self.0 = false;
+    pub fn drop_resource(&mut self) -> EntityId {
+        self.held_resource
+            .take()
+            .expect("Can't drop a resource that's not being held")
     }
 }
 

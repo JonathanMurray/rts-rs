@@ -137,14 +137,18 @@ impl Core {
                 };
             if success {
                 let gatherer = self.entity_mut(gatherer_id);
+                let team = gatherer.team;
                 gatherer
                     .unit_mut()
                     .gathering
                     .as_mut()
                     .unwrap()
-                    .pick_up_resource();
-                gatherer.state = EntityState::Idle;
-                println!("{:?} gathered some resource and is now idling", gatherer.id);
+                    .pick_up_resource(resource_id);
+                println!(
+                    "{:?} gathered some resource and should now return it",
+                    gatherer.id
+                );
+                self.unit_return_resource(gatherer_id, team, None);
             }
         }
 
@@ -171,17 +175,19 @@ impl Core {
                 };
             if success {
                 let returner = self.entity_mut(returner_id);
-                returner
-                    .unit_mut()
-                    .gathering
-                    .as_mut()
-                    .unwrap()
-                    .drop_resource();
-                returner.state = EntityState::Idle;
-                println!("{:?} Returned resource and is now idling", returner.id);
+                let gathering = returner.unit_mut().gathering.as_mut().unwrap();
+                let resource_id = gathering.drop_resource();
+                let resource_pos = self.entity_mut(resource_id).position;
                 let team = self.teams.get_mut(&returner_team).unwrap();
                 team.resources += 1;
                 println!("Resources: {}", team.resources);
+                let returner = self.entity_mut(returner_id);
+                returner.state = EntityState::Idle;
+                println!(
+                    "{:?} Returned resource and will now go out to gather again",
+                    returner.id
+                );
+                Core::unit_gather_resource(returner, resource_id, resource_pos);
             }
         }
 
@@ -361,7 +367,7 @@ impl Core {
                     .gathering
                     .as_ref()
                     .unwrap()
-                    .carries_resource()
+                    .is_carrying()
                 {
                     // TODO improve UI so that no player input leads to this situation
                     eprintln!(
@@ -370,24 +376,16 @@ impl Core {
                     );
                     return;
                 }
-                gatherer.state = EntityState::GatheringResource(resource_id);
-                let gatherer_pos = gatherer.position;
-                gatherer
-                    .unit_mut()
-                    .pathfinder
-                    .find_path(&gatherer_pos, resource_pos);
+                Core::unit_gather_resource(gatherer, resource_id, resource_pos);
             }
             Command::ReturnResource(gatherer_id, structure_id) => {
                 let gatherer = self.entity_mut(gatherer_id);
                 assert_eq!(gatherer.team, issuing_team);
 
-                if !gatherer
-                    .unit_mut()
-                    .gathering
-                    .as_ref()
-                    .unwrap()
-                    .carries_resource()
-                {
+                let gathering = gatherer.unit_mut().gathering.as_ref().unwrap();
+                if gathering.is_carrying() {
+                    self.unit_return_resource(gatherer_id, issuing_team, structure_id);
+                } else {
                     // TODO improve UI so that no player input leads to this situation
                     eprintln!(
                         "WARN: {:?} was issued to return a resource, but they don't carry any",
@@ -395,40 +393,58 @@ impl Core {
                     );
                     return;
                 }
-
-                let gatherer_pos = gatherer.position;
-
-                let structure_id_and_pos = match structure_id {
-                    Some(structure_id) => {
-                        let structure = self.entity_mut(structure_id);
-                        Some((structure_id, structure.position))
-                    }
-                    None => {
-                        // No specific structure was selected as the destination, so we pick one
-                        let mut structure_id_and_pos = None;
-                        for entity in &self.entities {
-                            if entity.team == issuing_team {
-                                // For now, resources can be returned to any friendly structure
-                                if let PhysicalType::Structure { .. } = entity.physical_type {
-                                    //TODO find the closest structure
-                                    structure_id_and_pos = Some((entity.id, entity.position));
-                                }
-                            }
-                        }
-                        structure_id_and_pos
-                    }
-                };
-
-                if let Some((structure_id, structure_pos)) = structure_id_and_pos {
-                    let gatherer = self.entity_mut(gatherer_id);
-                    gatherer.state = EntityState::ReturningResource(structure_id);
-                    gatherer
-                        .unit_mut()
-                        .pathfinder
-                        .find_path(&gatherer_pos, structure_pos);
-                }
             }
         }
+    }
+
+    fn unit_return_resource(
+        &mut self,
+        gatherer_id: EntityId,
+        team: Team,
+        structure_id: Option<EntityId>,
+    ) {
+        let structure_id_and_pos = match structure_id {
+            Some(structure_id) => {
+                let structure = self.entity_mut(structure_id);
+                Some((structure_id, structure.position))
+            }
+            None => {
+                // No specific structure was selected as the destination, so we pick one
+                let mut structure_id_and_pos = None;
+                for entity in &self.entities {
+                    if entity.team == team {
+                        // For now, resources can be returned to any friendly structure
+                        if let PhysicalType::Structure { .. } = entity.physical_type {
+                            //TODO find the closest structure
+                            structure_id_and_pos = Some((entity.id, entity.position));
+                        }
+                    }
+                }
+                structure_id_and_pos
+            }
+        };
+
+        let gatherer = self.entity_mut(gatherer_id);
+        if let Some((structure_id, structure_pos)) = structure_id_and_pos {
+            gatherer.state = EntityState::ReturningResource(structure_id);
+            let gatherer_pos = gatherer.position;
+            gatherer
+                .unit_mut()
+                .pathfinder
+                .find_path(&gatherer_pos, structure_pos);
+        } else {
+            gatherer.state = EntityState::Idle;
+            eprintln!("WARN: Couldn't return resource. No structure found?");
+        }
+    }
+
+    fn unit_gather_resource(gatherer: &mut Entity, resource_id: EntityId, resource_pos: [u32; 2]) {
+        gatherer.state = EntityState::GatheringResource(resource_id);
+        let gatherer_pos = gatherer.position;
+        gatherer
+            .unit_mut()
+            .pathfinder
+            .find_path(&gatherer_pos, resource_pos);
     }
 
     pub fn team_state(&self, team: &Team) -> &TeamState {

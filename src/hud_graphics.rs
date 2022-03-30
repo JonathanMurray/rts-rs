@@ -128,7 +128,7 @@ impl HudGraphics {
                 }
                 if let PhysicalType::Unit(unit) = &selected_entity.physical_type {
                     if let Some(gathering) = unit.gathering.as_ref() {
-                        if gathering.carries_resource() {
+                        if gathering.is_carrying() {
                             self.draw_text(
                                 ctx,
                                 [x, resource_status_y],
