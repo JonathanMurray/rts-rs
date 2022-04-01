@@ -8,7 +8,7 @@ use crate::game;
 
 static NEXT_ENTITY_ID: AtomicUsize = AtomicUsize::new(1);
 
-pub const NUM_ENTITY_ACTIONS: usize = 3;
+pub const NUM_ENTITY_ACTIONS: usize = 6;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct EntityId(usize);

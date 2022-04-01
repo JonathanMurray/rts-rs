@@ -12,6 +12,7 @@ use crate::core::TeamState;
 use crate::data::EntityType;
 use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
 use crate::game::{CursorAction, PlayerState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
+use std::convert::TryInto;
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 
@@ -33,14 +34,17 @@ impl HudGraphics {
         world_dimensions: [u32; 2],
     ) -> GameResult<Self> {
         let w = 80.0;
-        let button_1_rect = Rect::new(position[0] + 5.0, position[1] + 270.0, w, w);
-        let button_1 = Button::new(ctx, button_1_rect)?;
+
+        let mut buttons = vec![];
         let button_margin = 5.0;
-        let button_2_rect = Rect::new(button_1_rect.x + w + button_margin, button_1_rect.y, w, w);
-        let button_2 = Button::new(ctx, button_2_rect)?;
-        let button_3_rect = Rect::new(button_2_rect.x + w + button_margin, button_1_rect.y, w, w);
-        let button_3 = Button::new(ctx, button_3_rect)?;
-        let buttons = [button_1, button_2, button_3];
+        let buttons_per_row = 3;
+        for i in 0..NUM_BUTTONS {
+            let x = position[0] + 5.0 + (i % buttons_per_row) as f32 * (w + button_margin);
+            let y = position[1] + 240.0 + (i / buttons_per_row) as f32 * (w + button_margin);
+            let rect = Rect::new(x, y, w, w);
+            buttons.push(Button::new(ctx, rect)?);
+        }
+        let buttons = buttons.try_into().unwrap();
 
         let minimap_pos = [900.0, position[1] + 30.0];
         let minimap = Minimap::new(ctx, minimap_pos, world_dimensions)?;
@@ -66,12 +70,12 @@ impl HudGraphics {
         player_state: &PlayerState,
     ) -> GameResult {
         let x = 0.0;
-        let name_y = 48.0;
-        let health_y = 130.0;
-        let resource_status_y = 200.0;
-        let training_status_y = 240.0;
-        let progress_y = 290.0;
-        let tooltip_y = 380.0;
+        let name_y = 28.0;
+        let health_y = 110.0;
+        let resource_status_y = 180.0;
+        let training_status_y = 220.0;
+        let progress_y = 270.0;
+        let tooltip_y = 420.0;
 
         let small_font = 20.0;
         let medium_font = 30.0;
@@ -446,6 +450,7 @@ fn clamped_ratio(x: f32, y: f32, rect: &Rect) -> [f32; 2] {
     [x_ratio, y_ratio]
 }
 
+#[derive(Debug)]
 pub struct Button {
     rect: Rect,
     border: Mesh,

@@ -155,10 +155,6 @@ impl Core {
                     .as_mut()
                     .unwrap()
                     .pick_up_resource(resource_id);
-                println!(
-                    "{:?} gathered some resource and should now return it",
-                    gatherer.id
-                );
                 self.unit_return_resource(gatherer_id, team, None);
             }
         }
@@ -193,13 +189,8 @@ impl Core {
                 let resource_size = resource.size();
                 let team = self.teams.get_mut(&returner_team).unwrap();
                 team.resources += 1;
-                println!("Resources: {}", team.resources);
                 let returner = self.entity_mut(returner_id);
                 returner.state = EntityState::Idle;
-                println!(
-                    "{:?} Returned resource and will now go out to gather again",
-                    returner.id
-                );
 
                 returner.state = EntityState::GatheringResource(resource_id);
 

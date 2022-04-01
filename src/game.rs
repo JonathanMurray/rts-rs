@@ -176,7 +176,7 @@ impl Game {
         let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState::new(camera);
 
-        let hud_pos = [WORLD_VIEWPORT.x, WORLD_VIEWPORT.y + WORLD_VIEWPORT.h + 25.0];
+        let hud_pos = [WORLD_VIEWPORT.x, WORLD_VIEWPORT.y + WORLD_VIEWPORT.h + 15.0];
         let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions)?;
 
         let core = Core::new(entities, world_dimensions);
