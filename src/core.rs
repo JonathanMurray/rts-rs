@@ -46,11 +46,11 @@ impl Core {
             if let PhysicalType::Unit(unit) = &mut entity.physical_type {
                 unit.sub_cell_movement.update(dt, entity.position);
                 if unit.sub_cell_movement.is_ready() {
-                    if let Some(next_pos) = unit.pathfinder.peek_path() {
+                    if let Some(next_pos) = unit.movement_plan.peek() {
                         let occupied = self.entity_grid.get(next_pos);
                         if !occupied {
                             let old_pos = entity.position;
-                            let new_pos = unit.pathfinder.advance_path();
+                            let new_pos = unit.movement_plan.advance();
                             self.entity_grid.set(old_pos, false);
                             unit.sub_cell_movement.set_moving(old_pos, new_pos);
                             entity.position = new_pos;
@@ -99,14 +99,21 @@ impl Core {
                         .start_cooldown();
                 } else {
                     let attacker = self.entity_mut(attacker_id).unit_mut();
-                    if attacker.pathfinder.peek_path().is_none() {
-                        attacker.pathfinder.find_path(&attacker_pos, victim_pos);
+                    if attacker.movement_plan.peek().is_none() {
+                        if let Some(plan) =
+                            pathfind::find_path(attacker_pos, victim_pos, &self.entity_grid)
+                        {
+                            self.entity_mut(attacker_id)
+                                .unit_mut()
+                                .movement_plan
+                                .set(plan);
+                        }
                     }
                 }
             } else {
                 let attacker = self.entity_mut(attacker_id);
                 attacker.state = EntityState::Idle;
-                attacker.unit_mut().pathfinder.clear();
+                attacker.unit_mut().movement_plan.clear();
                 // println!(
                 //     "{:?} doesn't exist so {:?} went back to idling",
                 //     victim_id, attacker_id
@@ -188,7 +195,17 @@ impl Core {
                     "{:?} Returned resource and will now go out to gather again",
                     returner.id
                 );
-                Core::unit_gather_resource(returner, resource_id, resource_pos);
+
+                returner.state = EntityState::GatheringResource(resource_id);
+
+                if let Some(plan) =
+                    pathfind::find_path(returner.position, resource_pos, &self.entity_grid)
+                {
+                    self.entity_mut(returner_id)
+                        .unit_mut()
+                        .movement_plan
+                        .set(plan);
+                }
             }
         }
 
@@ -199,7 +216,7 @@ impl Core {
         let mut structures_to_add = Vec::new();
         for entity in &mut self.entities {
             if let EntityState::Constructing(structure_type) = entity.state {
-                if entity.unit_mut().pathfinder.peek_path().is_none() {
+                if entity.unit_mut().movement_plan.peek().is_none() {
                     let position = entity.position;
                     let size = self.structure_sizes.get(&structure_type).unwrap();
                     let mut sufficient_space = true;
@@ -326,10 +343,15 @@ impl Core {
                 assert_eq!(builder.team, issuing_team);
                 let builder_pos = builder.position;
                 builder.state = EntityState::Constructing(structure_type);
-                builder
-                    .unit_mut()
-                    .pathfinder
-                    .find_path(&builder_pos, construction_position);
+
+                if let Some(plan) =
+                    pathfind::find_path(builder_pos, construction_position, &self.entity_grid)
+                {
+                    self.entity_mut(builder_id)
+                        .unit_mut()
+                        .movement_plan
+                        .set(plan);
+                }
             }
             Command::Heal(healer_id) => {
                 let healer = self.entity_mut(healer_id);
@@ -354,7 +376,7 @@ impl Core {
                 {
                     let mover = self.entity_mut(unit_id);
                     mover.state = EntityState::Moving;
-                    mover.unit_mut().pathfinder.set_plan(plan);
+                    mover.unit_mut().movement_plan.set(plan);
                 }
             }
             Command::Attack(AttackCommand {
@@ -368,10 +390,14 @@ impl Core {
                 assert_eq!(attacker.team, issuing_team);
                 attacker.state = EntityState::Attacking(victim_id);
                 let attacker_pos = attacker.position;
-                attacker
-                    .unit_mut()
-                    .pathfinder
-                    .find_path(&attacker_pos, victim_pos);
+
+                if let Some(plan) = pathfind::find_path(attacker_pos, victim_pos, &self.entity_grid)
+                {
+                    self.entity_mut(attacker_id)
+                        .unit_mut()
+                        .movement_plan
+                        .set(plan);
+                }
             }
             Command::GatherResource(GatherResourceCommand {
                 gatherer_id,
@@ -396,7 +422,16 @@ impl Core {
                     );
                     return;
                 }
-                Core::unit_gather_resource(gatherer, resource_id, resource_pos);
+                gatherer.state = EntityState::GatheringResource(resource_id);
+
+                if let Some(plan) =
+                    pathfind::find_path(gatherer.position, resource_pos, &self.entity_grid)
+                {
+                    self.entity_mut(gatherer_id)
+                        .unit_mut()
+                        .movement_plan
+                        .set(plan);
+                }
             }
             Command::ReturnResource(ReturnResourceCommand {
                 gatherer_id,
@@ -450,23 +485,18 @@ impl Core {
         if let Some((structure_id, structure_pos)) = structure_id_and_pos {
             gatherer.state = EntityState::ReturningResource(structure_id);
             let gatherer_pos = gatherer.position;
-            gatherer
-                .unit_mut()
-                .pathfinder
-                .find_path(&gatherer_pos, structure_pos);
+
+            if let Some(plan) = pathfind::find_path(gatherer_pos, structure_pos, &self.entity_grid)
+            {
+                self.entity_mut(gatherer_id)
+                    .unit_mut()
+                    .movement_plan
+                    .set(plan);
+            }
         } else {
             gatherer.state = EntityState::Idle;
             eprintln!("WARN: Couldn't return resource. No structure found?");
         }
-    }
-
-    fn unit_gather_resource(gatherer: &mut Entity, resource_id: EntityId, resource_pos: [u32; 2]) {
-        gatherer.state = EntityState::GatheringResource(resource_id);
-        let gatherer_pos = gatherer.position;
-        gatherer
-            .unit_mut()
-            .pathfinder
-            .find_path(&gatherer_pos, resource_pos);
     }
 
     pub fn team_state(&self, team: &Team) -> &TeamState {

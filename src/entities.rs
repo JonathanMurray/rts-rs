@@ -1,4 +1,4 @@
-use std::cmp::{min, Ordering};
+use std::cmp::min;
 use std::collections::HashMap;
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Duration;
@@ -178,7 +178,7 @@ pub enum EntitySprite {
 #[derive(Debug)]
 pub struct UnitComponent {
     pub sub_cell_movement: SubCellMovement,
-    pub pathfinder: Pathfinder,
+    pub movement_plan: MovementPlan,
     pub combat: Option<Combat>,
     pub gathering: Option<Gathering>,
 }
@@ -192,7 +192,7 @@ impl UnitComponent {
     ) -> Self {
         Self {
             sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
-            pathfinder: Pathfinder::new(),
+            movement_plan: MovementPlan::new(),
             combat,
             gathering,
         }
@@ -200,11 +200,11 @@ impl UnitComponent {
 }
 
 #[derive(Debug)]
-pub struct Pathfinder {
+pub struct MovementPlan {
     movement_plan: Vec<[u32; 2]>,
 }
 
-impl Pathfinder {
+impl MovementPlan {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
@@ -212,35 +212,15 @@ impl Pathfinder {
         }
     }
 
-    pub fn set_plan(&mut self, movement_plan: Vec<[u32; 2]>) {
+    pub fn set(&mut self, movement_plan: Vec<[u32; 2]>) {
         self.movement_plan = movement_plan;
     }
 
-    pub fn find_path(&mut self, current_pos: &[u32; 2], destination: [u32; 2]) {
-        let [mut x, mut y] = current_pos;
-        let mut plan = Vec::new();
-        while [x, y] != destination {
-            match destination[0].cmp(&x) {
-                Ordering::Less => x -= 1,
-                Ordering::Greater => x += 1,
-                Ordering::Equal => {}
-            };
-            match destination[1].cmp(&y) {
-                Ordering::Less => y -= 1,
-                Ordering::Greater => y += 1,
-                Ordering::Equal => {}
-            };
-            plan.push([x, y]);
-        }
-        plan.reverse();
-        self.movement_plan = plan;
-    }
-
-    pub fn peek_path(&self) -> Option<&[u32; 2]> {
+    pub fn peek(&self) -> Option<&[u32; 2]> {
         self.movement_plan.last()
     }
 
-    pub fn advance_path(&mut self) -> [u32; 2] {
+    pub fn advance(&mut self) -> [u32; 2] {
         self.movement_plan.pop().expect("Can't advance empty path")
     }
 

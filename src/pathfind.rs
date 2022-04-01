@@ -3,6 +3,12 @@ use std::cmp::{Eq, Ordering};
 use std::collections::binary_heap::BinaryHeap;
 use std::collections::HashMap;
 
+// TODO: we should allow searching for a path that leads to a cell adjacent to
+//       another entity. That mode should be used for attacking, gathering,
+//       returning with resource, etc. As it is now, a unit may search to the
+//       top-left corner of a structure, which is occupied, and not find a
+//       path.
+
 pub fn find_path(start: [u32; 2], goal: [u32; 2], grid: &EntityGrid) -> Option<Vec<[u32; 2]>> {
     if distance(start, goal) < 10.0 {
         a_star(start, goal, grid)
