@@ -42,7 +42,7 @@ impl HudGraphics {
         let button_3 = Button::new(ctx, button_3_rect)?;
         let buttons = [button_1, button_2, button_3];
 
-        let minimap_pos = [900.0, position[1] + 100.0];
+        let minimap_pos = [900.0, position[1] + 30.0];
         let minimap = Minimap::new(ctx, minimap_pos, world_dimensions)?;
 
         let keycode_labels = create_keycode_labels(font);
@@ -352,13 +352,13 @@ struct Minimap {
 
 impl Minimap {
     fn new(ctx: &mut Context, position: [f32; 2], world_dimensions: [u32; 2]) -> GameResult<Self> {
-        let cell_pixel_size_in_minimap = 8.0;
-
+        let minimap_width = 300.0;
+        let aspect_ratio = world_dimensions[0] as f32 / world_dimensions[1] as f32;
         let rect = Rect::new(
             position[0],
             position[1],
-            world_dimensions[0] as f32 * cell_pixel_size_in_minimap,
-            world_dimensions[1] as f32 * cell_pixel_size_in_minimap,
+            minimap_width,
+            minimap_width / aspect_ratio,
         );
 
         let border_mesh = MeshBuilder::new()
@@ -366,8 +366,8 @@ impl Minimap {
             .build(ctx)?;
 
         let camera_scale = [
-            cell_pixel_size_in_minimap / CELL_PIXEL_SIZE[0],
-            cell_pixel_size_in_minimap / CELL_PIXEL_SIZE[1],
+            minimap_width / world_dimensions[0] as f32 / CELL_PIXEL_SIZE[0],
+            minimap_width / world_dimensions[0] as f32 / CELL_PIXEL_SIZE[1],
         ];
         let camera_mesh = MeshBuilder::new()
             .rectangle(

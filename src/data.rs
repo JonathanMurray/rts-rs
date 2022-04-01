@@ -84,10 +84,10 @@ impl WorldInitData {
             }
             MapType::LoadTest => {
                 let mut rng = rand::thread_rng();
-                let dimensions = [50, 25];
+                let dimensions = [100, 100];
                 for y in 5..dimensions[1] {
                     for x in 5..dimensions[0] {
-                        if rng.gen_bool(0.6) {
+                        if rng.gen_bool(0.2) {
                             let team = if rng.gen_bool(0.5) {
                                 Team::Player
                             } else {

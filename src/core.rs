@@ -107,10 +107,10 @@ impl Core {
                 let attacker = self.entity_mut(attacker_id);
                 attacker.state = EntityState::Idle;
                 attacker.unit_mut().pathfinder.clear();
-                println!(
-                    "{:?} doesn't exist so {:?} went back to idling",
-                    victim_id, attacker_id
-                );
+                // println!(
+                //     "{:?} doesn't exist so {:?} went back to idling",
+                //     victim_id, attacker_id
+                // );
             }
         }
 

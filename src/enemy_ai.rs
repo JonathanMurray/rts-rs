@@ -25,7 +25,7 @@ impl EnemyPlayerAi {
         if self.timer_s <= 0.0 {
             self.timer_s = 1.0;
             for entity in entities {
-                if entity.team == Team::Enemy && rng.gen_bool(0.5) {
+                if entity.team == Team::Enemy && rng.gen_bool(0.2) {
                     for action in entity.actions.iter().flatten() {
                         if action == &Action::Attack && rng.gen_bool(0.8) {
                             if let Some(player_entity) =
