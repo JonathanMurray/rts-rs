@@ -60,6 +60,11 @@ impl WorldInitData {
             },
             MapType::Small => {
                 entities.push(create_entity(EntityType::CircleUnit, [7, 7], Team::Enemy));
+                entities.push(create_entity(
+                    EntityType::LargeBuilding,
+                    [6, 8],
+                    Team::Enemy,
+                ));
                 Self {
                     dimensions: [30, 20],
                     entities,

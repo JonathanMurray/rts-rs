@@ -3,20 +3,21 @@ use std::cmp::{Eq, Ordering};
 use std::collections::binary_heap::BinaryHeap;
 use std::collections::HashMap;
 
-// TODO: we should allow searching for a path that leads to a cell adjacent to
-//       another entity. That mode should be used for attacking, gathering,
-//       returning with resource, etc. As it is now, a unit may search to the
-//       top-left corner of a structure, which is occupied, and not find a
-//       path.
-
-pub fn find_path(start: [u32; 2], goal: [u32; 2], grid: &EntityGrid) -> Option<Vec<[u32; 2]>> {
-    if distance(start, goal) < 10.0 {
-        a_star(start, goal, grid)
+pub fn find_path(
+    start: [u32; 2],
+    destination: Destination,
+    grid: &EntityGrid,
+) -> Option<Vec<[u32; 2]>> {
+    let center = destination.center();
+    let rect = destination.rect();
+    //println!("Finding path from {:?} to {:?}, i.e. {:?}", start, destination, rect);
+    if rect.distance(start) < 10.0 {
+        a_star(start, rect, grid)
     } else {
         // Especially when AI moves a lot of units at the exact same time,
         // our frame-rate takes a big hit, so we fall back to a naive version for
         // long paths.
-        Some(naive_path(start, goal))
+        Some(naive_path(start, center))
     }
 }
 
@@ -40,12 +41,12 @@ fn naive_path(start: [u32; 2], goal: [u32; 2]) -> Vec<[u32; 2]> {
     plan
 }
 
-fn a_star(start: [u32; 2], goal: [u32; 2], grid: &EntityGrid) -> Option<Vec<[u32; 2]>> {
+fn a_star(start: [u32; 2], destination: Rect, grid: &EntityGrid) -> Option<Vec<[u32; 2]>> {
     let [w, h] = grid.dimensions;
 
     let mut open_set = BinaryHeap::new();
     //println!("open_set={:?}", open_set);
-    open_set.push(RatedNode(start, distance(start, goal)));
+    open_set.push(RatedNode(start, destination.distance(start)));
     let mut came_from: HashMap<[u32; 2], [u32; 2]> = Default::default();
 
     let mut shortest_known_to: HashMap<[u32; 2], f32> = Default::default();
@@ -55,7 +56,7 @@ fn a_star(start: [u32; 2], goal: [u32; 2], grid: &EntityGrid) -> Option<Vec<[u32
     while !open_set.is_empty() {
         let RatedNode(current, _) = open_set.pop().unwrap();
         // println!("current={:?}", current);
-        if current == goal {
+        if destination.contains(current) {
             return Some(reconstruct_path(came_from, current));
         }
 
@@ -83,7 +84,7 @@ fn a_star(start: [u32; 2], goal: [u32; 2], grid: &EntityGrid) -> Option<Vec<[u32
                                 shortest_known_to.insert(neighbor, maybe_shortest_to_neighbor);
                                 // println!("shortest_known_to={:?}", shortest_known_to);
                                 let rating_of_neighbor =
-                                    maybe_shortest_to_neighbor + distance(neighbor, goal);
+                                    maybe_shortest_to_neighbor + destination.distance(neighbor);
                                 open_set.push(RatedNode(neighbor, rating_of_neighbor));
                             }
                         }
@@ -96,9 +97,94 @@ fn a_star(start: [u32; 2], goal: [u32; 2], grid: &EntityGrid) -> Option<Vec<[u32
     None
 }
 
-fn distance(cell: [u32; 2], goal: [u32; 2]) -> f32 {
-    (((cell[0] as i32 - goal[0] as i32).pow(2) + (cell[1] as i32 - goal[1] as i32).pow(2)) as f32)
-        .sqrt()
+#[derive(Debug)]
+pub enum Destination {
+    Point([u32; 2]),
+    AdjacentToEntity([u32; 2], [u32; 2]),
+}
+
+impl Destination {
+    fn center(&self) -> [u32; 2] {
+        match &self {
+            Destination::Point(p) => *p,
+            Destination::AdjacentToEntity(position, size) => [
+                position[0] + (size[0] as f32 / 2.0) as u32,
+                position[1] + (size[1] as f32 / 2.0) as u32,
+            ],
+        }
+    }
+
+    fn rect(&self) -> Rect {
+        match self {
+            Destination::Point(position) => Rect {
+                left: position[0],
+                top: position[1],
+                right: position[0],
+                bottom: position[1],
+            },
+            Destination::AdjacentToEntity(position, size) => Rect {
+                left: position[0] - 1,
+                top: position[1] - 1,
+                right: position[0] + size[0],
+                bottom: position[1] + size[1],
+            },
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
+struct Rect {
+    left: u32,
+    top: u32,
+    right: u32,
+    bottom: u32,
+}
+
+impl Rect {
+    fn distance(&self, cell: [u32; 2]) -> f32 {
+        if cell[0] < self.left {
+            // cell is some west
+            if cell[1] < self.top {
+                //cell is north-west
+                distance(cell, [self.left, self.top])
+            } else if cell[1] > self.bottom {
+                //cell is south-west
+                distance(cell, [self.left, self.bottom])
+            } else {
+                //cell is west
+                distance(cell, [self.left, cell[1]])
+            }
+        } else if cell[0] > self.right {
+            // cell is some east
+            if cell[1] < self.top {
+                //cell is north-east
+                distance(cell, [self.right, self.top])
+            } else if cell[1] > self.bottom {
+                //cell is south-east
+                distance(cell, [self.right, self.bottom])
+            } else {
+                //cell is east
+                distance(cell, [self.right, cell[1]])
+            }
+        } else if cell[1] < self.top {
+            // cell is north
+            distance(cell, [cell[0], self.top])
+        } else {
+            // cell is south
+            distance(cell, [cell[0], self.bottom])
+        }
+    }
+
+    fn contains(&self, cell: [u32; 2]) -> bool {
+        cell[0] >= self.left
+            && cell[1] >= self.top
+            && cell[0] <= self.right
+            && cell[1] <= self.bottom
+    }
+}
+
+fn distance(a: [u32; 2], b: [u32; 2]) -> f32 {
+    (((a[0] as i32 - b[0] as i32).pow(2) + (a[1] as i32 - b[1] as i32).pow(2)) as f32).sqrt()
 }
 
 fn neighbor_distance(cell: [u32; 2], neighbor: [u32; 2]) -> f32 {
@@ -150,7 +236,7 @@ mod test {
     #[test]
     fn trivial_straight_line_path() {
         let grid = EntityGrid::new([10, 10]);
-        let path = find_path([0, 0], [2, 0], &grid);
+        let path = find_path([0, 0], Destination::Point([2, 0]), &grid);
         let expected = vec![[2, 0], [1, 0]];
         assert_eq!(path, Some(expected));
     }
@@ -158,7 +244,7 @@ mod test {
     #[test]
     fn diagonal_line_path() {
         let grid = EntityGrid::new([10, 10]);
-        let path = find_path([0, 0], [2, 2], &grid);
+        let path = find_path([0, 0], Destination::Point([2, 2]), &grid);
         let expected = vec![[2, 2], [1, 1]];
         assert_eq!(path, Some(expected));
     }
@@ -167,7 +253,7 @@ mod test {
     fn path_going_around_obstacle() {
         let mut grid = EntityGrid::new([10, 10]);
         grid.set([1, 0], true);
-        let path = find_path([0, 0], [2, 0], &grid);
+        let path = find_path([0, 0], Destination::Point([2, 0]), &grid);
         let expected = vec![[2, 0], [1, 1]];
         assert_eq!(path, Some(expected));
     }
@@ -177,7 +263,7 @@ mod test {
         let mut grid = EntityGrid::new([10, 2]);
         grid.set([2, 0], true);
         grid.set([2, 1], true);
-        let path = find_path([0, 0], [4, 0], &grid);
+        let path = find_path([0, 0], Destination::Point([4, 0]), &grid);
         assert_eq!(path, None);
     }
 
@@ -190,7 +276,7 @@ mod test {
         grid.set([4, 3], true);
         grid.set([4, 2], true);
         grid.set([4, 1], true);
-        let path = find_path([0, 0], [6, 3], &grid).unwrap();
+        let path = find_path([0, 0], Destination::Point([6, 3]), &grid).unwrap();
         visualize_path(&grid, &path[..]);
         let expected = vec![
             [6, 3],

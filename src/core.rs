@@ -8,7 +8,7 @@ use crate::entities::{
     TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::grid::EntityGrid;
-use crate::pathfind;
+use crate::pathfind::{self, Destination};
 
 pub struct Core {
     teams: HashMap<Team, TeamState>,
@@ -84,7 +84,8 @@ impl Core {
             let attacker_pos = self.entity_mut(attacker_id).position;
             if let Some(victim) = self.entities.iter_mut().find(|e| e.id == victim_id) {
                 let victim_pos = victim.position;
-                if is_unit_within_melee_range_of(attacker_pos, victim_pos, victim.size()) {
+                let victim_size = victim.size();
+                if is_unit_within_melee_range_of(attacker_pos, victim_pos, victim_size) {
                     let health = victim.health.as_mut().expect("victim without health");
                     health.receive_damage(damage_amount);
                     println!(
@@ -100,9 +101,11 @@ impl Core {
                 } else {
                     let attacker = self.entity_mut(attacker_id).unit_mut();
                     if attacker.movement_plan.peek().is_none() {
-                        if let Some(plan) =
-                            pathfind::find_path(attacker_pos, victim_pos, &self.entity_grid)
-                        {
+                        if let Some(plan) = pathfind::find_path(
+                            attacker_pos,
+                            Destination::AdjacentToEntity(victim_pos, victim_size),
+                            &self.entity_grid,
+                        ) {
                             self.entity_mut(attacker_id)
                                 .unit_mut()
                                 .movement_plan
@@ -185,7 +188,9 @@ impl Core {
                 let returner = self.entity_mut(returner_id);
                 let gathering = returner.unit_mut().gathering.as_mut().unwrap();
                 let resource_id = gathering.drop_resource();
-                let resource_pos = self.entity_mut(resource_id).position;
+                let resource = self.entity_mut(resource_id);
+                let resource_pos = resource.position;
+                let resource_size = resource.size();
                 let team = self.teams.get_mut(&returner_team).unwrap();
                 team.resources += 1;
                 println!("Resources: {}", team.resources);
@@ -198,9 +203,11 @@ impl Core {
 
                 returner.state = EntityState::GatheringResource(resource_id);
 
-                if let Some(plan) =
-                    pathfind::find_path(returner.position, resource_pos, &self.entity_grid)
-                {
+                if let Some(plan) = pathfind::find_path(
+                    returner.position,
+                    Destination::AdjacentToEntity(resource_pos, resource_size),
+                    &self.entity_grid,
+                ) {
                     self.entity_mut(returner_id)
                         .unit_mut()
                         .movement_plan
@@ -344,9 +351,13 @@ impl Core {
                 let builder_pos = builder.position;
                 builder.state = EntityState::Constructing(structure_type);
 
-                if let Some(plan) =
-                    pathfind::find_path(builder_pos, construction_position, &self.entity_grid)
-                {
+                let size = *self.structure_sizes.get(&structure_type).unwrap();
+
+                if let Some(plan) = pathfind::find_path(
+                    builder_pos,
+                    Destination::AdjacentToEntity(construction_position, size),
+                    &self.entity_grid,
+                ) {
                     self.entity_mut(builder_id)
                         .unit_mut()
                         .movement_plan
@@ -372,8 +383,11 @@ impl Core {
                 assert_eq!(mover.team, issuing_team);
                 let current_pos = mover.position;
 
-                if let Some(plan) = pathfind::find_path(current_pos, destination, &self.entity_grid)
-                {
+                if let Some(plan) = pathfind::find_path(
+                    current_pos,
+                    Destination::Point(destination),
+                    &self.entity_grid,
+                ) {
                     let mover = self.entity_mut(unit_id);
                     mover.state = EntityState::Moving;
                     mover.unit_mut().movement_plan.set(plan);
@@ -386,13 +400,17 @@ impl Core {
                 let victim = self.entity_mut(victim_id);
                 assert_ne!(victim.team, issuing_team);
                 let victim_pos = victim.position;
+                let victim_size = victim.size();
                 let attacker = self.entity_mut(attacker_id);
                 assert_eq!(attacker.team, issuing_team);
                 attacker.state = EntityState::Attacking(victim_id);
                 let attacker_pos = attacker.position;
 
-                if let Some(plan) = pathfind::find_path(attacker_pos, victim_pos, &self.entity_grid)
-                {
+                if let Some(plan) = pathfind::find_path(
+                    attacker_pos,
+                    Destination::AdjacentToEntity(victim_pos, victim_size),
+                    &self.entity_grid,
+                ) {
                     self.entity_mut(attacker_id)
                         .unit_mut()
                         .movement_plan
@@ -406,6 +424,7 @@ impl Core {
                 let resource = self.entity_mut(resource_id);
                 assert_eq!(resource.team, Team::Neutral);
                 let resource_pos = resource.position;
+                let resource_size = resource.size();
                 let gatherer = self.entity_mut(gatherer_id);
                 assert_eq!(gatherer.team, issuing_team);
                 if gatherer
@@ -424,9 +443,11 @@ impl Core {
                 }
                 gatherer.state = EntityState::GatheringResource(resource_id);
 
-                if let Some(plan) =
-                    pathfind::find_path(gatherer.position, resource_pos, &self.entity_grid)
-                {
+                if let Some(plan) = pathfind::find_path(
+                    gatherer.position,
+                    Destination::AdjacentToEntity(resource_pos, resource_size),
+                    &self.entity_grid,
+                ) {
                     self.entity_mut(gatherer_id)
                         .unit_mut()
                         .movement_plan
@@ -460,34 +481,37 @@ impl Core {
         team: Team,
         structure_id: Option<EntityId>,
     ) {
-        let structure_id_and_pos = match structure_id {
+        let structure_id_pos_size = match structure_id {
             Some(structure_id) => {
                 let structure = self.entity_mut(structure_id);
-                Some((structure_id, structure.position))
+                Some((structure_id, structure.position, structure.size()))
             }
             None => {
                 // No specific structure was selected as the destination, so we pick one
-                let mut structure_id_and_pos = None;
+                let mut structure_id_pos_size = None;
                 for entity in &self.entities {
                     if entity.team == team {
                         // For now, resources can be returned to any friendly structure
-                        if let PhysicalType::Structure { .. } = entity.physical_type {
+                        if let PhysicalType::Structure { size } = entity.physical_type {
                             //TODO find the closest structure
-                            structure_id_and_pos = Some((entity.id, entity.position));
+                            structure_id_pos_size = Some((entity.id, entity.position, size));
                         }
                     }
                 }
-                structure_id_and_pos
+                structure_id_pos_size
             }
         };
 
         let gatherer = self.entity_mut(gatherer_id);
-        if let Some((structure_id, structure_pos)) = structure_id_and_pos {
+        if let Some((structure_id, structure_pos, structure_size)) = structure_id_pos_size {
             gatherer.state = EntityState::ReturningResource(structure_id);
             let gatherer_pos = gatherer.position;
 
-            if let Some(plan) = pathfind::find_path(gatherer_pos, structure_pos, &self.entity_grid)
-            {
+            if let Some(plan) = pathfind::find_path(
+                gatherer_pos,
+                Destination::AdjacentToEntity(structure_pos, structure_size),
+                &self.entity_grid,
+            ) {
                 self.entity_mut(gatherer_id)
                     .unit_mut()
                     .movement_plan
