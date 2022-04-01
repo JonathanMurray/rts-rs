@@ -17,7 +17,7 @@ pub struct EntityId(usize);
 pub enum EntityState {
     Idle,
     TrainingUnit(EntityType),
-    Constructing(EntityType),
+    Constructing(EntityType, [u32; 2]),
     Moving,
     Attacking(EntityId),
     GatheringResource(EntityId),

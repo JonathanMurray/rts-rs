@@ -213,25 +213,30 @@ impl Core {
         let mut builders_to_remove = Vec::new();
         let mut structures_to_add = Vec::new();
         for entity in &mut self.entities {
-            if let EntityState::Constructing(structure_type) = entity.state {
+            if let EntityState::Constructing(structure_type, structure_position) = entity.state {
                 if entity.unit_mut().movement_plan.peek().is_none() {
-                    let position = entity.position;
+                    let builder_pos = entity.position;
                     let size = self.structure_sizes.get(&structure_type).unwrap();
                     let mut sufficient_space = true;
-                    for x in position[0]..position[0] + size[0] {
-                        for y in position[1]..position[1] + size[1] {
-                            if [x, y] != position {
+                    println!(
+                        "Check if structure can fit. Worker pos: {:?}, Structure pos: {:?}, Structure size: {:?}",
+                        builder_pos, structure_position, size
+                    );
+                    for x in structure_position[0]..structure_position[0] + size[0] {
+                        for y in structure_position[1]..structure_position[1] + size[1] {
+                            if [x, y] != builder_pos {
                                 // Don't check for collision on the cell that the builder stands on,
                                 // since it will be removed when structure is added.
                                 if self.entity_grid.get(&[x, y]) {
                                     sufficient_space = false;
+                                    println!("Not enough space. Occupied cell: {:?}", [x, y]);
                                 }
                             }
                         }
                     }
                     if sufficient_space {
                         builders_to_remove.push(entity.id);
-                        structures_to_add.push((entity.team, position, structure_type));
+                        structures_to_add.push((entity.team, structure_position, structure_type));
                     } else {
                         println!("There's not enough space for the structure, so builder goes back to idling");
                         entity.state = EntityState::Idle;
@@ -334,19 +339,19 @@ impl Core {
             }
             Command::Construct(ConstructCommand {
                 builder_id,
-                construction_position,
+                structure_position,
                 structure_type,
             }) => {
                 let builder = self.entity_mut(builder_id);
                 assert_eq!(builder.team, issuing_team);
                 let builder_pos = builder.position;
-                builder.state = EntityState::Constructing(structure_type);
+                builder.state = EntityState::Constructing(structure_type, structure_position);
 
                 let size = *self.structure_sizes.get(&structure_type).unwrap();
 
                 if let Some(plan) = pathfind::find_path(
                     builder_pos,
-                    Destination::AdjacentToEntity(construction_position, size),
+                    Destination::AdjacentToEntity(structure_position, size),
                     &self.entity_grid,
                 ) {
                     self.entity_mut(builder_id)
@@ -640,7 +645,7 @@ pub struct TrainCommand {
 #[derive(Debug)]
 pub struct ConstructCommand {
     pub builder_id: EntityId,
-    pub construction_position: [u32; 2],
+    pub structure_position: [u32; 2],
     pub structure_type: EntityType,
 }
 

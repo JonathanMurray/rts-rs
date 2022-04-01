@@ -545,7 +545,7 @@ impl EventHandler for Game {
                     self.core.issue_command(
                         Command::Construct(ConstructCommand {
                             builder_id: entity_id,
-                            construction_position: clicked_world_pos,
+                            structure_position: clicked_world_pos,
                             structure_type,
                         }),
                         Team::Player,

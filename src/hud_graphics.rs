@@ -165,10 +165,12 @@ impl HudGraphics {
                                     }
                                 }
                                 Action::Construct(structure_type) => {
-                                    if selected_entity.state
-                                        == EntityState::Constructing(*structure_type)
+                                    if let EntityState::Constructing(constructing_type, _) =
+                                        selected_entity.state
                                     {
-                                        button_states[i].matches_entity_state = true;
+                                        if constructing_type == *structure_type {
+                                            button_states[i].matches_entity_state = true;
+                                        }
                                     }
                                     if cursor_action
                                         == &CursorAction::PlaceStructure(*structure_type)
