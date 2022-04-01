@@ -11,7 +11,10 @@ use std::time::Duration;
 
 use crate::assets::Assets;
 use crate::camera::Camera;
-use crate::core::{Command, Core};
+use crate::core::{
+    AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, MoveCommand,
+    ReturnResourceCommand, TrainCommand,
+};
 use crate::data::{EntityType, MapType, WorldInitData};
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{Action, Entity, EntityId, PhysicalType, Team};
@@ -210,9 +213,13 @@ impl Game {
         action: Action,
     ) {
         match action {
-            Action::Train(unit_type, training_config) => {
+            Action::Train(trained_unit_type, config) => {
                 self.core.issue_command(
-                    Command::Train(actor_id, unit_type, training_config),
+                    Command::Train(TrainCommand {
+                        trainer_id: actor_id,
+                        trained_unit_type,
+                        config,
+                    }),
                     Team::Player,
                 );
             }
@@ -237,8 +244,13 @@ impl Game {
                     .set_cursor_action(ctx, CursorAction::SelectResourceTarget);
             }
             Action::ReturnResource => {
-                self.core
-                    .issue_command(Command::ReturnResource(actor_id, None), Team::Player);
+                self.core.issue_command(
+                    Command::ReturnResource(ReturnResourceCommand {
+                        gatherer_id: actor_id,
+                        structure_id: None,
+                    }),
+                    Team::Player,
+                );
             }
         }
     }
@@ -316,8 +328,13 @@ impl Game {
             .movement_command_indicator
             .set(world_pixel_coordinates);
         let destination = world_to_grid(world_pixel_coordinates);
-        self.core
-            .issue_command(Command::Move(entity_id, destination), Team::Player);
+        self.core.issue_command(
+            Command::Move(MoveCommand {
+                unit_id: entity_id,
+                destination,
+            }),
+            Team::Player,
+        );
     }
 
     fn screen_to_grid(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
@@ -461,7 +478,10 @@ impl EventHandler for Game {
                                     {
                                         // TODO: highlight attacked entity temporarily
                                         self.core.issue_command(
-                                            Command::Attack(entity_id, victim_id),
+                                            Command::Attack(AttackCommand {
+                                                attacker_id: entity_id,
+                                                victim_id,
+                                            }),
                                             Team::Player,
                                         );
                                         return;
@@ -472,7 +492,10 @@ impl EventHandler for Game {
                                         self.resource_at_position(clicked_world_pos)
                                     {
                                         self.core.issue_command(
-                                            Command::GatherResource(entity_id, resource_id),
+                                            Command::GatherResource(GatherResourceCommand {
+                                                gatherer_id: entity_id,
+                                                resource_id,
+                                            }),
                                             Team::Player,
                                         );
                                         return;
@@ -481,7 +504,10 @@ impl EventHandler for Game {
                                         self.player_structure_at_position(clicked_world_pos)
                                     {
                                         self.core.issue_command(
-                                            Command::ReturnResource(entity_id, Some(structure_id)),
+                                            Command::ReturnResource(ReturnResourceCommand {
+                                                gatherer_id: entity_id,
+                                                structure_id: Some(structure_id),
+                                            }),
                                             Team::Player,
                                         );
                                         return;
@@ -517,7 +543,11 @@ impl EventHandler for Game {
                         .selected_entity_id
                         .expect("Cannot issue construction without selected entity");
                     self.core.issue_command(
-                        Command::Construct(entity_id, clicked_world_pos, structure_type),
+                        Command::Construct(ConstructCommand {
+                            builder_id: entity_id,
+                            construction_position: clicked_world_pos,
+                            structure_type,
+                        }),
                         Team::Player,
                     );
                     self.player_state
@@ -531,8 +561,13 @@ impl EventHandler for Game {
                             .selected_entity_id
                             .expect("Cannot attack without selected entity");
                         // TODO: highlight attacked entity temporarily
-                        self.core
-                            .issue_command(Command::Attack(attacker_id, victim_id), Team::Player);
+                        self.core.issue_command(
+                            Command::Attack(AttackCommand {
+                                attacker_id,
+                                victim_id,
+                            }),
+                            Team::Player,
+                        );
                     } else {
                         println!("Invalid attack target");
                     }
@@ -546,7 +581,10 @@ impl EventHandler for Game {
                             .selected_entity_id
                             .expect("Cannot gather without selected entity");
                         self.core.issue_command(
-                            Command::GatherResource(gatherer_id, resource_id),
+                            Command::GatherResource(GatherResourceCommand {
+                                gatherer_id,
+                                resource_id,
+                            }),
                             Team::Player,
                         );
                     } else {

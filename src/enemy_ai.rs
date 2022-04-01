@@ -2,7 +2,7 @@ use rand::rngs::ThreadRng;
 use rand::Rng;
 use std::time::Duration;
 
-use crate::core::Command;
+use crate::core::{AttackCommand, Command, MoveCommand, TrainCommand};
 use crate::entities::{Action, Entity, Team};
 
 pub struct EnemyPlayerAi {
@@ -31,18 +31,28 @@ impl EnemyPlayerAi {
                             if let Some(player_entity) =
                                 entities.iter().find(|e| e.team == Team::Player)
                             {
-                                commands.push(Command::Attack(entity.id, player_entity.id));
+                                commands.push(Command::Attack(AttackCommand {
+                                    attacker_id: entity.id,
+                                    victim_id: player_entity.id,
+                                }));
                                 break;
                             }
                         }
                         if action == &Action::Move && rng.gen_bool(0.3) {
                             let x: u32 = rng.gen_range(0..self.world_dimensions[0]);
                             let y: u32 = rng.gen_range(0..self.world_dimensions[1]);
-                            commands.push(Command::Move(entity.id, [x, y]));
+                            commands.push(Command::Move(MoveCommand {
+                                unit_id: entity.id,
+                                destination: [x, y],
+                            }));
                             break;
                         }
-                        if let &Action::Train(entity_type, config) = action {
-                            commands.push(Command::Train(entity.id, entity_type, config));
+                        if let &Action::Train(trained_unit_type, config) = action {
+                            commands.push(Command::Train(TrainCommand {
+                                trainer_id: entity.id,
+                                trained_unit_type,
+                                config,
+                            }));
                             break;
                         }
                     }

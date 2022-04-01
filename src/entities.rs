@@ -426,7 +426,9 @@ pub struct Gathering {
 
 impl Gathering {
     fn new() -> Self {
-        Self { held_resource: None }
+        Self {
+            held_resource: None,
+        }
     }
 
     pub fn is_carrying(&self) -> bool {

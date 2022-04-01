@@ -295,7 +295,11 @@ impl Core {
 
     pub fn issue_command(&mut self, command: Command, issuing_team: Team) {
         match command {
-            Command::Train(trainer_id, trained_entity_type, config) => {
+            Command::Train(TrainCommand {
+                trainer_id,
+                trained_unit_type,
+                config,
+            }) => {
                 let resources = self.teams.get(&issuing_team).unwrap().resources;
                 let trainer = self.entity_mut(trainer_id);
                 assert_eq!(trainer.team, issuing_team);
@@ -305,25 +309,32 @@ impl Core {
                     .expect("Training command was issued for entity that can't train");
                 if resources >= config.cost {
                     if let TrainingPerformStatus::NewTrainingStarted =
-                        training.try_start(trained_entity_type)
+                        training.try_start(trained_unit_type)
                     {
-                        trainer.state = EntityState::TrainingUnit(trained_entity_type);
+                        trainer.state = EntityState::TrainingUnit(trained_unit_type);
                         self.teams.get_mut(&issuing_team).unwrap().resources -= config.cost;
                     }
                 }
             }
-            Command::Construct(builder_id, construction_position, construction_type) => {
+            Command::Construct(ConstructCommand {
+                builder_id,
+                construction_position,
+                structure_type,
+            }) => {
                 let builder = self.entity_mut(builder_id);
                 assert_eq!(builder.team, issuing_team);
                 let builder_pos = builder.position;
-                builder.state = EntityState::Constructing(construction_type);
+                builder.state = EntityState::Constructing(structure_type);
                 builder
                     .unit_mut()
                     .pathfinder
                     .find_path(&builder_pos, construction_position);
             }
-            Command::Move(mover_id, destination) => {
-                let mover = self.entity_mut(mover_id);
+            Command::Move(MoveCommand {
+                unit_id,
+                destination,
+            }) => {
+                let mover = self.entity_mut(unit_id);
                 assert_eq!(mover.team, issuing_team);
                 let current_pos = mover.position;
                 mover.state = EntityState::Moving;
@@ -343,7 +354,10 @@ impl Core {
                 let health = healer.health.as_mut().unwrap();
                 health.receive_healing(1);
             }
-            Command::Attack(attacker_id, victim_id) => {
+            Command::Attack(AttackCommand {
+                attacker_id,
+                victim_id,
+            }) => {
                 let victim = self.entity_mut(victim_id);
                 assert_ne!(victim.team, issuing_team);
                 let victim_pos = victim.position;
@@ -356,7 +370,10 @@ impl Core {
                     .pathfinder
                     .find_path(&attacker_pos, victim_pos);
             }
-            Command::GatherResource(gatherer_id, resource_id) => {
+            Command::GatherResource(GatherResourceCommand {
+                gatherer_id,
+                resource_id,
+            }) => {
                 let resource = self.entity_mut(resource_id);
                 assert_eq!(resource.team, Team::Neutral);
                 let resource_pos = resource.position;
@@ -378,7 +395,10 @@ impl Core {
                 }
                 Core::unit_gather_resource(gatherer, resource_id, resource_pos);
             }
-            Command::ReturnResource(gatherer_id, structure_id) => {
+            Command::ReturnResource(ReturnResourceCommand {
+                gatherer_id,
+                structure_id,
+            }) => {
                 let gatherer = self.entity_mut(gatherer_id);
                 assert_eq!(gatherer.team, issuing_team);
 
@@ -391,7 +411,6 @@ impl Core {
                         "WARN: {:?} was issued to return a resource, but they don't carry any",
                         gatherer_id
                     );
-                    return;
                 }
             }
         }
@@ -530,13 +549,51 @@ fn square_distance(a: [u32; 2], b: [u32; 2]) -> u32 {
 
 #[derive(Debug)]
 pub enum Command {
-    Train(EntityId, EntityType, TrainingConfig),
-    Construct(EntityId, [u32; 2], EntityType),
-    Move(EntityId, [u32; 2]),
+    Train(TrainCommand),
+    Construct(ConstructCommand),
+    Move(MoveCommand),
     Heal(EntityId),
-    Attack(EntityId, EntityId),
-    GatherResource(EntityId, EntityId),
-    ReturnResource(EntityId, Option<EntityId>),
+    Attack(AttackCommand),
+    GatherResource(GatherResourceCommand),
+    ReturnResource(ReturnResourceCommand),
+}
+
+#[derive(Debug)]
+pub struct MoveCommand {
+    pub unit_id: EntityId,
+    pub destination: [u32; 2],
+}
+
+#[derive(Debug)]
+pub struct AttackCommand {
+    pub attacker_id: EntityId,
+    pub victim_id: EntityId,
+}
+
+#[derive(Debug)]
+pub struct GatherResourceCommand {
+    pub gatherer_id: EntityId,
+    pub resource_id: EntityId,
+}
+
+#[derive(Debug)]
+pub struct ReturnResourceCommand {
+    pub gatherer_id: EntityId,
+    pub structure_id: Option<EntityId>,
+}
+
+#[derive(Debug)]
+pub struct TrainCommand {
+    pub trainer_id: EntityId,
+    pub trained_unit_type: EntityType,
+    pub config: TrainingConfig,
+}
+
+#[derive(Debug)]
+pub struct ConstructCommand {
+    pub builder_id: EntityId,
+    pub construction_position: [u32; 2],
+    pub structure_type: EntityType,
 }
 
 pub struct TeamState {
