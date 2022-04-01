@@ -8,6 +8,7 @@ use crate::entities::{
     TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::grid::EntityGrid;
+use crate::pathfind;
 
 pub struct Core {
     teams: HashMap<Team, TeamState>,
@@ -50,10 +51,10 @@ impl Core {
                         if !occupied {
                             let old_pos = entity.position;
                             let new_pos = unit.pathfinder.advance_path();
-                            self.entity_grid.set(&old_pos, false);
+                            self.entity_grid.set(old_pos, false);
                             unit.sub_cell_movement.set_moving(old_pos, new_pos);
                             entity.position = new_pos;
-                            self.entity_grid.set(&new_pos, true);
+                            self.entity_grid.set(new_pos, true);
                         }
                     } else if entity.state == EntityState::Moving {
                         entity.state = EntityState::Idle;
@@ -330,19 +331,6 @@ impl Core {
                     .pathfinder
                     .find_path(&builder_pos, construction_position);
             }
-            Command::Move(MoveCommand {
-                unit_id,
-                destination,
-            }) => {
-                let mover = self.entity_mut(unit_id);
-                assert_eq!(mover.team, issuing_team);
-                let current_pos = mover.position;
-                mover.state = EntityState::Moving;
-                mover
-                    .unit_mut()
-                    .pathfinder
-                    .find_path(&current_pos, destination);
-            }
             Command::Heal(healer_id) => {
                 let healer = self.entity_mut(healer_id);
                 assert_eq!(healer.team, issuing_team);
@@ -353,6 +341,21 @@ impl Core {
                     .expect("Heal command was issued for entity that doesn't have a Heal action");
                 let health = healer.health.as_mut().unwrap();
                 health.receive_healing(1);
+            }
+            Command::Move(MoveCommand {
+                unit_id,
+                destination,
+            }) => {
+                let mover = self.entity_mut(unit_id);
+                assert_eq!(mover.team, issuing_team);
+                let current_pos = mover.position;
+
+                if let Some(plan) = pathfind::find_path(current_pos, destination, &self.entity_grid)
+                {
+                    let mover = self.entity_mut(unit_id);
+                    mover.state = EntityState::Moving;
+                    mover.unit_mut().pathfinder.set_plan(plan);
+                }
             }
             Command::Attack(AttackCommand {
                 attacker_id,

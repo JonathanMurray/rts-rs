@@ -12,3 +12,4 @@ mod entities;
 mod grid;
 mod hud_graphics;
 mod images;
+mod pathfind;

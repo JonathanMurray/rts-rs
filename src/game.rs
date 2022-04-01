@@ -357,7 +357,7 @@ impl EventHandler for Game {
         if !enemy_commands.is_empty() {
             println!("Issuing {} AI commands:", enemy_commands.len());
             for command in enemy_commands {
-                println!("  {:?}", command);
+                //println!("  {:?}", command);
                 self.core.issue_command(command, Team::Enemy);
             }
         }

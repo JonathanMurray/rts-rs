@@ -11,8 +11,8 @@ impl EntityGrid {
         Self { grid, dimensions }
     }
 
-    pub fn set(&mut self, position: &[u32; 2], occupied: bool) {
-        let i = self.index(position);
+    pub fn set(&mut self, position: [u32; 2], occupied: bool) {
+        let i = self.index(&position);
         // Protect against bugs where two entities occupy same cell or we "double free" a cell
         assert_ne!(
             self.grid[i], occupied,
@@ -30,7 +30,7 @@ impl EntityGrid {
         let [w, h] = size;
         for x in position[0]..position[0] + w {
             for y in position[1]..position[1] + h {
-                self.set(&[x, y], occupied);
+                self.set([x, y], occupied);
             }
         }
     }

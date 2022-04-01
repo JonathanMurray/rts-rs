@@ -4,3 +4,4 @@ set -ex
 
 cargo clippy --all-targets
 cargo fmt
+cargo test

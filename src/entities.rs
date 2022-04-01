@@ -212,6 +212,10 @@ impl Pathfinder {
         }
     }
 
+    pub fn set_plan(&mut self, movement_plan: Vec<[u32; 2]>) {
+        self.movement_plan = movement_plan;
+    }
+
     pub fn find_path(&mut self, current_pos: &[u32; 2], destination: [u32; 2]) {
         let [mut x, mut y] = current_pos;
         let mut plan = Vec::new();

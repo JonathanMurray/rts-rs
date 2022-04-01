@@ -23,7 +23,7 @@ impl EnemyPlayerAi {
         self.timer_s -= dt.as_secs_f32();
 
         if self.timer_s <= 0.0 {
-            self.timer_s = 5.0;
+            self.timer_s = 1.0;
             for entity in entities {
                 if entity.team == Team::Enemy && rng.gen_bool(0.5) {
                     for action in entity.actions.iter().flatten() {
