@@ -12,6 +12,12 @@ impl EntityGrid {
     }
 
     pub fn set(&mut self, position: [u32; 2], occupied: bool) {
+        if position[0] >= self.dimensions[0] || position[1] >= self.dimensions[1] {
+            panic!(
+                "Trying to set grid{:?}={} but this is outside of the grid!",
+                position, occupied
+            );
+        }
         let i = self.index(&position);
         // Protect against bugs where two entities occupy same cell or we "double free" a cell
         assert_ne!(
@@ -23,6 +29,14 @@ impl EntityGrid {
     }
 
     pub fn get(&self, position: &[u32; 2]) -> bool {
+        if position[0] >= self.dimensions[0] || position[1] >= self.dimensions[1] {
+            // If someone asks about a cell that's outside of the grid, we're being
+            // nice and report the cell as occupied instead of crashing. Doing
+            // the bound-checks at every call-site seems error-prone and cumbersome.
+            // Also, as we translate a 2D coordinate to a 1D-index we would risk
+            // reading the status of an entirely different cell.
+            return true;
+        }
         self.grid[self.index(position)]
     }
 

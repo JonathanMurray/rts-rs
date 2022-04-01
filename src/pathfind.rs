@@ -85,7 +85,9 @@ fn a_star(start: [u32; 2], destination: Rect, grid: &EntityGrid) -> Option<Vec<[
                                 // println!("shortest_known_to={:?}", shortest_known_to);
                                 let rating_of_neighbor =
                                     maybe_shortest_to_neighbor + destination.distance(neighbor);
-                                open_set.push(RatedNode(neighbor, rating_of_neighbor));
+                                let rated_neighbor = RatedNode(neighbor, rating_of_neighbor);
+                                // println!("Adding to open_set={:?}", rated_neighbor);
+                                open_set.push(rated_neighbor);
                             }
                         }
                     }
@@ -117,14 +119,14 @@ impl Destination {
     fn rect(&self) -> Rect {
         match self {
             Destination::Point(position) => Rect {
-                left: position[0],
-                top: position[1],
+                left: position[0] as i32,
+                top: position[1] as i32,
                 right: position[0],
                 bottom: position[1],
             },
             Destination::AdjacentToEntity(position, size) => Rect {
-                left: position[0] - 1,
-                top: position[1] - 1,
+                left: position[0] as i32 - 1,
+                top: position[1] as i32 - 1,
                 right: position[0] + size[0],
                 bottom: position[1] + size[1],
             },
@@ -134,31 +136,38 @@ impl Destination {
 
 #[derive(Copy, Clone, Debug)]
 struct Rect {
-    left: u32,
-    top: u32,
+    // Left and top can be negative when they extend outside of the grid.
+    // For example, if a unit path-finds towards another entity that covers
+    // the top-left corner of the game world, some adjacent cells of that
+    // entity have negative coordinates.
+    left: i32,
+    top: i32,
     right: u32,
     bottom: u32,
 }
 
 impl Rect {
     fn distance(&self, cell: [u32; 2]) -> f32 {
-        if cell[0] < self.left {
+        if (cell[0] as i32) < self.left {
             // cell is some west
-            if cell[1] < self.top {
+            let left = self.left as u32; // Safe because cell[0] is u32 and smaller
+            if (cell[1] as i32) < self.top {
                 //cell is north-west
-                distance(cell, [self.left, self.top])
+                let top = self.top as u32; // Safe because cell[1] is u32 and smaller
+                distance(cell, [left, top])
             } else if cell[1] > self.bottom {
                 //cell is south-west
-                distance(cell, [self.left, self.bottom])
+                distance(cell, [left, self.bottom])
             } else {
                 //cell is west
-                distance(cell, [self.left, cell[1]])
+                distance(cell, [left, cell[1]])
             }
         } else if cell[0] > self.right {
             // cell is some east
-            if cell[1] < self.top {
+            if (cell[1] as i32) < self.top {
                 //cell is north-east
-                distance(cell, [self.right, self.top])
+                let top = self.top as u32; // Safe because cell[1] is u32 and smaller
+                distance(cell, [self.right, top])
             } else if cell[1] > self.bottom {
                 //cell is south-east
                 distance(cell, [self.right, self.bottom])
@@ -166,18 +175,22 @@ impl Rect {
                 //cell is east
                 distance(cell, [self.right, cell[1]])
             }
-        } else if cell[1] < self.top {
+        } else if (cell[1] as i32) < self.top {
             // cell is north
-            distance(cell, [cell[0], self.top])
-        } else {
+            let top = self.top as u32; // Safe because cell[1] is u32 and smaller
+            distance(cell, [cell[0], top])
+        } else if cell[1] > self.bottom {
             // cell is south
             distance(cell, [cell[0], self.bottom])
+        } else {
+            // cell is within
+            0.0
         }
     }
 
     fn contains(&self, cell: [u32; 2]) -> bool {
-        cell[0] >= self.left
-            && cell[1] >= self.top
+        cell[0] as i32 >= self.left
+            && cell[1] as i32 >= self.top
             && cell[0] <= self.right
             && cell[1] <= self.bottom
     }
@@ -210,7 +223,7 @@ fn reconstruct_path(
     total_path
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 struct RatedNode([u32; 2], f32);
 
 impl PartialOrd for RatedNode {
@@ -276,8 +289,9 @@ mod test {
         grid.set([4, 3], true);
         grid.set([4, 2], true);
         grid.set([4, 1], true);
-        let path = find_path([0, 0], Destination::Point([6, 3]), &grid).unwrap();
-        visualize_path(&grid, &path[..]);
+        let start = [0, 0];
+        let path = find_path(start, Destination::Point([6, 3]), &grid).unwrap();
+        visualize_path(&grid, start, &path[..]);
         let expected = vec![
             [6, 3],
             [6, 2],
@@ -292,7 +306,31 @@ mod test {
         assert_eq!(path, expected);
     }
 
-    fn visualize_path(grid: &EntityGrid, path: &[[u32; 2]]) {
+    #[test]
+    fn to_structure_path() {
+        let mut grid = EntityGrid::new([10, 10]);
+        let structure_pos = [7, 3];
+        let structure_size = [3, 2];
+        grid.set([7, 3], true);
+        grid.set([8, 3], true);
+        grid.set([9, 3], true);
+        grid.set([7, 4], true);
+        grid.set([8, 4], true);
+        grid.set([9, 4], true);
+
+        let start = [4, 4];
+        let path = find_path(
+            start,
+            Destination::AdjacentToEntity(structure_pos, structure_size),
+            &grid,
+        )
+        .unwrap();
+        visualize_path(&grid, start, &path[..]);
+        let expected = vec![[6, 4], [5, 4]];
+        assert_eq!(path, expected);
+    }
+
+    fn visualize_path(grid: &EntityGrid, start: [u32; 2], path: &[[u32; 2]]) {
         let w = grid.dimensions[0];
         let h = grid.dimensions[1];
         print!("+");
@@ -307,6 +345,8 @@ mod test {
                     print!("#");
                 } else if path.contains(&[x, y]) {
                     print!(".");
+                } else if start == [x, y] {
+                    print!("S");
                 } else {
                     print!(" ");
                 }
