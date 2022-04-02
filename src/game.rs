@@ -1,7 +1,7 @@
 use ggez;
 use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event::EventHandler;
-use ggez::graphics::{Color, Font, Rect};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Font, MeshBuilder, Rect};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
@@ -52,6 +52,7 @@ pub enum CursorAction {
     SelectMovementDestination,
     PlaceStructure(EntityType),
     SelectResourceTarget,
+    DefineSelectionArea([f32; 2]),
 }
 
 struct MovementCommandIndicator {
@@ -109,8 +110,11 @@ impl PlayerState {
             CursorAction::SelectMovementDestination => {
                 mouse::set_cursor_type(ctx, CursorIcon::Move)
             }
-            CursorAction::PlaceStructure(_) => mouse::set_cursor_type(ctx, CursorIcon::Grabbing),
+            CursorAction::PlaceStructure(..) => mouse::set_cursor_type(ctx, CursorIcon::Grabbing),
             CursorAction::SelectResourceTarget => mouse::set_cursor_type(ctx, CursorIcon::Grab),
+            CursorAction::DefineSelectionArea(..) => {
+                mouse::set_cursor_type(ctx, CursorIcon::Default)
+            }
         }
         self.cursor_action = cursor_action;
     }
@@ -350,6 +354,22 @@ impl Game {
             .screen_to_world(coordinates)
             .map(world_to_grid)
     }
+
+    // Create a rect with non-negative width and height from two points
+    fn rect_from_points(a: [f32; 2], b: [f32; 2]) -> Rect {
+        let (x0, x1) = if a[0] < b[0] {
+            (a[0], b[0])
+        } else {
+            (b[0], a[0])
+        };
+        let (y0, y1) = if a[1] < b[1] {
+            (a[1], b[1])
+        } else {
+            (b[1], a[1])
+        };
+
+        Rect::new(x0, y0, x1 - x0, y1 - y0)
+    }
 }
 
 impl EventHandler for Game {
@@ -414,18 +434,6 @@ impl EventHandler for Game {
             self.player_state.camera.position_in_world,
         )?;
 
-        let mouse_position: [f32; 2] = ggez::input::mouse::position(ctx).into();
-        if let CursorAction::PlaceStructure(structure_type) = self.player_state.cursor_action {
-            if let Some(hovered_world_pos) = self.screen_to_grid(mouse_position) {
-                let size = *self.core.structure_size(&structure_type);
-                let world_coords = grid_to_world(hovered_world_pos);
-                let screen_coords = self.player_state.world_to_screen(world_coords);
-                // TODO: Draw transparent filled rect instead of selection outline
-                self.assets
-                    .draw_selection(ctx, size, Team::Player, screen_coords)?;
-            }
-        }
-
         let indicator = &self.player_state.movement_command_indicator;
         if let Some((world_pixel_position, scale)) = indicator.graphics() {
             let screen_coords = self.player_state.world_to_screen(world_pixel_position);
@@ -448,6 +456,31 @@ impl EventHandler for Game {
         }
         self.assets.flush_entity_sprite_batch(ctx)?;
 
+        let mouse_position: [f32; 2] = ggez::input::mouse::position(ctx).into();
+        match self.player_state.cursor_action {
+            CursorAction::PlaceStructure(structure_type) => {
+                if let Some(hovered_world_pos) = self.screen_to_grid(mouse_position) {
+                    let size = *self.core.structure_size(&structure_type);
+                    let world_coords = grid_to_world(hovered_world_pos);
+                    let screen_coords = self.player_state.world_to_screen(world_coords);
+                    // TODO: Draw transparent filled rect instead of selection outline
+                    self.assets
+                        .draw_selection(ctx, size, Team::Player, screen_coords)?;
+                }
+            }
+            CursorAction::DefineSelectionArea(start_world_pixel_coords) => {
+                let rect = Game::rect_from_points(
+                    self.player_state.world_to_screen(start_world_pixel_coords),
+                    mouse_position,
+                );
+                MeshBuilder::new()
+                    .rectangle(DrawMode::stroke(2.0), rect, Color::new(0.6, 1.0, 0.6, 1.0))?
+                    .build(ctx)?
+                    .draw(ctx, DrawParam::default())?;
+            }
+            _ => {}
+        }
+
         self.assets
             .draw_background_around_grid(ctx, WORLD_VIEWPORT.point().into())?;
 
@@ -468,14 +501,9 @@ impl EventHandler for Game {
             match self.player_state.cursor_action {
                 CursorAction::Default => {
                     if button == MouseButton::Left {
-                        // TODO (bug) Don't select neutral entity when player unit is on top of it
-                        let selected_entity_id = self
-                            .core
-                            .entities()
-                            .iter()
-                            .find(|e| e.contains(clicked_world_pos))
-                            .map(|e| e.id);
-                        self.set_selected_entity(selected_entity_id);
+                        println!("Starting to define selection area...");
+                        self.player_state.cursor_action =
+                            CursorAction::DefineSelectionArea(clicked_world_pixel_coords);
                     } else if let Some(entity) = self.selected_player_entity() {
                         match &entity.physical_type {
                             PhysicalType::Unit(unit) => {
@@ -582,6 +610,7 @@ impl EventHandler for Game {
                     self.player_state
                         .set_cursor_action(ctx, CursorAction::Default);
                 }
+
                 CursorAction::SelectResourceTarget => {
                     if let Some(resource_id) = self.resource_at_position(clicked_world_pos) {
                         let gatherer_id = self
@@ -601,6 +630,10 @@ impl EventHandler for Game {
                     self.player_state
                         .set_cursor_action(ctx, CursorAction::Default);
                 }
+
+                CursorAction::DefineSelectionArea(..) => {
+                    panic!("How did we end up here? When we release button, this cursor action should have been removed.");
+                }
             }
         } else {
             self.player_state
@@ -612,7 +645,37 @@ impl EventHandler for Game {
         }
     }
 
-    fn mouse_button_up_event(&mut self, _ctx: &mut Context, button: MouseButton, _x: f32, _y: f32) {
+    fn mouse_button_up_event(&mut self, _ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+        if let CursorAction::DefineSelectionArea(start_world_pixel_coords) =
+            self.player_state.cursor_action
+        {
+            self.player_state.cursor_action = CursorAction::Default;
+            // TODO: select even if mouse is released outside of the world view port
+            if let Some(released_world_pixel_coords) = self.player_state.screen_to_world([x, y]) {
+                let selection_rect =
+                    Game::rect_from_points(start_world_pixel_coords, released_world_pixel_coords);
+
+                println!("SELECTION RECT: {:?}", selection_rect);
+
+                // TODO: select multiple entities, and prioritize player-owned
+                if button == MouseButton::Left {
+                    let selected_entity_id = self
+                        .core
+                        .entities()
+                        .iter()
+                        .find(|e| e.rect().overlaps(&selection_rect))
+                        .map(|e| e.id);
+                    println!(
+                        "Selected {:?} by releasing mouse button",
+                        selected_entity_id
+                    );
+                    self.set_selected_entity(selected_entity_id);
+                }
+            } else {
+                println!("Didn't get any targets from the selection area")
+            }
+        }
+
         self.hud.on_mouse_button_up(button);
     }
 

@@ -3,8 +3,11 @@ use std::collections::HashMap;
 use std::sync::atomic::{self, AtomicUsize};
 use std::time::Duration;
 
+use ggez::graphics::Rect;
+
 use crate::data::EntityType;
 use crate::game;
+use game::CELL_PIXEL_SIZE;
 
 static NEXT_ENTITY_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -124,6 +127,17 @@ impl Entity {
             && position[0] < self.position[0] + w
             && position[1] >= self.position[1]
             && position[1] < self.position[1] + h
+    }
+
+    pub fn rect(&self) -> Rect {
+        let [pixel_x, pixel_y] = self.world_pixel_position();
+        let [grid_w, grid_h] = self.size();
+        Rect {
+            x: pixel_x,
+            y: pixel_y,
+            w: (grid_w as f32) * CELL_PIXEL_SIZE[0],
+            h: (grid_h as f32) * CELL_PIXEL_SIZE[1],
+        }
     }
 
     pub fn unit_mut(&mut self) -> &mut UnitComponent {
