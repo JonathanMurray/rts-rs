@@ -81,7 +81,7 @@ impl HudGraphics {
         let medium_font = 30.0;
         let large_font = 40.0;
 
-        let cursor_action = &player_state.cursor_action;
+        let cursor_action = player_state.cursor_action();
 
         let resources_text = Text::new((
             format!("RESOURCES: {}", player_team_state.resources),
@@ -173,7 +173,7 @@ impl HudGraphics {
                                         }
                                     }
                                     if cursor_action
-                                        == &CursorAction::PlaceStructure(*structure_type)
+                                        == CursorAction::PlaceStructure(*structure_type)
                                     {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = format!("Construct {:?}", structure_type);
@@ -187,7 +187,7 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Move";
-                                    if cursor_action == &CursorAction::SelectMovementDestination {
+                                    if cursor_action == CursorAction::SelectMovementDestination {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
@@ -205,7 +205,7 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Attack";
-                                    if cursor_action == &CursorAction::SelectAttackTarget {
+                                    if cursor_action == CursorAction::SelectAttackTarget {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
@@ -220,7 +220,7 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Gather";
-                                    if cursor_action == &CursorAction::SelectResourceTarget {
+                                    if cursor_action == CursorAction::SelectResourceTarget {
                                         button_states[i].matches_cursor_action = true;
                                         tooltip_text = TEXT.to_string();
                                     }
@@ -256,7 +256,7 @@ impl HudGraphics {
         }
 
         self.minimap
-            .draw(ctx, player_state.camera.position_in_world)?;
+            .draw(ctx, player_state.camera_position_in_world())?;
 
         Ok(())
     }

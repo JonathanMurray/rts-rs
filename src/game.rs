@@ -87,8 +87,8 @@ impl MovementCommandIndicator {
 
 pub struct PlayerState {
     selected_entity_id: Option<EntityId>,
-    pub cursor_action: CursorAction, //TODO
-    pub camera: Camera,              //TODO
+    cursor_action: CursorAction,
+    camera: Camera,
     movement_command_indicator: MovementCommandIndicator,
 }
 
@@ -113,6 +113,10 @@ impl PlayerState {
             CursorAction::SelectResourceTarget => mouse::set_cursor_type(ctx, CursorIcon::Grab),
         }
         self.cursor_action = cursor_action;
+    }
+
+    pub fn cursor_action(&self) -> CursorAction {
+        self.cursor_action
     }
 
     fn screen_to_world(&self, coordinates: [f32; 2]) -> Option<[f32; 2]> {
@@ -140,6 +144,10 @@ impl PlayerState {
     fn update(&mut self, ctx: &mut Context, dt: Duration) {
         self.camera.update(ctx, dt);
         self.movement_command_indicator.update(dt);
+    }
+
+    pub fn camera_position_in_world(&self) -> [f32; 2] {
+        self.camera.position_in_world
     }
 }
 
