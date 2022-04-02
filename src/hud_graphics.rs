@@ -11,7 +11,7 @@ use ggez::{Context, GameResult};
 use crate::core::TeamState;
 use crate::data::EntityType;
 use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
-use crate::game::{CursorAction, PlayerState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
+use crate::game::{CursorState, PlayerState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
 use std::convert::TryInto;
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
@@ -81,7 +81,7 @@ impl HudGraphics {
         let medium_font = 30.0;
         let large_font = 40.0;
 
-        let cursor_action = player_state.cursor_action();
+        let cursor_state = player_state.cursor_state();
 
         let resources_text = Text::new((
             format!("RESOURCES: {}", player_team_state.resources),
@@ -114,7 +114,7 @@ impl HudGraphics {
                 let mut button_states = [ButtonState {
                     text: None,
                     matches_entity_state: false,
-                    matches_cursor_action: false,
+                    matches_cursor_state: false,
                 }; NUM_BUTTONS];
                 if let EntityState::TrainingUnit(trained_entity_type) = selected_entity.state {
                     is_training = true;
@@ -172,10 +172,10 @@ impl HudGraphics {
                                             button_states[i].matches_entity_state = true;
                                         }
                                     }
-                                    if cursor_action
-                                        == CursorAction::PlaceStructure(*structure_type)
+                                    if cursor_state
+                                        == CursorState::PlacingStructure(*structure_type)
                                     {
-                                        button_states[i].matches_cursor_action = true;
+                                        button_states[i].matches_cursor_state = true;
                                         tooltip_text = format!("Construct {:?}", structure_type);
                                     }
                                     if self.hovered_button_index == Some(i) {
@@ -187,8 +187,8 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Move";
-                                    if cursor_action == CursorAction::SelectMovementDestination {
-                                        button_states[i].matches_cursor_action = true;
+                                    if cursor_state == CursorState::SelectingMovementDestination {
+                                        button_states[i].matches_cursor_state = true;
                                         tooltip_text = TEXT.to_string();
                                     }
                                     if self.hovered_button_index == Some(i) {
@@ -205,8 +205,8 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Attack";
-                                    if cursor_action == CursorAction::SelectAttackTarget {
-                                        button_states[i].matches_cursor_action = true;
+                                    if cursor_state == CursorState::SelectingAttackTarget {
+                                        button_states[i].matches_cursor_state = true;
                                         tooltip_text = TEXT.to_string();
                                     }
                                     if self.hovered_button_index == Some(i) {
@@ -220,8 +220,8 @@ impl HudGraphics {
                                         button_states[i].matches_entity_state = true;
                                     }
                                     const TEXT: &str = "Gather";
-                                    if cursor_action == CursorAction::SelectResourceTarget {
-                                        button_states[i].matches_cursor_action = true;
+                                    if cursor_state == CursorState::SelectingResourceTarget {
+                                        button_states[i].matches_cursor_state = true;
                                         tooltip_text = TEXT.to_string();
                                     }
                                     if self.hovered_button_index == Some(i) {
@@ -345,7 +345,7 @@ impl HudGraphics {
 struct ButtonState<'a> {
     text: Option<&'a Text>,
     matches_entity_state: bool,
-    matches_cursor_action: bool,
+    matches_cursor_state: bool,
 }
 
 struct Minimap {
@@ -518,7 +518,7 @@ impl Button {
                     .scale(scale),
             )?;
         }
-        if state.matches_cursor_action || is_hovered {
+        if state.matches_cursor_state || is_hovered {
             self.highlight.draw(
                 ctx,
                 DrawParam::default()
