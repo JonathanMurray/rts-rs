@@ -1,3 +1,4 @@
+mod button;
 mod minimap;
 
 use std::cell::Ref;
@@ -5,13 +6,12 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::time::Duration;
 
-use ggez::graphics::{
-    self, Color, DrawMode, DrawParam, Drawable, Font, Mesh, MeshBuilder, Rect, Text,
-};
+use ggez::graphics::{self, DrawParam, Drawable, Font, Rect, Text};
 use ggez::input::keyboard::KeyCode;
 use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
+use self::button::Button;
 use self::minimap::Minimap;
 use crate::core::TeamState;
 use crate::data::EntityType;
@@ -162,7 +162,7 @@ impl HudGraphics {
         for (button_i, button) in self.buttons.iter().enumerate() {
             let is_hovered = self.hovered_button_index == Some(button_i);
             let matches_entity_state = button
-                .action
+                .action()
                 .map(|action| {
                     selected_entities
                         .iter()
@@ -175,7 +175,7 @@ impl HudGraphics {
         let tooltip_text = match cursor_state {
             CursorState::Default => {
                 if let Some(index) = self.hovered_button_index {
-                    match self.buttons[index].action {
+                    match self.buttons[index].action() {
                         Some(Action::Attack) => TooltipText::ActionAttack,
                         Some(Action::Move) => TooltipText::ActionMove,
                         Some(Action::Construct(structure_type)) => {
@@ -222,9 +222,9 @@ impl HudGraphics {
         y: f32,
     ) -> Option<PlayerInput> {
         for button in &mut self.buttons {
-            if button.rect.contains([x, y]) {
-                if let Some(input) = button.on_click() {
-                    return Some(input);
+            if button.contains([x, y]) {
+                if let Some(action) = button.on_click() {
+                    return Some(PlayerInput::UseEntityAction(action));
                 }
             }
         }
@@ -238,7 +238,7 @@ impl HudGraphics {
         self.hovered_button_index = self
             .buttons
             .iter()
-            .position(|button| button.rect.contains([x, y]));
+            .position(|button| button.contains([x, y]));
 
         self.minimap
             .on_mouse_motion(x, y)
@@ -250,7 +250,7 @@ impl HudGraphics {
     }
 
     pub fn on_key_down(&self, keycode: KeyCode) -> Option<PlayerInput> {
-        for action in self.buttons.iter().filter_map(|b| b.action) {
+        for action in self.buttons.iter().filter_map(|b| b.action()) {
             if action_keycode(&action) == keycode {
                 return Some(PlayerInput::UseEntityAction(action));
             }
@@ -266,8 +266,12 @@ impl HudGraphics {
 
     pub fn set_entity_actions(&mut self, actions: [Option<Action>; NUM_ENTITY_ACTIONS]) {
         for (i, action) in actions.iter().enumerate() {
-            self.buttons[i].action = *action;
-            self.buttons[i].text = action.map(|action| self.action_label(&action).clone());
+            if let Some(action) = action {
+                let text = self.action_label(action).clone();
+                self.buttons[i].set_action(Some((*action, text)));
+            } else {
+                self.buttons[i].set_action(None);
+            }
         }
     }
 
@@ -394,122 +398,6 @@ enum TooltipText {
     CursorSelectMovementDestination,
     CursorPlaceStructure,
     CursorSelectResource,
-}
-
-#[derive(Debug)]
-pub struct Button {
-    rect: Rect,
-    border: Mesh,
-    highlight_entity_state: Mesh,
-    highlight: Mesh,
-    is_down: bool,
-    down_cooldown: Duration,
-    action: Option<Action>,
-    text: Option<Text>,
-}
-
-impl Button {
-    fn new(ctx: &mut Context, rect: Rect) -> GameResult<Button> {
-        let local_rect = Rect::new(0.0, 0.0, rect.w, rect.h);
-        let border = MeshBuilder::new()
-            .rectangle(
-                DrawMode::stroke(1.0),
-                local_rect,
-                Color::new(0.7, 0.7, 0.7, 1.0),
-            )?
-            .build(ctx)?;
-        let highlight_entity_state = MeshBuilder::new()
-            .rectangle(
-                DrawMode::stroke(3.0),
-                Rect::new(2.0, 2.0, rect.w - 4.0, rect.h - 4.0),
-                Color::new(0.4, 0.95, 0.4, 1.0),
-            )?
-            .build(ctx)?;
-        let highlight = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                local_rect,
-                Color::new(1.0, 1.0, 0.6, 0.05),
-            )?
-            .build(ctx)?;
-
-        Ok(Self {
-            rect,
-            border,
-            highlight_entity_state,
-            highlight,
-            is_down: false,
-            down_cooldown: Duration::ZERO,
-            action: None,
-            text: None,
-        })
-    }
-
-    fn draw(
-        &self,
-        ctx: &mut Context,
-        is_hovered: bool,
-        cursor_state: CursorState,
-        matches_entity_state: bool,
-    ) -> GameResult {
-        self.border
-            .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
-        if matches_entity_state {
-            self.highlight_entity_state
-                .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
-        }
-
-        let matches_cursor_state = match cursor_state {
-            CursorState::Default => false,
-            CursorState::SelectingAttackTarget => self.action == Some(Action::Attack),
-            CursorState::SelectingMovementDestination => self.action == Some(Action::Move),
-            CursorState::PlacingStructure(structure_type) => {
-                self.action == Some(Action::Construct(structure_type))
-            }
-            CursorState::SelectingResourceTarget => self.action == Some(Action::GatherResource),
-            CursorState::DraggingSelectionArea(_) => false,
-        };
-
-        let offset = if self.is_down { [4.0, 4.0] } else { [0.0, 0.0] };
-        let scale = if self.is_down { [0.9, 0.9] } else { [1.0, 1.0] };
-        if let Some(text) = &self.text {
-            text.draw(
-                ctx,
-                DrawParam::default()
-                    .dest([
-                        self.rect.x + 30.0 + offset[0],
-                        self.rect.y + 20.0 + offset[1],
-                    ])
-                    .scale(scale),
-            )?;
-        }
-        if matches_cursor_state || (self.action.is_some() && is_hovered) {
-            self.highlight.draw(
-                ctx,
-                DrawParam::default()
-                    .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
-                    .scale(scale),
-            )?;
-        }
-        Ok(())
-    }
-
-    fn update(&mut self, dt: Duration) {
-        if self.is_down {
-            self.down_cooldown = self.down_cooldown.checked_sub(dt).unwrap_or(Duration::ZERO);
-            if self.down_cooldown.is_zero() {
-                self.is_down = false;
-            }
-        }
-    }
-
-    fn on_click(&mut self) -> Option<PlayerInput> {
-        self.action.map(|action| {
-            self.is_down = true;
-            self.down_cooldown = Duration::from_millis(100);
-            PlayerInput::UseEntityAction(action)
-        })
-    }
 }
 
 #[derive(Debug)]
