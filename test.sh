@@ -2,6 +2,6 @@
 
 set -ex
 
-cargo clippy --all-targets
 cargo fmt
+cargo clippy --all-targets
 cargo test
