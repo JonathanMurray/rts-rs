@@ -684,7 +684,7 @@ impl EventHandler for Game {
                 if button == MouseButton::Left {
                     let selected_entity_id = self.core.entities().iter().find_map(|(id, e)| {
                         let e = e.borrow();
-                        if e.rect().overlaps(&selection_rect) {
+                        if e.pixel_rect().overlaps(&selection_rect) {
                             Some(*id)
                         } else {
                             None

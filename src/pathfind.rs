@@ -1,4 +1,4 @@
-use crate::grid::EntityGrid;
+use crate::grid::{CellRect, EntityGrid};
 use std::cmp::{Eq, Ordering};
 use std::collections::binary_heap::BinaryHeap;
 use std::collections::HashMap;
@@ -102,16 +102,16 @@ fn a_star(start: [u32; 2], destination: Rect, grid: &EntityGrid) -> Option<Vec<[
 #[derive(Debug)]
 pub enum Destination {
     Point([u32; 2]),
-    AdjacentToEntity([u32; 2], [u32; 2]),
+    AdjacentToEntity(CellRect),
 }
 
 impl Destination {
     fn center(&self) -> [u32; 2] {
         match &self {
             Destination::Point(p) => *p,
-            Destination::AdjacentToEntity(position, size) => [
-                position[0] + (size[0] as f32 / 2.0) as u32,
-                position[1] + (size[1] as f32 / 2.0) as u32,
+            Destination::AdjacentToEntity(entity_rect) => [
+                entity_rect.position[0] + (entity_rect.size[0] as f32 / 2.0) as u32,
+                entity_rect.position[1] + (entity_rect.size[1] as f32 / 2.0) as u32,
             ],
         }
     }
@@ -124,11 +124,11 @@ impl Destination {
                 right: position[0],
                 bottom: position[1],
             },
-            Destination::AdjacentToEntity(position, size) => Rect {
-                left: position[0] as i32 - 1,
-                top: position[1] as i32 - 1,
-                right: position[0] + size[0],
-                bottom: position[1] + size[1],
+            Destination::AdjacentToEntity(entity_rect) => Rect {
+                left: entity_rect.position[0] as i32 - 1,
+                top: entity_rect.position[1] as i32 - 1,
+                right: entity_rect.position[0] + entity_rect.size[0],
+                bottom: entity_rect.position[1] + entity_rect.size[1],
             },
         }
     }
@@ -309,8 +309,10 @@ mod test {
     #[test]
     fn to_structure_path() {
         let mut grid = EntityGrid::new([10, 10]);
-        let structure_pos = [7, 3];
-        let structure_size = [3, 2];
+        let structure_cell_rect = CellRect {
+            position: [7, 3],
+            size: [3, 2],
+        };
         grid.set([7, 3], true);
         grid.set([8, 3], true);
         grid.set([9, 3], true);
@@ -321,7 +323,7 @@ mod test {
         let start = [4, 4];
         let path = find_path(
             start,
-            Destination::AdjacentToEntity(structure_pos, structure_size),
+            Destination::AdjacentToEntity(structure_cell_rect),
             &grid,
         )
         .unwrap();

@@ -6,8 +6,8 @@ use std::time::Duration;
 use ggez::graphics::Rect;
 
 use crate::data::EntityType;
-use crate::game;
-use game::CELL_PIXEL_SIZE;
+use crate::game::{self, CELL_PIXEL_SIZE};
+use crate::grid::CellRect;
 
 static NEXT_ENTITY_ID: AtomicUsize = AtomicUsize::new(1);
 
@@ -122,6 +122,7 @@ impl Entity {
     }
 
     pub fn contains(&self, position: [u32; 2]) -> bool {
+        // TODO delegate to CellRect
         let [w, h] = self.size();
         position[0] >= self.position[0]
             && position[0] < self.position[0] + w
@@ -129,7 +130,14 @@ impl Entity {
             && position[1] < self.position[1] + h
     }
 
-    pub fn rect(&self) -> Rect {
+    pub fn cell_rect(&self) -> CellRect {
+        CellRect {
+            position: self.position,
+            size: self.size(),
+        }
+    }
+
+    pub fn pixel_rect(&self) -> Rect {
         let [pixel_x, pixel_y] = self.world_pixel_position();
         let [grid_w, grid_h] = self.size();
         Rect {

@@ -8,7 +8,7 @@ use crate::entities::{
     Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig, TrainingPerformStatus,
     TrainingUpdateStatus,
 };
-use crate::grid::EntityGrid;
+use crate::grid::{CellRect, EntityGrid};
 use crate::pathfind::{self, Destination};
 
 pub struct Core {
@@ -27,7 +27,7 @@ impl Core {
         let mut entity_grid = EntityGrid::new(world_dimensions);
         for entity in &entities {
             if entity.is_solid {
-                entity_grid.set_area(&entity.position, &entity.size(), true);
+                entity_grid.set_area(entity.cell_rect(), true);
             }
         }
         let entities = entities
@@ -85,11 +85,7 @@ impl Core {
                 if combat.count_down_cooldown(dt) {
                     if let Some(victim) = self.find_entity(victim_id) {
                         let mut victim = victim.borrow_mut();
-                        if is_unit_within_melee_range_of(
-                            attacker.position,
-                            victim.position,
-                            victim.size(),
-                        ) {
+                        if is_unit_within_melee_range_of(attacker.position, victim.cell_rect()) {
                             let health = victim.health.as_mut().expect("victim without health");
                             let damage_amount = 1;
                             health.receive_damage(damage_amount);
@@ -106,7 +102,7 @@ impl Core {
                         } else if attacker.unit_mut().movement_plan.peek().is_none() {
                             if let Some(plan) = pathfind::find_path(
                                 attacker.position,
-                                Destination::AdjacentToEntity(victim.position, victim.size()),
+                                Destination::AdjacentToEntity(victim.cell_rect()),
                                 &self.entity_grid,
                             ) {
                                 attacker.unit_mut().movement_plan.set(plan);
@@ -132,11 +128,7 @@ impl Core {
                         .find_entity(resource_id)
                         .unwrap_or_else(|| panic!("Resource not found: {:?}", resource_id));
                     let resource = resource.borrow();
-                    if is_unit_within_melee_range_of(
-                        gatherer.position,
-                        resource.position,
-                        resource.size(),
-                    ) {
+                    if is_unit_within_melee_range_of(gatherer.position, resource.cell_rect()) {
                         let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
                         gathering.pick_up_resource(resource_id);
                         self.unit_return_resource(gatherer, None);
@@ -155,11 +147,7 @@ impl Core {
                 if returner.unit_mut().sub_cell_movement.is_ready() {
                     if let Some(structure) = self.find_entity(structure_id) {
                         let structure = structure.borrow();
-                        if is_unit_within_melee_range_of(
-                            returner.position,
-                            structure.position,
-                            structure.size(),
-                        ) {
+                        if is_unit_within_melee_range_of(returner.position, structure.cell_rect()) {
                             self.team_state(&returner.team).borrow_mut().resources += 1;
                             // Unit goes back out to gather more
                             let gathering = returner.unit_mut().gathering.as_mut().unwrap();
@@ -167,7 +155,7 @@ impl Core {
                             let resource = self.entity(resource_id).borrow();
                             if let Some(plan) = pathfind::find_path(
                                 returner.position,
-                                Destination::AdjacentToEntity(resource.position, resource.size()),
+                                Destination::AdjacentToEntity(resource.cell_rect()),
                                 &self.entity_grid,
                             ) {
                                 returner.unit_mut().movement_plan.set(plan);
@@ -237,20 +225,15 @@ impl Core {
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
-            if is_transforming_into_structure {
-                println!("{:?} is transforming into a structure", entity_id);
-            }
-            let should_be_removed = is_dead || is_transforming_into_structure;
-
-            if should_be_removed {
+            if is_dead || is_transforming_into_structure {
                 if entity.is_solid {
-                    self.entity_grid
-                        .set_area(&entity.position, &entity.size(), false);
+                    self.entity_grid.set_area(entity.cell_rect(), false);
                 }
                 removed_entity_ids.push(*entity_id);
+                false
+            } else {
+                true
             }
-
-            !should_be_removed
         });
 
         //-------------------------------
@@ -275,21 +258,17 @@ impl Core {
                     completed_trainings.push((
                         trained_entity_type,
                         entity.team,
-                        entity.position,
-                        entity.size(),
+                        entity.cell_rect(),
                     ));
                 }
             }
         }
-        for (entity_type, team, source_position, source_size) in completed_trainings {
+        for (entity_type, team, source_rect) in completed_trainings {
             if self
-                .try_add_trained_entity(entity_type, team, source_position, source_size)
+                .try_add_trained_entity(entity_type, team, source_rect)
                 .is_none()
             {
-                eprintln!(
-                    "Failed to create entity around {:?}, {:?}",
-                    source_position, source_size
-                );
+                eprintln!("Failed to create entity around {:?}", source_rect);
             }
         }
 
@@ -326,10 +305,13 @@ impl Core {
             }) => {
                 assert_eq!(builder.team, issuing_team);
                 builder.state = EntityState::Constructing(structure_type, structure_position);
-                let structure_size = *self.structure_sizes.get(&structure_type).unwrap();
+                let structure_rect = CellRect {
+                    position: structure_position,
+                    size: *self.structure_sizes.get(&structure_type).unwrap(),
+                };
                 if let Some(plan) = pathfind::find_path(
                     builder.position,
-                    Destination::AdjacentToEntity(structure_position, structure_size),
+                    Destination::AdjacentToEntity(structure_rect),
                     &self.entity_grid,
                 ) {
                     builder.unit_mut().movement_plan.set(plan);
@@ -360,7 +342,7 @@ impl Core {
                 attacker.state = EntityState::Attacking(victim.id);
                 if let Some(plan) = pathfind::find_path(
                     attacker.position,
-                    Destination::AdjacentToEntity(victim.position, victim.size()),
+                    Destination::AdjacentToEntity(victim.cell_rect()),
                     &self.entity_grid,
                 ) {
                     attacker.unit_mut().movement_plan.set(plan);
@@ -390,7 +372,7 @@ impl Core {
                 gatherer.state = EntityState::GatheringResource(resource.id);
                 if let Some(plan) = pathfind::find_path(
                     gatherer.position,
-                    Destination::AdjacentToEntity(resource.position, resource.size()),
+                    Destination::AdjacentToEntity(resource.cell_rect()),
                     &self.entity_grid,
                 ) {
                     gatherer.unit_mut().movement_plan.set(plan);
@@ -444,7 +426,7 @@ impl Core {
 
             if let Some(plan) = pathfind::find_path(
                 gatherer.position,
-                Destination::AdjacentToEntity(structure.position, structure.size()),
+                Destination::AdjacentToEntity(structure.cell_rect()),
                 &self.entity_grid,
             ) {
                 gatherer.unit_mut().movement_plan.set(plan);
@@ -477,17 +459,16 @@ impl Core {
         &mut self,
         entity_type: EntityType,
         team: Team,
-        source_position: [u32; 2],
-        source_size: [u32; 2],
+        source_rect: CellRect,
     ) -> Option<[u32; 2]> {
-        let left = source_position[0].saturating_sub(1);
-        let top = source_position[1].saturating_sub(1);
+        let left = source_rect.position[0].saturating_sub(1);
+        let top = source_rect.position[1].saturating_sub(1);
         let right = min(
-            source_position[0] + source_size[0],
+            source_rect.position[0] + source_rect.size[0],
             self.entity_grid.dimensions[0] - 1,
         );
         let bot = min(
-            source_position[1] + source_size[1],
+            source_rect.position[1] + source_rect.size[1],
             self.entity_grid.dimensions[1] - 1,
         );
         for x in left..right + 1 {
@@ -503,10 +484,10 @@ impl Core {
 
     fn add_entity(&mut self, entity_type: EntityType, position: [u32; 2], team: Team) {
         let new_entity = data::create_entity(entity_type, position, team);
-        let size = new_entity.size();
+        let rect = new_entity.cell_rect();
         self.entities
             .push((new_entity.id, RefCell::new(new_entity)));
-        self.entity_grid.set_area(&position, &size, true);
+        self.entity_grid.set_area(rect, true);
     }
 
     fn entity(&self, id: EntityId) -> &RefCell<Entity> {
@@ -528,14 +509,10 @@ impl Core {
     }
 }
 
-fn is_unit_within_melee_range_of(
-    unit_position: [u32; 2],
-    other_position: [u32; 2],
-    other_size: [u32; 2],
-) -> bool {
+fn is_unit_within_melee_range_of(unit_position: [u32; 2], rect: CellRect) -> bool {
     let mut is_attacker_within_range = false;
-    for x in other_position[0]..other_position[0] + other_size[0] {
-        for y in other_position[1]..other_position[1] + other_size[1] {
+    for x in rect.position[0]..rect.position[0] + rect.size[0] {
+        for y in rect.position[1]..rect.position[1] + rect.size[1] {
             if square_distance(unit_position, [x, y]) <= 2 {
                 is_attacker_within_range = true;
             }

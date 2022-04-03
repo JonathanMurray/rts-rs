@@ -40,10 +40,9 @@ impl EntityGrid {
         self.grid[self.index(position)]
     }
 
-    pub fn set_area(&mut self, position: &[u32; 2], size: &[u32; 2], occupied: bool) {
-        let [w, h] = size;
-        for x in position[0]..position[0] + w {
-            for y in position[1]..position[1] + h {
+    pub fn set_area(&mut self, area: CellRect, occupied: bool) {
+        for x in area.position[0]..area.position[0] + area.size[0] {
+            for y in area.position[1]..area.position[1] + area.size[1] {
                 self.set([x, y], occupied);
             }
         }
@@ -53,4 +52,10 @@ impl EntityGrid {
         let [x, y] = position;
         (y * self.dimensions[0] + x) as usize
     }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct CellRect {
+    pub position: [u32; 2],
+    pub size: [u32; 2],
 }
