@@ -1,3 +1,4 @@
+use std::cell::Ref;
 use std::collections::HashMap;
 use std::time::Duration;
 
@@ -65,8 +66,8 @@ impl HudGraphics {
     pub fn draw(
         &self,
         ctx: &mut Context,
-        player_team_state: &TeamState,
-        selected_entity: Option<&Entity>,
+        player_team_state: Ref<TeamState>,
+        selected_entity: Option<Ref<Entity>>,
         player_state: &PlayerState,
     ) -> GameResult {
         let x = 0.0;
@@ -193,11 +194,6 @@ impl HudGraphics {
                                     }
                                     if self.hovered_button_index == Some(i) {
                                         tooltip_text = TEXT.to_string();
-                                    }
-                                }
-                                Action::Heal => {
-                                    if self.hovered_button_index == Some(i) {
-                                        tooltip_text = "Heal".to_string();
                                     }
                                 }
                                 Action::Attack => {
@@ -561,7 +557,6 @@ fn action_keycode(action: &Action) -> KeyCode {
             panic!("No keycode for constructing {:?}", structure_type)
         }
         Action::Move => KeyCode::M,
-        Action::Heal => KeyCode::H,
         Action::Attack => KeyCode::A,
         Action::GatherResource => KeyCode::G,
         Action::ReturnResource => KeyCode::R,

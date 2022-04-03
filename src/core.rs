@@ -1,18 +1,19 @@
+use std::cell::{Ref, RefCell, RefMut};
 use std::cmp::min;
 use std::collections::HashMap;
 use std::time::Duration;
 
 use crate::data::{self, EntityType};
 use crate::entities::{
-    Action, Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig,
-    TrainingPerformStatus, TrainingUpdateStatus,
+    Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig, TrainingPerformStatus,
+    TrainingUpdateStatus,
 };
 use crate::grid::EntityGrid;
 use crate::pathfind::{self, Destination};
 
 pub struct Core {
-    teams: HashMap<Team, TeamState>,
-    entities: Vec<Entity>,
+    teams: HashMap<Team, RefCell<TeamState>>,
+    entities: Vec<(EntityId, RefCell<Entity>)>,
     entity_grid: EntityGrid,
     structure_sizes: HashMap<EntityType, [u32; 2]>,
 }
@@ -20,8 +21,8 @@ pub struct Core {
 impl Core {
     pub fn new(entities: Vec<Entity>, world_dimensions: [u32; 2]) -> Self {
         let mut teams = HashMap::new();
-        teams.insert(Team::Player, TeamState { resources: 5 });
-        teams.insert(Team::Enemy, TeamState { resources: 5 });
+        teams.insert(Team::Player, RefCell::new(TeamState { resources: 5 }));
+        teams.insert(Team::Enemy, RefCell::new(TeamState { resources: 5 }));
 
         let mut entity_grid = EntityGrid::new(world_dimensions);
         for entity in &entities {
@@ -29,6 +30,10 @@ impl Core {
                 entity_grid.set_area(&entity.position, &entity.size(), true);
             }
         }
+        let entities = entities
+            .into_iter()
+            .map(|entity| (entity.id, RefCell::new(entity)))
+            .collect();
         let structure_sizes = data::structure_sizes();
         Self {
             teams,
@@ -42,14 +47,16 @@ impl Core {
         //-------------------------------
         //          MOVEMENT
         //-------------------------------
-        for entity in &mut self.entities {
+        for (_id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
+            let pos = entity.position;
             if let PhysicalType::Unit(unit) = &mut entity.physical_type {
-                unit.sub_cell_movement.update(dt, entity.position);
+                unit.sub_cell_movement.update(dt, pos);
                 if unit.sub_cell_movement.is_ready() {
                     if let Some(next_pos) = unit.movement_plan.peek() {
                         let occupied = self.entity_grid.get(next_pos);
                         if !occupied {
-                            let old_pos = entity.position;
+                            let old_pos = pos;
                             let new_pos = unit.movement_plan.advance();
                             self.entity_grid.set(old_pos, false);
                             unit.sub_cell_movement.set_moving(old_pos, new_pos);
@@ -66,61 +73,50 @@ impl Core {
         //-------------------------------
         //           COMBAT
         //-------------------------------
-        let mut attacks = vec![];
-        for entity in &mut self.entities {
+        for (_entity_id, entity) in &self.entities {
+            let entity = entity.borrow_mut();
             if let EntityState::Attacking(victim_id) = entity.state {
-                let attacker_id = entity.id;
-                let combat = entity
+                let mut attacker = entity;
+                let combat = attacker
                     .unit_mut()
                     .combat
                     .as_mut()
                     .expect("non-combat attacker");
                 if combat.count_down_cooldown(dt) {
-                    attacks.push((attacker_id, 1, victim_id));
-                }
-            }
-        }
-        for (attacker_id, damage_amount, victim_id) in attacks {
-            let attacker_pos = self.entity_mut(attacker_id).position;
-            if let Some(victim) = self.entities.iter_mut().find(|e| e.id == victim_id) {
-                let victim_pos = victim.position;
-                let victim_size = victim.size();
-                if is_unit_within_melee_range_of(attacker_pos, victim_pos, victim_size) {
-                    let health = victim.health.as_mut().expect("victim without health");
-                    health.receive_damage(damage_amount);
-                    println!(
-                        "{:?} --[{} dmg]--> {:?}",
-                        attacker_id, damage_amount, victim_id
-                    );
-                    self.entity_mut(attacker_id)
-                        .unit_mut()
-                        .combat
-                        .as_mut()
-                        .unwrap()
-                        .start_cooldown();
-                } else {
-                    let attacker = self.entity_mut(attacker_id).unit_mut();
-                    if attacker.movement_plan.peek().is_none() {
-                        if let Some(plan) = pathfind::find_path(
-                            attacker_pos,
-                            Destination::AdjacentToEntity(victim_pos, victim_size),
-                            &self.entity_grid,
+                    if let Some(victim) = self.find_entity(victim_id) {
+                        let mut victim = victim.borrow_mut();
+                        if is_unit_within_melee_range_of(
+                            attacker.position,
+                            victim.position,
+                            victim.size(),
                         ) {
-                            self.entity_mut(attacker_id)
+                            let health = victim.health.as_mut().expect("victim without health");
+                            let damage_amount = 1;
+                            health.receive_damage(damage_amount);
+                            println!(
+                                "{:?} --[{} dmg]--> {:?}",
+                                attacker.id, damage_amount, victim_id
+                            );
+                            attacker
                                 .unit_mut()
-                                .movement_plan
-                                .set(plan);
+                                .combat
+                                .as_mut()
+                                .unwrap()
+                                .start_cooldown();
+                        } else if attacker.unit_mut().movement_plan.peek().is_none() {
+                            if let Some(plan) = pathfind::find_path(
+                                attacker.position,
+                                Destination::AdjacentToEntity(victim.position, victim.size()),
+                                &self.entity_grid,
+                            ) {
+                                attacker.unit_mut().movement_plan.set(plan);
+                            }
                         }
+                    } else {
+                        attacker.state = EntityState::Idle;
+                        attacker.unit_mut().movement_plan.clear();
                     }
                 }
-            } else {
-                let attacker = self.entity_mut(attacker_id);
-                attacker.state = EntityState::Idle;
-                attacker.unit_mut().movement_plan.clear();
-                // println!(
-                //     "{:?} doesn't exist so {:?} went back to idling",
-                //     victim_id, attacker_id
-                // );
             }
         }
 
@@ -128,34 +124,35 @@ impl Core {
         //     GATHERING RESOURCES
         //-------------------------------
         let mut gathering_candidates = vec![];
-        for entity in &mut self.entities {
+        for (entity_id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
             if let EntityState::GatheringResource(resource_id) = entity.state {
-                let gatherer_id = entity.id;
+                let gatherer_id = entity_id;
                 if entity.unit_mut().sub_cell_movement.is_ready() {
-                    gathering_candidates.push((gatherer_id, resource_id));
+                    gathering_candidates.push((*gatherer_id, resource_id));
                 }
             }
         }
+        //TODO simplify now that we have RefCell?
         for (gatherer_id, resource_id) in gathering_candidates {
-            let gatherer_pos = self.entity_mut(gatherer_id).position;
-            let success =
-                if let Some(resource) = self.entities.iter_mut().find(|e| e.id == resource_id) {
-                    let resource_pos = resource.position;
-                    let resource_size = resource.size();
-                    is_unit_within_melee_range_of(gatherer_pos, resource_pos, resource_size)
-                } else {
-                    panic!("Resource doesn't exist");
-                };
+            let mut gatherer = self.entity(gatherer_id).borrow_mut();
+            let gatherer_pos = gatherer.position;
+            let success = if let Some(resource) = self.find_entity(resource_id) {
+                let resource = resource.borrow();
+                let resource_pos = resource.position;
+                let resource_size = resource.size();
+                is_unit_within_melee_range_of(gatherer_pos, resource_pos, resource_size)
+            } else {
+                panic!("Resource doesn't exist");
+            };
             if success {
-                let gatherer = self.entity_mut(gatherer_id);
-                let team = gatherer.team;
                 gatherer
                     .unit_mut()
                     .gathering
                     .as_mut()
                     .unwrap()
                     .pick_up_resource(resource_id);
-                self.unit_return_resource(gatherer_id, team, None);
+                self.unit_return_resource(gatherer, None);
             }
         }
 
@@ -163,48 +160,44 @@ impl Core {
         //     RETURNING RESOURCES
         //-------------------------------
         let mut return_candidates = vec![];
-        for entity in &mut self.entities {
+        for (entity_id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
             if let EntityState::ReturningResource(structure_id) = entity.state {
                 if entity.unit_mut().sub_cell_movement.is_ready() {
-                    return_candidates.push((entity.id, entity.team, structure_id));
+                    return_candidates.push((*entity_id, entity.team, structure_id));
                 }
             }
         }
+        //TODO simplify now that we have RefCell?
         for (returner_id, returner_team, structure_id) in return_candidates {
-            let returner_pos = self.entity_mut(returner_id).position;
-            let success =
-                if let Some(structure) = self.entities.iter_mut().find(|e| e.id == structure_id) {
-                    let structure_pos = structure.position;
-                    let structure_size = structure.size();
-                    is_unit_within_melee_range_of(returner_pos, structure_pos, structure_size)
-                } else {
-                    panic!("structure doesn't exist");
-                };
-            if success {
-                let returner = self.entity_mut(returner_id);
-                let gathering = returner.unit_mut().gathering.as_mut().unwrap();
-                let resource_id = gathering.drop_resource();
-                let resource = self.entity_mut(resource_id);
-                let resource_pos = resource.position;
-                let resource_size = resource.size();
-                let team = self.teams.get_mut(&returner_team).unwrap();
-                team.resources += 1;
-                let returner = self.entity_mut(returner_id);
-                returner.state = EntityState::Idle;
-
-                returner.state = EntityState::GatheringResource(resource_id);
-
-                if let Some(plan) = pathfind::find_path(
-                    returner.position,
-                    Destination::AdjacentToEntity(resource_pos, resource_size),
-                    &self.entity_grid,
-                ) {
-                    self.entity_mut(returner_id)
-                        .unit_mut()
-                        .movement_plan
-                        .set(plan);
+            let mut returner = self.entity(returner_id).borrow_mut();
+            let returner_pos = returner.position;
+            if let Some(structure) = self.find_entity(structure_id) {
+                let structure = structure.borrow();
+                if is_unit_within_melee_range_of(returner_pos, structure.position, structure.size())
+                {
+                    self.team_state(&returner_team).borrow_mut().resources += 1;
+                    // Unit goes back out to gather more
+                    let gathering = returner.unit_mut().gathering.as_mut().unwrap();
+                    let resource_id = gathering.drop_resource();
+                    let resource = self.entity(resource_id).borrow();
+                    if let Some(plan) = pathfind::find_path(
+                        returner.position,
+                        Destination::AdjacentToEntity(resource.position, resource.size()),
+                        &self.entity_grid,
+                    ) {
+                        returner.unit_mut().movement_plan.set(plan);
+                        returner.state = EntityState::GatheringResource(resource_id);
+                    } else {
+                        returner.state = EntityState::Idle;
+                    }
                 }
-            }
+            } else {
+                println!(
+                    "Tried to return resource to structure that doesn't exist anymore. Idling."
+                );
+                returner.state = EntityState::Idle;
+            };
         }
 
         //-------------------------------
@@ -212,19 +205,20 @@ impl Core {
         //-------------------------------
         let mut builders_to_remove = Vec::new();
         let mut structures_to_add = Vec::new();
-        for entity in &mut self.entities {
+        for (entity_id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
             if let EntityState::Constructing(structure_type, structure_position) = entity.state {
                 if entity.unit_mut().movement_plan.peek().is_none() {
-                    let builder_pos = entity.position;
+                    //TODO Check if we have _fully_ arrived to the target cell
                     let size = self.structure_sizes.get(&structure_type).unwrap();
                     let mut sufficient_space = true;
                     println!(
                         "Check if structure can fit. Worker pos: {:?}, Structure pos: {:?}, Structure size: {:?}",
-                        builder_pos, structure_position, size
+                        entity.position, structure_position, size
                     );
                     for x in structure_position[0]..structure_position[0] + size[0] {
                         for y in structure_position[1]..structure_position[1] + size[1] {
-                            if [x, y] != builder_pos {
+                            if [x, y] != entity.position {
                                 // Don't check for collision on the cell that the builder stands on,
                                 // since it will be removed when structure is added.
                                 if self.entity_grid.get(&[x, y]) {
@@ -235,7 +229,7 @@ impl Core {
                         }
                     }
                     if sufficient_space {
-                        builders_to_remove.push(entity.id);
+                        builders_to_remove.push(*entity_id);
                         structures_to_add.push((entity.team, structure_position, structure_type));
                     } else {
                         println!("There's not enough space for the structure, so builder goes back to idling");
@@ -249,15 +243,16 @@ impl Core {
         //       ENTITY REMOVAL
         //-------------------------------
         let mut removed_entity_ids = vec![];
-        self.entities.retain(|entity| {
+        self.entities.retain(|(entity_id, entity)| {
+            let entity = entity.borrow();
             let is_dead = entity
                 .health
                 .as_ref()
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
-            let is_transforming_into_structure = builders_to_remove.contains(&entity.id);
+            let is_transforming_into_structure = builders_to_remove.contains(entity_id);
             if is_transforming_into_structure {
-                println!("{:?} is transforming into a structure", entity.id);
+                println!("{:?} is transforming into a structure", entity_id);
             }
             let should_be_removed = is_dead || is_transforming_into_structure;
 
@@ -266,7 +261,7 @@ impl Core {
                     self.entity_grid
                         .set_area(&entity.position, &entity.size(), false);
                 }
-                removed_entity_ids.push(entity.id);
+                removed_entity_ids.push(*entity_id);
             }
 
             !should_be_removed
@@ -285,7 +280,8 @@ impl Core {
         //          TRAINING
         //-------------------------------
         let mut completed_trainings = Vec::new();
-        for entity in &mut self.entities {
+        for (_id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
             if let EntityState::TrainingUnit(trained_entity_type) = entity.state {
                 let status = entity.training.as_mut().map(|training| training.update(dt));
                 if let Some(TrainingUpdateStatus::Done) = status {
@@ -314,204 +310,162 @@ impl Core {
         removed_entity_ids
     }
 
-    pub fn issue_command(&mut self, command: Command, issuing_team: Team) {
+    pub fn issue_command(&self, command: Command, issuing_team: Team) {
         match command {
             Command::Train(TrainCommand {
-                trainer_id,
+                mut trainer,
                 trained_unit_type,
                 config,
             }) => {
-                let resources = self.teams.get(&issuing_team).unwrap().resources;
-                let trainer = self.entity_mut(trainer_id);
                 assert_eq!(trainer.team, issuing_team);
+                let mut team_state = self.teams.get(&issuing_team).unwrap().borrow_mut();
                 let training = trainer
                     .training
                     .as_mut()
                     .expect("Training command was issued for entity that can't train");
-                if resources >= config.cost {
+                if team_state.resources >= config.cost {
                     if let TrainingPerformStatus::NewTrainingStarted =
                         training.try_start(trained_unit_type)
                     {
                         trainer.state = EntityState::TrainingUnit(trained_unit_type);
-                        self.teams.get_mut(&issuing_team).unwrap().resources -= config.cost;
+                        team_state.resources -= config.cost;
                     }
                 }
             }
+
             Command::Construct(ConstructCommand {
-                builder_id,
+                mut builder,
                 structure_position,
                 structure_type,
             }) => {
-                let builder = self.entity_mut(builder_id);
                 assert_eq!(builder.team, issuing_team);
-                let builder_pos = builder.position;
                 builder.state = EntityState::Constructing(structure_type, structure_position);
-
-                let size = *self.structure_sizes.get(&structure_type).unwrap();
-
+                let structure_size = *self.structure_sizes.get(&structure_type).unwrap();
                 if let Some(plan) = pathfind::find_path(
-                    builder_pos,
-                    Destination::AdjacentToEntity(structure_position, size),
+                    builder.position,
+                    Destination::AdjacentToEntity(structure_position, structure_size),
                     &self.entity_grid,
                 ) {
-                    self.entity_mut(builder_id)
-                        .unit_mut()
-                        .movement_plan
-                        .set(plan);
+                    builder.unit_mut().movement_plan.set(plan);
                 }
             }
-            Command::Heal(healer_id) => {
-                let healer = self.entity_mut(healer_id);
-                assert_eq!(healer.team, issuing_team);
-                healer
-                    .actions
-                    .iter()
-                    .find(|action| **action == Some(Action::Heal))
-                    .expect("Heal command was issued for entity that doesn't have a Heal action");
-                let health = healer.health.as_mut().unwrap();
-                health.receive_healing(1);
-            }
+
             Command::Move(MoveCommand {
-                unit_id,
+                unit: mut mover,
                 destination,
             }) => {
-                let mover = self.entity_mut(unit_id);
                 assert_eq!(mover.team, issuing_team);
-                let current_pos = mover.position;
-
                 if let Some(plan) = pathfind::find_path(
-                    current_pos,
+                    mover.position,
                     Destination::Point(destination),
                     &self.entity_grid,
                 ) {
-                    let mover = self.entity_mut(unit_id);
                     mover.state = EntityState::Moving;
                     mover.unit_mut().movement_plan.set(plan);
                 }
             }
-            Command::Attack(AttackCommand {
-                attacker_id,
-                victim_id,
-            }) => {
-                let victim = self.entity_mut(victim_id);
-                assert_ne!(victim.team, issuing_team);
-                let victim_pos = victim.position;
-                let victim_size = victim.size();
-                let attacker = self.entity_mut(attacker_id);
-                assert_eq!(attacker.team, issuing_team);
-                attacker.state = EntityState::Attacking(victim_id);
-                let attacker_pos = attacker.position;
 
+            Command::Attack(AttackCommand {
+                mut attacker,
+                victim,
+            }) => {
+                assert_eq!(attacker.team, issuing_team);
+                assert_ne!(victim.team, issuing_team);
+                attacker.state = EntityState::Attacking(victim.id);
                 if let Some(plan) = pathfind::find_path(
-                    attacker_pos,
-                    Destination::AdjacentToEntity(victim_pos, victim_size),
+                    attacker.position,
+                    Destination::AdjacentToEntity(victim.position, victim.size()),
                     &self.entity_grid,
                 ) {
-                    self.entity_mut(attacker_id)
-                        .unit_mut()
-                        .movement_plan
-                        .set(plan);
+                    attacker.unit_mut().movement_plan.set(plan);
                 }
             }
+
             Command::GatherResource(GatherResourceCommand {
-                gatherer_id,
-                resource_id,
+                mut gatherer,
+                resource,
             }) => {
-                let resource = self.entity_mut(resource_id);
-                assert_eq!(resource.team, Team::Neutral);
-                let resource_pos = resource.position;
-                let resource_size = resource.size();
-                let gatherer = self.entity_mut(gatherer_id);
                 assert_eq!(gatherer.team, issuing_team);
-                if gatherer
+                assert_eq!(resource.team, Team::Neutral);
+                let is_carrying_resource = gatherer
                     .unit_mut()
                     .gathering
                     .as_ref()
                     .unwrap()
-                    .is_carrying()
-                {
+                    .is_carrying();
+                if is_carrying_resource {
                     // TODO improve UI so that no player input leads to this situation
                     eprintln!(
                         "WARN: {:?} was issued to gather a resource, but they already carry some",
-                        gatherer_id
+                        gatherer.id
                     );
                     return;
                 }
-                gatherer.state = EntityState::GatheringResource(resource_id);
-
+                gatherer.state = EntityState::GatheringResource(resource.id);
                 if let Some(plan) = pathfind::find_path(
                     gatherer.position,
-                    Destination::AdjacentToEntity(resource_pos, resource_size),
+                    Destination::AdjacentToEntity(resource.position, resource.size()),
                     &self.entity_grid,
                 ) {
-                    self.entity_mut(gatherer_id)
-                        .unit_mut()
-                        .movement_plan
-                        .set(plan);
+                    gatherer.unit_mut().movement_plan.set(plan);
                 }
             }
-            Command::ReturnResource(ReturnResourceCommand {
-                gatherer_id,
-                structure_id,
-            }) => {
-                let gatherer = self.entity_mut(gatherer_id);
-                assert_eq!(gatherer.team, issuing_team);
 
-                let gathering = gatherer.unit_mut().gathering.as_ref().unwrap();
-                if gathering.is_carrying() {
-                    self.unit_return_resource(gatherer_id, issuing_team, structure_id);
+            Command::ReturnResource(ReturnResourceCommand {
+                mut gatherer,
+                structure,
+            }) => {
+                assert_eq!(gatherer.team, issuing_team);
+                let is_carrying_resource = gatherer
+                    .unit_mut()
+                    .gathering
+                    .as_ref()
+                    .unwrap()
+                    .is_carrying();
+                if is_carrying_resource {
+                    self.unit_return_resource(gatherer, structure);
                 } else {
                     // TODO improve UI so that no player input leads to this situation
                     eprintln!(
                         "WARN: {:?} was issued to return a resource, but they don't carry any",
-                        gatherer_id
+                        gatherer.id
                     );
                 }
             }
         }
     }
 
-    fn unit_return_resource(
-        &mut self,
-        gatherer_id: EntityId,
-        team: Team,
-        structure_id: Option<EntityId>,
-    ) {
-        let structure_id_pos_size = match structure_id {
-            Some(structure_id) => {
-                let structure = self.entity_mut(structure_id);
-                Some((structure_id, structure.position, structure.size()))
-            }
+    fn unit_return_resource(&self, mut gatherer: RefMut<Entity>, structure: Option<Ref<Entity>>) {
+        let structure_id_pos_size = match structure {
+            Some(structure) => Some((structure.id, structure.position, structure.size())),
             None => {
                 // No specific structure was selected as the destination, so we pick one
                 let mut structure_id_pos_size = None;
-                for entity in &self.entities {
-                    if entity.team == team {
-                        // For now, resources can be returned to any friendly structure
-                        if let PhysicalType::Structure { size } = entity.physical_type {
-                            //TODO find the closest structure
-                            structure_id_pos_size = Some((entity.id, entity.position, size));
+                for (entity_id, entity) in &self.entities {
+                    match entity.try_borrow() {
+                        Ok(entity) if entity.team == gatherer.team => {
+                            // For now, resources can be returned to any friendly structure
+                            if let PhysicalType::Structure { size } = entity.physical_type {
+                                //TODO find the closest structure
+                                structure_id_pos_size = Some((*entity_id, entity.position, size));
+                            }
                         }
-                    }
+                        _ => {}
+                    };
                 }
                 structure_id_pos_size
             }
         };
-
-        let gatherer = self.entity_mut(gatherer_id);
+        // TODO simplify with RefCell?
         if let Some((structure_id, structure_pos, structure_size)) = structure_id_pos_size {
             gatherer.state = EntityState::ReturningResource(structure_id);
-            let gatherer_pos = gatherer.position;
 
             if let Some(plan) = pathfind::find_path(
-                gatherer_pos,
+                gatherer.position,
                 Destination::AdjacentToEntity(structure_pos, structure_size),
                 &self.entity_grid,
             ) {
-                self.entity_mut(gatherer_id)
-                    .unit_mut()
-                    .movement_plan
-                    .set(plan);
+                gatherer.unit_mut().movement_plan.set(plan);
             }
         } else {
             gatherer.state = EntityState::Idle;
@@ -519,11 +473,11 @@ impl Core {
         }
     }
 
-    pub fn team_state(&self, team: &Team) -> &TeamState {
+    pub fn team_state(&self, team: &Team) -> &RefCell<TeamState> {
         self.teams.get(team).expect("Unknown team")
     }
 
-    pub fn entities(&self) -> &[Entity] {
+    pub fn entities(&self) -> &[(EntityId, RefCell<Entity>)] {
         &self.entities
     }
 
@@ -568,15 +522,27 @@ impl Core {
     fn add_entity(&mut self, entity_type: EntityType, position: [u32; 2], team: Team) {
         let new_entity = data::create_entity(entity_type, position, team);
         let size = new_entity.size();
-        self.entities.push(new_entity);
+        self.entities
+            .push((new_entity.id, RefCell::new(new_entity)));
         self.entity_grid.set_area(&position, &size, true);
     }
 
-    fn entity_mut(&mut self, id: EntityId) -> &mut Entity {
-        self.entities
-            .iter_mut()
-            .find(|e| e.id == id)
-            .expect("entity must exist")
+    fn entity(&self, id: EntityId) -> &RefCell<Entity> {
+        self.find_entity(id)
+            .unwrap_or_else(|| panic!("Entity not found: {:?}", id))
+    }
+
+    fn find_entity(&self, id: EntityId) -> Option<&RefCell<Entity>> {
+        //println!("find_entity({:?})", id);
+        self.entities.iter().find_map(
+            |(entity_id, entity)| {
+                if entity_id == &id {
+                    Some(entity)
+                } else {
+                    None
+                }
+            },
+        )
     }
 }
 
@@ -601,52 +567,51 @@ fn square_distance(a: [u32; 2], b: [u32; 2]) -> u32 {
 }
 
 #[derive(Debug)]
-pub enum Command {
-    Train(TrainCommand),
-    Construct(ConstructCommand),
-    Move(MoveCommand),
-    Heal(EntityId),
-    Attack(AttackCommand),
-    GatherResource(GatherResourceCommand),
-    ReturnResource(ReturnResourceCommand),
+pub enum Command<'a> {
+    Train(TrainCommand<'a>),
+    Construct(ConstructCommand<'a>),
+    Move(MoveCommand<'a>),
+    Attack(AttackCommand<'a>),
+    GatherResource(GatherResourceCommand<'a>),
+    ReturnResource(ReturnResourceCommand<'a>),
 }
 
 #[derive(Debug)]
-pub struct MoveCommand {
-    pub unit_id: EntityId,
-    pub destination: [u32; 2],
-}
-
-#[derive(Debug)]
-pub struct AttackCommand {
-    pub attacker_id: EntityId,
-    pub victim_id: EntityId,
-}
-
-#[derive(Debug)]
-pub struct GatherResourceCommand {
-    pub gatherer_id: EntityId,
-    pub resource_id: EntityId,
-}
-
-#[derive(Debug)]
-pub struct ReturnResourceCommand {
-    pub gatherer_id: EntityId,
-    pub structure_id: Option<EntityId>,
-}
-
-#[derive(Debug)]
-pub struct TrainCommand {
-    pub trainer_id: EntityId,
+pub struct TrainCommand<'a> {
+    pub trainer: RefMut<'a, Entity>,
     pub trained_unit_type: EntityType,
     pub config: TrainingConfig,
 }
 
 #[derive(Debug)]
-pub struct ConstructCommand {
-    pub builder_id: EntityId,
+pub struct ConstructCommand<'a> {
+    pub builder: RefMut<'a, Entity>,
     pub structure_position: [u32; 2],
     pub structure_type: EntityType,
+}
+
+#[derive(Debug)]
+pub struct MoveCommand<'a> {
+    pub unit: RefMut<'a, Entity>,
+    pub destination: [u32; 2],
+}
+
+#[derive(Debug)]
+pub struct AttackCommand<'a> {
+    pub attacker: RefMut<'a, Entity>,
+    pub victim: Ref<'a, Entity>,
+}
+
+#[derive(Debug)]
+pub struct GatherResourceCommand<'a> {
+    pub gatherer: RefMut<'a, Entity>,
+    pub resource: Ref<'a, Entity>,
+}
+
+#[derive(Debug)]
+pub struct ReturnResourceCommand<'a> {
+    pub gatherer: RefMut<'a, Entity>,
+    pub structure: Option<Ref<'a, Entity>>,
 }
 
 pub struct TeamState {

@@ -31,27 +31,23 @@ pub struct WorldInitData {
 impl WorldInitData {
     pub fn new(map_type: MapType) -> Self {
         let mut entities = vec![
-            create_entity(EntityType::SquareUnit, [4, 4], Team::Player),
             create_entity(EntityType::CircleUnit, [6, 2], Team::Player),
-            create_entity(EntityType::SmallBuilding, [2, 1], Team::Player),
             create_entity(EntityType::LargeBuilding, [1, 7], Team::Player),
         ];
 
-        if map_type != MapType::Empty {
-            let neutral_entity = Entity::new(
-                EntityConfig {
-                    name: "Resource",
-                    is_solid: true,
-                    sprite: EntitySprite::Neutral,
-                    max_health: None,
-                    physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
-                    actions: [None; NUM_ENTITY_ACTIONS],
-                },
-                [6, 4],
-                Team::Neutral,
-            );
-            entities.push(neutral_entity);
-        }
+        let neutral_entity = Entity::new(
+            EntityConfig {
+                name: "Resource",
+                is_solid: true,
+                sprite: EntitySprite::Neutral,
+                max_health: None,
+                physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
+                actions: [None; NUM_ENTITY_ACTIONS],
+            },
+            [6, 4],
+            Team::Neutral,
+        );
+        entities.push(neutral_entity);
 
         match map_type {
             MapType::Empty => Self {

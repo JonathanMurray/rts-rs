@@ -453,7 +453,6 @@ pub enum Action {
     Train(EntityType, TrainingConfig),
     Construct(EntityType),
     Move,
-    Heal,
     Attack,
     GatherResource,
     ReturnResource,
