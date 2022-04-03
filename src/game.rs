@@ -549,15 +549,16 @@ impl EventHandler for Game {
 
         self.player_state.update(ctx, dt);
 
-        if let Some(hovered_world_pos) =
-            self.screen_to_grid(ggez::input::mouse::position(ctx).into())
+        if let Some(pixel_coords) = self
+            .player_state
+            .screen_to_world(ggez::input::mouse::position(ctx).into())
         {
             if self.player_state.cursor_state() == CursorState::Default {
                 let is_hovering_some_entity = self
                     .core
                     .entities()
                     .iter()
-                    .any(|(_id, e)| e.borrow().cell_rect().contains(hovered_world_pos));
+                    .any(|(_id, e)| e.borrow().pixel_rect().contains(pixel_coords));
                 let icon = if is_hovering_some_entity {
                     CursorIcon::Hand
                 } else {
@@ -713,7 +714,8 @@ impl EventHandler for Game {
 
                 println!("SELECTION RECT: {:?}", selection_rect);
 
-                // TODO: select multiple entities, and prioritize player-owned
+                // TODO: prioritize player-owned
+                // TODO: prioritize units
                 if button == MouseButton::Left {
                     let selected_entity_ids = self
                         .core
