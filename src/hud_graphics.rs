@@ -23,7 +23,6 @@ pub struct HudGraphics {
     buttons: [Button; NUM_BUTTONS],
     minimap: Minimap,
     hovered_button_index: Option<usize>,
-    entity_actions: [Option<Action>; NUM_ENTITY_ACTIONS],
     keycode_labels: HashMap<KeyCode, Text>,
 }
 
@@ -58,25 +57,19 @@ impl HudGraphics {
             buttons,
             minimap,
             hovered_button_index: None,
-            entity_actions: [None; NUM_ENTITY_ACTIONS],
             keycode_labels,
         })
     }
 
-    pub fn draw(
+    pub fn draw<'a>(
         &self,
         ctx: &mut Context,
         player_team_state: Ref<TeamState>,
-        selected_entity: Option<Ref<Entity>>,
+        selected_entities: Vec<Ref<'a, Entity>>,
+        num_selected_entities: usize,
         player_state: &PlayerState,
     ) -> GameResult {
         let x = 0.0;
-        let name_y = 28.0;
-        let health_y = 110.0;
-        let resource_status_y = 180.0;
-        let training_status_y = 220.0;
-        let progress_y = 270.0;
-        let tooltip_y = 420.0;
 
         let small_font = 20.0;
         let medium_font = 30.0;
@@ -91,7 +84,30 @@ impl HudGraphics {
         ));
         resources_text.draw(ctx, DrawParam::new().dest([1200.0, 15.0]))?;
 
-        if let Some(selected_entity) = selected_entity {
+        let name_y = 28.0;
+        let health_y = 110.0;
+        let resource_status_y = 180.0;
+        let training_status_y = 220.0;
+        let progress_y = 270.0;
+        let tooltip_y = 420.0;
+
+        let mut button_states = [ButtonState {
+            text: None,
+            matches_entity_state: false,
+            matches_cursor_state: false,
+        }; NUM_BUTTONS];
+
+        if num_selected_entities == 0 {
+            let y = 28.0;
+            self.draw_text(ctx, [x, y], "[nothing selected]", large_font)?;
+        } else if num_selected_entities > 1 {
+            let mut y = 28.0;
+            for entity in &selected_entities {
+                self.draw_text(ctx, [x, y], entity.name, large_font)?;
+                y += 50.0;
+            }
+        } else if num_selected_entities == 1 {
+            let selected_entity = selected_entities.first().unwrap();
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
 
             if let Some(health) = &selected_entity.health {
@@ -111,14 +127,9 @@ impl HudGraphics {
             )?;
 
             if selected_entity.team == Team::Player {
-                let mut is_training = false;
-                let mut button_states = [ButtonState {
-                    text: None,
-                    matches_entity_state: false,
-                    matches_cursor_state: false,
-                }; NUM_BUTTONS];
                 if let EntityState::TrainingUnit(trained_entity_type) = selected_entity.state {
-                    is_training = true;
+                    // TODO: Use some other way of determining when to hide buttons
+                    //is_training = true;
                     let training = selected_entity.training.as_ref().unwrap();
                     let progress = training.progress(trained_entity_type).unwrap();
                     let training_status = format!("Training {:?}", trained_entity_type);
@@ -143,112 +154,118 @@ impl HudGraphics {
                         }
                     }
                 }
+            }
+        }
 
-                if !is_training {
-                    let mut tooltip_text = String::new();
-                    for (i, action) in selected_entity.actions.iter().enumerate() {
-                        if let Some(action) = action {
-                            button_states[i].text = Some(self.action_label(action));
-                            match action {
-                                Action::Train(trained_entity_type, training_config) => {
-                                    if selected_entity.state
-                                        == EntityState::TrainingUnit(*trained_entity_type)
-                                    {
-                                        button_states[i].matches_entity_state = true;
-                                    }
-                                    if self.hovered_button_index == Some(i) {
-                                        tooltip_text = format!(
-                                            "Train {:?} [cost {}, {}s]",
-                                            trained_entity_type,
-                                            training_config.cost,
-                                            training_config.duration.as_secs()
-                                        );
-                                    }
-                                }
-                                Action::Construct(structure_type) => {
-                                    if let EntityState::Constructing(constructing_type, _) =
-                                        selected_entity.state
-                                    {
-                                        if constructing_type == *structure_type {
-                                            button_states[i].matches_entity_state = true;
-                                        }
-                                    }
-                                    if cursor_state
-                                        == CursorState::PlacingStructure(*structure_type)
-                                    {
-                                        button_states[i].matches_cursor_state = true;
-                                        tooltip_text = format!("Construct {:?}", structure_type);
-                                    }
-                                    if self.hovered_button_index == Some(i) {
-                                        tooltip_text = format!("Construct {:?}", structure_type);
-                                    }
-                                }
-                                Action::Move => {
-                                    if selected_entity.state == EntityState::Moving {
-                                        button_states[i].matches_entity_state = true;
-                                    }
-                                    const TEXT: &str = "Move";
-                                    if cursor_state == CursorState::SelectingMovementDestination {
-                                        button_states[i].matches_cursor_state = true;
-                                        tooltip_text = TEXT.to_string();
-                                    }
-                                    if self.hovered_button_index == Some(i) {
-                                        tooltip_text = TEXT.to_string();
-                                    }
-                                }
-                                Action::Attack => {
-                                    if let EntityState::Attacking(_) = selected_entity.state {
-                                        button_states[i].matches_entity_state = true;
-                                    }
-                                    const TEXT: &str = "Attack";
-                                    if cursor_state == CursorState::SelectingAttackTarget {
-                                        button_states[i].matches_cursor_state = true;
-                                        tooltip_text = TEXT.to_string();
-                                    }
-                                    if self.hovered_button_index == Some(i) {
-                                        tooltip_text = TEXT.to_string();
-                                    }
-                                }
-                                Action::GatherResource => {
-                                    if let EntityState::GatheringResource(..) =
-                                        selected_entity.state
-                                    {
-                                        button_states[i].matches_entity_state = true;
-                                    }
-                                    const TEXT: &str = "Gather";
-                                    if cursor_state == CursorState::SelectingResourceTarget {
-                                        button_states[i].matches_cursor_state = true;
-                                        tooltip_text = TEXT.to_string();
-                                    }
-                                    if self.hovered_button_index == Some(i) {
-                                        tooltip_text = TEXT.to_string();
-                                    }
-                                }
-                                Action::ReturnResource => {
-                                    if let EntityState::ReturningResource(..) =
-                                        selected_entity.state
-                                    {
-                                        button_states[i].matches_entity_state = true;
-                                    }
-                                    if self.hovered_button_index == Some(i) {
-                                        tooltip_text = "Return".to_string();
-                                    }
+        let mut tooltip_text = String::new();
+
+        // TODO: Store more of this state inside buttons and update inside set_entity_actions
+        for (i, button_state) in button_states.iter_mut().enumerate() {
+            if let Some(action) = self.buttons[i].action {
+                button_state.text = Some(self.action_label(&action));
+
+                match action {
+                    Action::Train(trained_entity_type, training_config) => {
+                        if selected_entities
+                            .iter()
+                            .any(|e| e.state == EntityState::TrainingUnit(trained_entity_type))
+                        {
+                            button_state.matches_entity_state = true;
+                        }
+                        if self.hovered_button_index == Some(i) {
+                            tooltip_text = format!(
+                                "Train {:?} [cost {}, {}s]",
+                                trained_entity_type,
+                                training_config.cost,
+                                training_config.duration.as_secs()
+                            );
+                        }
+                    }
+                    Action::Construct(structure_type) => {
+                        for e in &selected_entities {
+                            if let EntityState::Constructing(constructing_type, _) = e.state {
+                                if structure_type == constructing_type {
+                                    button_state.matches_entity_state = true;
                                 }
                             }
                         }
-                    }
 
-                    let mut button_states = button_states.into_iter();
-                    for (button_i, button) in self.buttons.iter().enumerate() {
-                        let is_hovered = self.hovered_button_index == Some(button_i);
-                        let button_state = button_states.next().unwrap();
-                        button.draw(ctx, button_state, is_hovered)?;
+                        if cursor_state == CursorState::PlacingStructure(structure_type) {
+                            button_state.matches_cursor_state = true;
+                            tooltip_text = format!("Construct {:?}", structure_type);
+                        }
+                        if self.hovered_button_index == Some(i) {
+                            tooltip_text = format!("Construct {:?}", structure_type);
+                        }
                     }
-                    if !tooltip_text.is_empty() {
-                        self.draw_text(ctx, [x, tooltip_y], tooltip_text, medium_font)?;
+                    Action::Move => {
+                        if selected_entities
+                            .iter()
+                            .any(|e| e.state == EntityState::Moving)
+                        {
+                            button_state.matches_entity_state = true;
+                        }
+                        const TEXT: &str = "Move";
+                        if cursor_state == CursorState::SelectingMovementDestination {
+                            button_state.matches_cursor_state = true;
+                            tooltip_text = TEXT.to_string();
+                        }
+                        if self.hovered_button_index == Some(i) {
+                            tooltip_text = TEXT.to_string();
+                        }
+                    }
+                    Action::Attack => {
+                        for e in &selected_entities {
+                            if let EntityState::Attacking(_) = e.state {
+                                button_state.matches_entity_state = true;
+                            }
+                        }
+                        const TEXT: &str = "Attack";
+                        if cursor_state == CursorState::SelectingAttackTarget {
+                            button_state.matches_cursor_state = true;
+                            tooltip_text = TEXT.to_string();
+                        }
+                        if self.hovered_button_index == Some(i) {
+                            tooltip_text = TEXT.to_string();
+                        }
+                    }
+                    Action::GatherResource => {
+                        for e in &selected_entities {
+                            if let EntityState::GatheringResource(_) = e.state {
+                                button_state.matches_entity_state = true;
+                            }
+                        }
+                        const TEXT: &str = "Gather";
+                        if cursor_state == CursorState::SelectingResourceTarget {
+                            button_state.matches_cursor_state = true;
+                            tooltip_text = TEXT.to_string();
+                        }
+                        if self.hovered_button_index == Some(i) {
+                            tooltip_text = TEXT.to_string();
+                        }
+                    }
+                    Action::ReturnResource => {
+                        for e in &selected_entities {
+                            if let EntityState::ReturningResource(..) = e.state {
+                                button_state.matches_entity_state = true;
+                            }
+                        }
+                        if self.hovered_button_index == Some(i) {
+                            tooltip_text = "Return".to_string();
+                        }
                     }
                 }
             }
+        }
+
+        let mut button_states = button_states.into_iter();
+        for (button_i, button) in self.buttons.iter().enumerate() {
+            let is_hovered = self.hovered_button_index == Some(button_i);
+            let button_state = button_states.next().unwrap();
+            button.draw(ctx, button_state, is_hovered)?;
+        }
+        if !tooltip_text.is_empty() {
+            self.draw_text(ctx, [x, tooltip_y], tooltip_text, medium_font)?;
         }
 
         self.minimap
@@ -270,10 +287,13 @@ impl HudGraphics {
         x: f32,
         y: f32,
     ) -> Option<PlayerInput> {
-        for (i, button) in self.buttons.iter_mut().enumerate() {
+        for button in &mut self.buttons {
             if button.rect.contains([x, y]) {
-                button.on_click();
-                return Some(PlayerInput::UseEntityAction(i));
+                // TODO delegate more to button
+                if let Some(action) = button.action {
+                    button.on_click();
+                    return Some(PlayerInput::UseEntityAction(action));
+                }
             }
         }
 
@@ -298,11 +318,9 @@ impl HudGraphics {
     }
 
     pub fn on_key_down(&self, keycode: KeyCode) -> Option<PlayerInput> {
-        for (i, action) in self.entity_actions.iter().enumerate() {
-            if let Some(action) = action {
-                if action_keycode(action) == keycode {
-                    return Some(PlayerInput::UseEntityAction(i));
-                }
+        for action in self.buttons.iter().filter_map(|b| b.action) {
+            if action_keycode(&action) == keycode {
+                return Some(PlayerInput::UseEntityAction(action));
             }
         }
         None
@@ -315,7 +333,9 @@ impl HudGraphics {
     }
 
     pub fn set_entity_actions(&mut self, actions: [Option<Action>; NUM_ENTITY_ACTIONS]) {
-        self.entity_actions = actions;
+        for (i, action) in actions.iter().enumerate() {
+            self.buttons[i].action = *action;
+        }
     }
 
     fn draw_text(
@@ -456,6 +476,7 @@ pub struct Button {
     highlight: Mesh,
     is_down: bool,
     cooldown: Duration,
+    action: Option<Action>,
 }
 
 impl Button {
@@ -490,6 +511,7 @@ impl Button {
             highlight,
             is_down: false,
             cooldown: Duration::ZERO,
+            action: None,
         })
     }
 
@@ -514,13 +536,15 @@ impl Button {
                     .scale(scale),
             )?;
         }
-        if state.matches_cursor_state || is_hovered {
-            self.highlight.draw(
-                ctx,
-                DrawParam::default()
-                    .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
-                    .scale(scale),
-            )?;
+        if self.action.is_some() {
+            if state.matches_cursor_state || is_hovered {
+                self.highlight.draw(
+                    ctx,
+                    DrawParam::default()
+                        .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
+                        .scale(scale),
+                )?;
+            }
         }
         Ok(())
     }
@@ -542,7 +566,7 @@ impl Button {
 
 #[derive(Debug)]
 pub enum PlayerInput {
-    UseEntityAction(usize),
+    UseEntityAction(Action),
     SetCameraPositionRelativeToWorldDimension([f32; 2]),
 }
 

@@ -18,7 +18,7 @@ use crate::core::{
 };
 use crate::data::{EntityType, MapType, WorldInitData};
 use crate::enemy_ai::EnemyPlayerAi;
-use crate::entities::{Action, Entity, EntityId, PhysicalType, Team};
+use crate::entities::{Action, Entity, EntityId, PhysicalType, Team, NUM_ENTITY_ACTIONS};
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -31,6 +31,9 @@ pub const WORLD_VIEWPORT: Rect = Rect {
     w: WINDOW_DIMENSIONS[0] - 100.0,
     h: 650.0,
 };
+
+//TODO
+const MAX_NUM_SELECTED_ENTITIES: usize = 2;
 
 const TITLE: &str = "RTS";
 
@@ -88,7 +91,7 @@ impl MovementCommandIndicator {
 }
 
 pub struct PlayerState {
-    selected_entity_id: Option<EntityId>,
+    selected_entity_ids: Vec<EntityId>,
     cursor_state: Cell<CursorState>,
     camera: RefCell<Camera>,
     movement_command_indicator: RefCell<MovementCommandIndicator>,
@@ -97,7 +100,7 @@ pub struct PlayerState {
 impl PlayerState {
     fn new(camera: Camera) -> Self {
         Self {
-            selected_entity_id: None,
+            selected_entity_ids: vec![],
             cursor_state: Cell::new(CursorState::Default),
             camera: RefCell::new(camera),
             movement_command_indicator: RefCell::new(MovementCommandIndicator::new()),
@@ -207,18 +210,18 @@ impl Game {
         })
     }
 
-    fn selected_entity(&self) -> Option<&RefCell<Entity>> {
-        self.player_state.selected_entity_id.map(|id| {
+    fn selected_entities(&self) -> impl Iterator<Item = &RefCell<Entity>> {
+        self.player_state.selected_entity_ids.iter().map(|id| {
             self.core
                 .entities()
                 .iter()
-                .find_map(|(entity_id, entity)| if entity_id == &id { Some(entity) } else { None })
+                .find_map(|(entity_id, entity)| if entity_id == id { Some(entity) } else { None })
                 .expect("selected entity must exist")
         })
     }
 
-    fn selected_player_entity(&self) -> Option<&RefCell<Entity>> {
-        self.selected_entity()
+    fn selected_player_entities(&self) -> impl Iterator<Item = &RefCell<Entity>> {
+        self.selected_entities()
             .filter(|entity| RefCell::borrow(entity).team == Team::Player)
     }
 
@@ -274,20 +277,34 @@ impl Game {
         ];
     }
 
-    fn set_selected_entity(&mut self, entity_id: Option<EntityId>) {
-        self.player_state.selected_entity_id = entity_id;
-        if let Some(entity) = self.selected_entity() {
-            let actions = entity.borrow().actions;
-            self.hud.borrow_mut().set_entity_actions(actions);
+    fn set_selected_entities(&mut self, entity_ids: Vec<EntityId>) {
+        self.player_state.selected_entity_ids = entity_ids;
+        let mut actions = [None; NUM_ENTITY_ACTIONS];
+
+        let mut selected_entities = self.selected_entities();
+        if let Some(first_entity) = selected_entities.next() {
+            actions = first_entity.borrow().actions;
         }
+
+        for additional_entity in selected_entities {
+            for (i, action) in additional_entity.borrow().actions.iter().enumerate() {
+                if actions[i] != *action {
+                    // Since not all selected entities have this action, it should not
+                    // be shown in HUD.
+                    actions[i] = None;
+                }
+            }
+        }
+
+        self.hud.borrow_mut().set_entity_actions(actions);
     }
 
     fn handle_player_input(&self, ctx: &mut Context, player_input: PlayerInput) {
         match player_input {
-            PlayerInput::UseEntityAction(i) => {
-                if let Some(entity) = self.selected_player_entity() {
+            PlayerInput::UseEntityAction(action) => {
+                for entity in self.selected_player_entities() {
                     let mut_entity = entity.borrow_mut();
-                    if let Some(action) = mut_entity.actions[i] {
+                    if mut_entity.actions.contains(&Some(action)) {
                         self.handle_player_use_entity_action(ctx, mut_entity, action);
                     }
                 }
@@ -338,42 +355,43 @@ impl Game {
     }
 
     fn handle_right_click_world(&mut self, world_pixel_coords: [f32; 2]) {
-        if let Some(entity) = self.selected_player_entity() {
+        let world_pos = world_to_grid(world_pixel_coords);
+        for entity in self.selected_player_entities() {
             let entity_ref = entity.borrow();
-            let world_pos = world_to_grid(world_pixel_coords);
             match &entity_ref.physical_type {
                 PhysicalType::Unit(unit) => {
                     if unit.combat.is_some() {
                         if let Some(victim) = self.enemy_at_position(world_pos) {
                             drop(entity_ref);
-                            return self._player_issue_attack(entity.borrow_mut(), victim.borrow());
+                            self._player_issue_attack(entity.borrow_mut(), victim.borrow());
+                            continue;
                         }
                     }
                     if entity_ref.actions.contains(&Some(Action::GatherResource)) {
                         if let Some(resource) = self.resource_at_position(world_pos) {
                             drop(entity_ref);
-                            return self._player_issue_gather_resource(
+                            self._player_issue_gather_resource(
                                 entity.borrow_mut(),
                                 resource.borrow(),
                             );
+                            continue;
                         }
                         if let Some(structure) = self.player_structure_at_position(world_pos) {
                             drop(entity_ref);
-                            return self.player_issue_return_resource(
+                            self.player_issue_return_resource(
                                 entity.borrow_mut(),
                                 Some(structure.borrow()),
                             );
+                            continue;
                         }
                     }
                     drop(entity_ref);
-                    self._player_issue_movement(world_pixel_coords, entity.borrow_mut());
+                    self._player_issue_movement(entity.borrow_mut(), world_pixel_coords);
                 }
                 PhysicalType::Structure { .. } => {
                     println!("Structures have no right-click functionality yet")
                 }
             }
-        } else {
-            println!("No entity is selected");
         }
     }
 
@@ -391,14 +409,15 @@ impl Game {
         );
     }
 
-    fn player_issue_construct(
+    fn player_issue_first_selected_construct(
         &self,
         _ctx: &mut Context,
         clicked_world_pos: [u32; 2],
         structure_type: EntityType,
     ) {
         let builder = self
-            .selected_player_entity()
+            .selected_player_entities()
+            .next()
             .expect("Cannot issue construction without selected entity")
             .borrow_mut();
         self.core.issue_command(
@@ -411,12 +430,11 @@ impl Game {
         );
     }
 
-    fn player_issue_attack(&self, world_pos: [u32; 2]) {
-        let attacker = self
-            .selected_player_entity()
-            .expect("Cannot attack without selected entity");
+    fn player_issue_all_selected_attack(&self, world_pos: [u32; 2]) {
         if let Some(victim) = self.enemy_at_position(world_pos) {
-            self._player_issue_attack(attacker.borrow_mut(), victim.borrow());
+            for attacker in self.selected_player_entities() {
+                self._player_issue_attack(attacker.borrow_mut(), victim.borrow());
+            }
         } else {
             println!("Invalid attack target");
         }
@@ -430,14 +448,13 @@ impl Game {
         );
     }
 
-    fn player_issue_movement(&self, world_pixel_coords: [f32; 2]) {
-        let entity = self
-            .selected_player_entity()
-            .expect("Cannot issue movement without selected entity");
-        self._player_issue_movement(world_pixel_coords, entity.borrow_mut());
+    fn player_issue_all_selected_movement(&self, world_pixel_coords: [f32; 2]) {
+        for entity in self.selected_player_entities() {
+            self._player_issue_movement(entity.borrow_mut(), world_pixel_coords);
+        }
     }
 
-    fn _player_issue_movement(&self, world_pixel_coordinates: [f32; 2], entity: RefMut<Entity>) {
+    fn _player_issue_movement(&self, entity: RefMut<Entity>, world_pixel_coordinates: [f32; 2]) {
         self.player_state
             .movement_command_indicator
             .borrow_mut()
@@ -452,12 +469,11 @@ impl Game {
         );
     }
 
-    fn player_issue_gather_resource(&self, world_pos: [u32; 2]) {
+    fn player_issue_all_selected_gather_resource(&self, world_pos: [u32; 2]) {
         if let Some(resource) = self.resource_at_position(world_pos) {
-            let gatherer = self
-                .selected_player_entity()
-                .expect("Cannot gather without selected entity");
-            self._player_issue_gather_resource(gatherer.borrow_mut(), resource.borrow());
+            for gatherer in self.selected_player_entities() {
+                self._player_issue_gather_resource(gatherer.borrow_mut(), resource.borrow());
+            }
         } else {
             println!("Invalid resource target");
         }
@@ -513,12 +529,15 @@ impl EventHandler for Game {
 
         let removed_entity_ids = self.core.update(dt);
 
-        for removed_entity_id in removed_entity_ids {
-            if self.player_state.selected_entity_id == Some(removed_entity_id) {
-                self.set_selected_entity(None);
-                self.player_state
-                    .set_cursor_state(ctx, CursorState::Default);
-            }
+        let had_some_selected = !self.player_state.selected_entity_ids.is_empty();
+        self.player_state
+            .selected_entity_ids
+            .retain(|entity_id| !removed_entity_ids.contains(entity_id));
+        if had_some_selected && self.player_state.selected_entity_ids.is_empty() {
+            // TODO: what if you still have some selected entity, but it doesn't
+            //       have any action corresponding to the cursor state?
+            self.player_state
+                .set_cursor_state(ctx, CursorState::Default);
         }
 
         self.player_state.update(ctx, dt);
@@ -568,7 +587,7 @@ impl EventHandler for Game {
                 .player_state
                 .world_to_screen(entity.world_pixel_position());
 
-            if self.player_state.selected_entity_id.as_ref() == Some(entity_id) {
+            if self.player_state.selected_entity_ids.contains(entity_id) {
                 self.assets
                     .draw_selection(ctx, entity.size(), entity.team, screen_coords)?;
             }
@@ -606,10 +625,16 @@ impl EventHandler for Game {
         self.assets
             .draw_background_around_grid(ctx, WORLD_VIEWPORT.point().into())?;
 
+        let selected_entities: Vec<Ref<Entity>> = self
+            .selected_entities()
+            .map(|entity| entity.borrow())
+            .collect();
+
         self.hud.borrow().draw(
             ctx,
             self.core.team_state(&Team::Player).borrow(),
-            self.selected_entity().map(|e| e.borrow()),
+            selected_entities,
+            self.player_state.selected_entity_ids.len(), //TODO
             &self.player_state,
         )?;
 
@@ -634,22 +659,26 @@ impl EventHandler for Game {
                     }
                 }
                 CursorState::SelectingMovementDestination => {
-                    self.player_issue_movement(clicked_world_pixel_coords);
+                    self.player_issue_all_selected_movement(clicked_world_pixel_coords);
                     self.player_state
                         .set_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::PlacingStructure(structure_type) => {
-                    self.player_issue_construct(ctx, clicked_world_pos, structure_type);
+                    self.player_issue_first_selected_construct(
+                        ctx,
+                        clicked_world_pos,
+                        structure_type,
+                    );
                     self.player_state
                         .set_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::SelectingAttackTarget => {
-                    self.player_issue_attack(clicked_world_pos);
+                    self.player_issue_all_selected_attack(clicked_world_pos);
                     self.player_state
                         .set_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::SelectingResourceTarget => {
-                    self.player_issue_gather_resource(clicked_world_pos);
+                    self.player_issue_all_selected_gather_resource(clicked_world_pos);
                     self.player_state
                         .set_cursor_state(ctx, CursorState::Default);
                 }
@@ -682,19 +711,25 @@ impl EventHandler for Game {
 
                 // TODO: select multiple entities, and prioritize player-owned
                 if button == MouseButton::Left {
-                    let selected_entity_id = self.core.entities().iter().find_map(|(id, e)| {
-                        let e = e.borrow();
-                        if e.pixel_rect().overlaps(&selection_rect) {
-                            Some(*id)
-                        } else {
-                            None
-                        }
-                    });
+                    let selected_entity_ids = self
+                        .core
+                        .entities()
+                        .iter()
+                        .filter_map(|(id, e)| {
+                            let e = e.borrow();
+                            if e.pixel_rect().overlaps(&selection_rect) {
+                                Some(*id)
+                            } else {
+                                None
+                            }
+                        })
+                        .take(MAX_NUM_SELECTED_ENTITIES)
+                        .collect();
                     println!(
                         "Selected {:?} by releasing mouse button",
-                        selected_entity_id
+                        selected_entity_ids
                     );
-                    self.set_selected_entity(selected_entity_id);
+                    self.set_selected_entities(selected_entity_ids);
                 }
             } else {
                 println!("Didn't get any targets from the selection area")

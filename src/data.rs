@@ -32,6 +32,7 @@ impl WorldInitData {
     pub fn new(map_type: MapType) -> Self {
         let mut entities = vec![
             create_entity(EntityType::CircleUnit, [6, 2], Team::Player),
+            create_entity(EntityType::SquareUnit, [8, 2], Team::Player),
             create_entity(EntityType::LargeBuilding, [1, 7], Team::Player),
         ];
 
