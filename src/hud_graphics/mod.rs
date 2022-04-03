@@ -89,7 +89,6 @@ impl HudGraphics {
         ctx: &mut Context,
         player_team_state: Ref<TeamState>,
         selected_entities: Vec<Ref<'a, Entity>>,
-        num_selected_entities: usize,
         player_state: &PlayerState,
     ) -> GameResult {
         let x = 0.0;
@@ -106,16 +105,14 @@ impl HudGraphics {
         ));
         resources_text.draw(ctx, DrawParam::new().dest([1200.0, 15.0]))?;
 
-        if num_selected_entities == 0 {
-            // draw nothing?
-        } else if num_selected_entities > 1 {
+        if selected_entities.len() > 1 {
             let mut y = 28.0;
             for entity in &selected_entities {
                 let config = self.assets.get(entity.entity_type);
                 self.draw_text(ctx, [x, y], &config.name, large_font)?;
                 y += 50.0;
             }
-        } else if num_selected_entities == 1 {
+        } else if selected_entities.len() == 1 {
             let entity = selected_entities.first().unwrap();
             let config = self.assets.get(entity.entity_type);
 

@@ -644,7 +644,6 @@ impl EventHandler for Game {
             ctx,
             self.core.team_state(&Team::Player).borrow(),
             selected_entities,
-            self.player_state.selected_entity_ids.len(), //TODO
             &self.player_state,
         )?;
 
