@@ -1,5 +1,6 @@
 use std::cell::Ref;
 use std::collections::HashMap;
+use std::convert::TryInto;
 use std::time::Duration;
 
 use ggez::graphics::{
@@ -11,9 +12,10 @@ use ggez::{Context, GameResult};
 
 use crate::core::TeamState;
 use crate::data::EntityType;
-use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
+use crate::entities::{
+    Action, Entity, EntityState, PhysicalType, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
+};
 use crate::game::{CursorState, PlayerState, CELL_PIXEL_SIZE, WORLD_VIEWPORT};
-use std::convert::TryInto;
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 
@@ -24,6 +26,7 @@ pub struct HudGraphics {
     minimap: Minimap,
     hovered_button_index: Option<usize>,
     keycode_labels: HashMap<KeyCode, Text>,
+    tooltip: Tooltip,
 }
 
 impl HudGraphics {
@@ -51,6 +54,8 @@ impl HudGraphics {
 
         let keycode_labels = create_keycode_labels(font);
 
+        let tooltip = Tooltip::new(font, [position[0], position[1] + 420.0]);
+
         Ok(Self {
             position_on_screen: position,
             font,
@@ -58,6 +63,7 @@ impl HudGraphics {
             minimap,
             hovered_button_index: None,
             keycode_labels,
+            tooltip,
         })
     }
 
@@ -89,13 +95,6 @@ impl HudGraphics {
         let resource_status_y = 180.0;
         let training_status_y = 220.0;
         let progress_y = 270.0;
-        let tooltip_y = 420.0;
-
-        let mut button_states = [ButtonState {
-            text: None,
-            matches_entity_state: false,
-            matches_cursor_state: false,
-        }; NUM_BUTTONS];
 
         if num_selected_entities == 0 {
             let y = 28.0;
@@ -157,116 +156,48 @@ impl HudGraphics {
             }
         }
 
-        let mut tooltip_text = String::new();
-
-        // TODO: Store more of this state inside buttons and update inside set_entity_actions
-        for (i, button_state) in button_states.iter_mut().enumerate() {
-            if let Some(action) = self.buttons[i].action {
-                button_state.text = Some(self.action_label(&action));
-
-                match action {
-                    Action::Train(trained_entity_type, training_config) => {
-                        if selected_entities
-                            .iter()
-                            .any(|e| e.state == EntityState::TrainingUnit(trained_entity_type))
-                        {
-                            button_state.matches_entity_state = true;
-                        }
-                        if self.hovered_button_index == Some(i) {
-                            tooltip_text = format!(
-                                "Train {:?} [cost {}, {}s]",
-                                trained_entity_type,
-                                training_config.cost,
-                                training_config.duration.as_secs()
-                            );
-                        }
-                    }
-                    Action::Construct(structure_type) => {
-                        for e in &selected_entities {
-                            if let EntityState::Constructing(constructing_type, _) = e.state {
-                                if structure_type == constructing_type {
-                                    button_state.matches_entity_state = true;
-                                }
-                            }
-                        }
-
-                        if cursor_state == CursorState::PlacingStructure(structure_type) {
-                            button_state.matches_cursor_state = true;
-                            tooltip_text = format!("Construct {:?}", structure_type);
-                        }
-                        if self.hovered_button_index == Some(i) {
-                            tooltip_text = format!("Construct {:?}", structure_type);
-                        }
-                    }
-                    Action::Move => {
-                        if selected_entities
-                            .iter()
-                            .any(|e| e.state == EntityState::Moving)
-                        {
-                            button_state.matches_entity_state = true;
-                        }
-                        const TEXT: &str = "Move";
-                        if cursor_state == CursorState::SelectingMovementDestination {
-                            button_state.matches_cursor_state = true;
-                            tooltip_text = TEXT.to_string();
-                        }
-                        if self.hovered_button_index == Some(i) {
-                            tooltip_text = TEXT.to_string();
-                        }
-                    }
-                    Action::Attack => {
-                        for e in &selected_entities {
-                            if let EntityState::Attacking(_) = e.state {
-                                button_state.matches_entity_state = true;
-                            }
-                        }
-                        const TEXT: &str = "Attack";
-                        if cursor_state == CursorState::SelectingAttackTarget {
-                            button_state.matches_cursor_state = true;
-                            tooltip_text = TEXT.to_string();
-                        }
-                        if self.hovered_button_index == Some(i) {
-                            tooltip_text = TEXT.to_string();
-                        }
-                    }
-                    Action::GatherResource => {
-                        for e in &selected_entities {
-                            if let EntityState::GatheringResource(_) = e.state {
-                                button_state.matches_entity_state = true;
-                            }
-                        }
-                        const TEXT: &str = "Gather";
-                        if cursor_state == CursorState::SelectingResourceTarget {
-                            button_state.matches_cursor_state = true;
-                            tooltip_text = TEXT.to_string();
-                        }
-                        if self.hovered_button_index == Some(i) {
-                            tooltip_text = TEXT.to_string();
-                        }
-                    }
-                    Action::ReturnResource => {
-                        for e in &selected_entities {
-                            if let EntityState::ReturningResource(..) = e.state {
-                                button_state.matches_entity_state = true;
-                            }
-                        }
-                        if self.hovered_button_index == Some(i) {
-                            tooltip_text = "Return".to_string();
-                        }
-                    }
-                }
-            }
-        }
-
-        let mut button_states = button_states.into_iter();
         for (button_i, button) in self.buttons.iter().enumerate() {
             let is_hovered = self.hovered_button_index == Some(button_i);
-            let button_state = button_states.next().unwrap();
-            button.draw(ctx, button_state, is_hovered)?;
+            let matches_entity_state = button
+                .action
+                .map(|action| {
+                    selected_entities
+                        .iter()
+                        .any(|e| state_matches_action(e.state, action))
+                })
+                .unwrap_or(false);
+            button.draw(ctx, is_hovered, cursor_state, matches_entity_state)?;
         }
-        if !tooltip_text.is_empty() {
-            self.draw_text(ctx, [x, tooltip_y], tooltip_text, medium_font)?;
-        }
+
+        let tooltip_text = match cursor_state {
+            CursorState::Default => {
+                if let Some(index) = self.hovered_button_index {
+                    match self.buttons[index].action {
+                        Some(Action::Attack) => TooltipText::ActionAttack,
+                        Some(Action::Move) => TooltipText::ActionMove,
+                        Some(Action::Construct(structure_type)) => {
+                            TooltipText::ActionConstruct(structure_type)
+                        }
+                        Some(Action::GatherResource) => TooltipText::ActionGather,
+                        Some(Action::ReturnResource) => TooltipText::ActionReturnResource,
+                        Some(Action::Train(unit_type, config)) => {
+                            TooltipText::ActionTrain(unit_type, config)
+                        }
+                        None => TooltipText::None,
+                    }
+                } else {
+                    TooltipText::None
+                }
+            }
+            CursorState::SelectingAttackTarget => TooltipText::CursorSelectAttackTarget,
+            CursorState::SelectingMovementDestination => {
+                TooltipText::CursorSelectMovementDestination
+            }
+            CursorState::PlacingStructure(_) => TooltipText::CursorPlaceStructure,
+            CursorState::SelectingResourceTarget => TooltipText::CursorSelectResource,
+            CursorState::DraggingSelectionArea(_) => TooltipText::None,
+        };
+        self.tooltip.draw(ctx, tooltip_text)?;
 
         self.minimap
             .draw(ctx, player_state.camera_position_in_world())?;
@@ -289,10 +220,8 @@ impl HudGraphics {
     ) -> Option<PlayerInput> {
         for button in &mut self.buttons {
             if button.rect.contains([x, y]) {
-                // TODO delegate more to button
-                if let Some(action) = button.action {
-                    button.on_click();
-                    return Some(PlayerInput::UseEntityAction(action));
+                if let Some(input) = button.on_click() {
+                    return Some(input);
                 }
             }
         }
@@ -335,6 +264,7 @@ impl HudGraphics {
     pub fn set_entity_actions(&mut self, actions: [Option<Action>; NUM_ENTITY_ACTIONS]) {
         for (i, action) in actions.iter().enumerate() {
             self.buttons[i].action = *action;
+            self.buttons[i].text = action.map(|action| self.action_label(&action).clone());
         }
     }
 
@@ -357,11 +287,110 @@ impl HudGraphics {
     }
 }
 
-#[derive(Copy, Clone)]
-struct ButtonState<'a> {
-    text: Option<&'a Text>,
-    matches_entity_state: bool,
-    matches_cursor_state: bool,
+fn state_matches_action(state: EntityState, action: Action) -> bool {
+    match action {
+        Action::Train(trained_entity_type, _) => {
+            state == EntityState::TrainingUnit(trained_entity_type)
+        }
+        Action::Construct(structure_type) => {
+            if let EntityState::Constructing(constructing_type, _) = state {
+                structure_type == constructing_type
+            } else {
+                false
+            }
+        }
+        Action::Move => state == EntityState::Moving,
+        Action::Attack => {
+            matches!(state, EntityState::Attacking(_))
+        }
+        Action::GatherResource => {
+            matches!(state, EntityState::GatheringResource(_))
+        }
+        Action::ReturnResource => {
+            matches!(state, EntityState::ReturningResource(..))
+        }
+    }
+}
+
+const TOOLTIP_FONT_SIZE: f32 = 30.0;
+
+struct Tooltip {
+    position: [f32; 2],
+    font: Font,
+    text_attack: Text,
+    text_move: Text,
+    text_gather: Text,
+    text_return: Text,
+    text_select_attack_target: Text,
+    text_select_movement_destination: Text,
+    text_place_structure: Text,
+    text_select_resource: Text,
+}
+
+impl Tooltip {
+    fn new(font: Font, position: [f32; 2]) -> Self {
+        let text = |t| Text::new((t, font, TOOLTIP_FONT_SIZE));
+
+        Self {
+            position,
+            font,
+            text_attack: text("Attack"),
+            text_move: text("Move"),
+            text_gather: text("Gather"),
+            text_return: text("Return"),
+            text_select_attack_target: text("Select attack target"),
+            text_select_movement_destination: text("Select destination"),
+            text_place_structure: text("Place structure"),
+            text_select_resource: text("Select resource to gather"),
+        }
+    }
+
+    fn draw(&self, ctx: &mut Context, text: TooltipText) -> GameResult {
+        let param = DrawParam::default().dest(self.position);
+        match text {
+            TooltipText::None => {}
+            TooltipText::ActionAttack => self.text_attack.draw(ctx, param)?,
+            TooltipText::ActionMove => self.text_move.draw(ctx, param)?,
+            TooltipText::ActionGather => self.text_gather.draw(ctx, param)?,
+            TooltipText::ActionReturnResource => self.text_return.draw(ctx, param)?,
+            TooltipText::ActionTrain(trained_entity_type, training_config) => {
+                let text = format!(
+                    "Train {:?} [cost {}, {}s]",
+                    trained_entity_type,
+                    training_config.cost,
+                    training_config.duration.as_secs()
+                );
+                Text::new((text, self.font, TOOLTIP_FONT_SIZE)).draw(ctx, param)?;
+            }
+            TooltipText::ActionConstruct(structure_type) => {
+                let text = format!("Construct {:?}", structure_type,);
+                Text::new((text, self.font, TOOLTIP_FONT_SIZE)).draw(ctx, param)?;
+            }
+            TooltipText::CursorSelectAttackTarget => {
+                self.text_select_attack_target.draw(ctx, param)?
+            }
+            TooltipText::CursorSelectMovementDestination => {
+                self.text_select_movement_destination.draw(ctx, param)?
+            }
+            TooltipText::CursorPlaceStructure => self.text_place_structure.draw(ctx, param)?,
+            TooltipText::CursorSelectResource => self.text_select_resource.draw(ctx, param)?,
+        };
+        Ok(())
+    }
+}
+
+enum TooltipText {
+    None,
+    ActionAttack,
+    ActionMove,
+    ActionGather,
+    ActionReturnResource,
+    ActionTrain(EntityType, TrainingConfig),
+    ActionConstruct(EntityType),
+    CursorSelectAttackTarget,
+    CursorSelectMovementDestination,
+    CursorPlaceStructure,
+    CursorSelectResource,
 }
 
 struct Minimap {
@@ -475,8 +504,9 @@ pub struct Button {
     highlight_entity_state: Mesh,
     highlight: Mesh,
     is_down: bool,
-    cooldown: Duration,
+    down_cooldown: Duration,
     action: Option<Action>,
+    text: Option<Text>,
 }
 
 impl Button {
@@ -510,22 +540,40 @@ impl Button {
             highlight_entity_state,
             highlight,
             is_down: false,
-            cooldown: Duration::ZERO,
+            down_cooldown: Duration::ZERO,
             action: None,
+            text: None,
         })
     }
 
-    fn draw(&self, ctx: &mut Context, state: ButtonState, is_hovered: bool) -> GameResult {
+    fn draw(
+        &self,
+        ctx: &mut Context,
+        is_hovered: bool,
+        cursor_state: CursorState,
+        matches_entity_state: bool,
+    ) -> GameResult {
         self.border
             .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
-        if state.matches_entity_state {
+        if matches_entity_state {
             self.highlight_entity_state
                 .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
         }
 
+        let matches_cursor_state = match cursor_state {
+            CursorState::Default => false,
+            CursorState::SelectingAttackTarget => self.action == Some(Action::Attack),
+            CursorState::SelectingMovementDestination => self.action == Some(Action::Move),
+            CursorState::PlacingStructure(structure_type) => {
+                self.action == Some(Action::Construct(structure_type))
+            }
+            CursorState::SelectingResourceTarget => self.action == Some(Action::GatherResource),
+            CursorState::DraggingSelectionArea(_) => false,
+        };
+
         let offset = if self.is_down { [4.0, 4.0] } else { [0.0, 0.0] };
         let scale = if self.is_down { [0.9, 0.9] } else { [1.0, 1.0] };
-        if let Some(text) = state.text {
+        if let Some(text) = &self.text {
             text.draw(
                 ctx,
                 DrawParam::default()
@@ -536,31 +584,32 @@ impl Button {
                     .scale(scale),
             )?;
         }
-        if self.action.is_some() {
-            if state.matches_cursor_state || is_hovered {
-                self.highlight.draw(
-                    ctx,
-                    DrawParam::default()
-                        .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
-                        .scale(scale),
-                )?;
-            }
+        if matches_cursor_state || (self.action.is_some() && is_hovered) {
+            self.highlight.draw(
+                ctx,
+                DrawParam::default()
+                    .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
+                    .scale(scale),
+            )?;
         }
         Ok(())
     }
 
     fn update(&mut self, dt: Duration) {
         if self.is_down {
-            self.cooldown = self.cooldown.checked_sub(dt).unwrap_or(Duration::ZERO);
-            if self.cooldown.is_zero() {
+            self.down_cooldown = self.down_cooldown.checked_sub(dt).unwrap_or(Duration::ZERO);
+            if self.down_cooldown.is_zero() {
                 self.is_down = false;
             }
         }
     }
 
-    fn on_click(&mut self) {
-        self.is_down = true;
-        self.cooldown = Duration::from_millis(100);
+    fn on_click(&mut self) -> Option<PlayerInput> {
+        self.action.map(|action| {
+            self.is_down = true;
+            self.down_cooldown = Duration::from_millis(100);
+            PlayerInput::UseEntityAction(action)
+        })
     }
 }
 

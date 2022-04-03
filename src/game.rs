@@ -333,20 +333,16 @@ impl Game {
                 );
             }
             Action::Construct(structure_type) => {
-                self.player_state
-                    .set_cursor_state(ctx, CursorState::PlacingStructure(structure_type));
+                self.set_player_cursor_state(ctx, CursorState::PlacingStructure(structure_type));
             }
             Action::Move => {
-                self.player_state
-                    .set_cursor_state(ctx, CursorState::SelectingMovementDestination);
+                self.set_player_cursor_state(ctx, CursorState::SelectingMovementDestination);
             }
             Action::Attack => {
-                self.player_state
-                    .set_cursor_state(ctx, CursorState::SelectingAttackTarget);
+                self.set_player_cursor_state(ctx, CursorState::SelectingAttackTarget);
             }
             Action::GatherResource => {
-                self.player_state
-                    .set_cursor_state(ctx, CursorState::SelectingResourceTarget);
+                self.set_player_cursor_state(ctx, CursorState::SelectingResourceTarget);
             }
             Action::ReturnResource => {
                 self.player_issue_return_resource(actor, None);
@@ -486,6 +482,10 @@ impl Game {
         );
     }
 
+    fn set_player_cursor_state(&self, ctx: &mut Context, cursor_state: CursorState) {
+        self.player_state.set_cursor_state(ctx, cursor_state);
+    }
+
     fn screen_to_grid(&self, coordinates: [f32; 2]) -> Option<[u32; 2]> {
         self.player_state
             .screen_to_world(coordinates)
@@ -536,8 +536,7 @@ impl EventHandler for Game {
         if had_some_selected && self.player_state.selected_entity_ids.is_empty() {
             // TODO: what if you still have some selected entity, but it doesn't
             //       have any action corresponding to the cursor state?
-            self.player_state
-                .set_cursor_state(ctx, CursorState::Default);
+            self.set_player_cursor_state(ctx, CursorState::Default);
         }
 
         self.player_state.update(ctx, dt);
@@ -545,7 +544,7 @@ impl EventHandler for Game {
         if let Some(hovered_world_pos) =
             self.screen_to_grid(ggez::input::mouse::position(ctx).into())
         {
-            if self.player_state.cursor_state.get() == CursorState::Default {
+            if self.player_state.cursor_state() == CursorState::Default {
                 let is_hovering_some_entity = self
                     .core
                     .entities()
@@ -598,7 +597,7 @@ impl EventHandler for Game {
         self.assets.flush_entity_sprite_batch(ctx)?;
 
         let mouse_position: [f32; 2] = ggez::input::mouse::position(ctx).into();
-        match self.player_state.cursor_state.get() {
+        match self.player_state.cursor_state() {
             CursorState::PlacingStructure(structure_type) => {
                 if let Some(hovered_world_pos) = self.screen_to_grid(mouse_position) {
                     let size = *self.core.structure_size(&structure_type);
@@ -645,23 +644,21 @@ impl EventHandler for Game {
     fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
         if let Some(clicked_world_pixel_coords) = self.player_state.screen_to_world([x, y]) {
             let clicked_world_pos = world_to_grid(clicked_world_pixel_coords);
-            match self.player_state.cursor_state.get() {
+            match self.player_state.cursor_state() {
                 CursorState::Default => {
                     if button == MouseButton::Left {
                         println!("Starting to define selection area...");
-                        self.player_state
-                            .cursor_state
-                            .set(CursorState::DraggingSelectionArea(
-                                clicked_world_pixel_coords,
-                            ));
+                        self.set_player_cursor_state(
+                            ctx,
+                            CursorState::DraggingSelectionArea(clicked_world_pixel_coords),
+                        );
                     } else if button == MouseButton::Right {
                         self.handle_right_click_world(clicked_world_pixel_coords)
                     }
                 }
                 CursorState::SelectingMovementDestination => {
                     self.player_issue_all_selected_movement(clicked_world_pixel_coords);
-                    self.player_state
-                        .set_cursor_state(ctx, CursorState::Default);
+                    self.set_player_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::PlacingStructure(structure_type) => {
                     self.player_issue_first_selected_construct(
@@ -669,28 +666,26 @@ impl EventHandler for Game {
                         clicked_world_pos,
                         structure_type,
                     );
-                    self.player_state
-                        .set_cursor_state(ctx, CursorState::Default);
+                    self.set_player_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::SelectingAttackTarget => {
                     self.player_issue_all_selected_attack(clicked_world_pos);
-                    self.player_state
-                        .set_cursor_state(ctx, CursorState::Default);
+                    self.set_player_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::SelectingResourceTarget => {
                     self.player_issue_all_selected_gather_resource(clicked_world_pos);
-                    self.player_state
-                        .set_cursor_state(ctx, CursorState::Default);
+                    self.set_player_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::DraggingSelectionArea(..) => {
                     panic!("How did we end up here? When we release button, this cursor action should have been removed.");
                 }
             }
         } else {
-            self.player_state
-                .set_cursor_state(ctx, CursorState::Default);
+            self.set_player_cursor_state(ctx, CursorState::Default);
 
-            if let Some(player_input) = self.hud.borrow_mut().on_mouse_button_down(button, x, y) {
+            let mut hud = self.hud.borrow_mut();
+            if let Some(player_input) = hud.on_mouse_button_down(button, x, y) {
+                drop(hud); // HUD may need to be updated, as part of handling the input
                 self.handle_player_input(ctx, player_input)
             }
         }
@@ -698,10 +693,9 @@ impl EventHandler for Game {
 
     fn mouse_button_up_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
         if let CursorState::DraggingSelectionArea(start_world_pixel_coords) =
-            self.player_state.cursor_state.get()
+            self.player_state.cursor_state()
         {
-            self.player_state
-                .set_cursor_state(ctx, CursorState::Default);
+            self.set_player_cursor_state(ctx, CursorState::Default);
             // TODO: select even if mouse is released outside of the world view port
             if let Some(released_world_pixel_coords) = self.player_state.screen_to_world([x, y]) {
                 let selection_rect =
@@ -740,7 +734,9 @@ impl EventHandler for Game {
     }
 
     fn mouse_motion_event(&mut self, ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
-        if let Some(player_input) = self.hud.borrow_mut().on_mouse_motion(x, y) {
+        let mut hud = self.hud.borrow_mut();
+        if let Some(player_input) = hud.on_mouse_motion(x, y) {
+            drop(hud); // HUD may need to be updated, as part of handling the input
             self.handle_player_input(ctx, player_input);
         }
     }
@@ -755,7 +751,9 @@ impl EventHandler for Game {
         match keycode {
             KeyCode::Escape => ggez::event::quit(ctx),
             _ => {
-                if let Some(player_input) = self.hud.borrow().on_key_down(keycode) {
+                let hud = self.hud.borrow();
+                if let Some(player_input) = hud.on_key_down(keycode) {
+                    drop(hud); // HUD may need to be updated, as part of handling the input
                     self.handle_player_input(ctx, player_input);
                 }
             }

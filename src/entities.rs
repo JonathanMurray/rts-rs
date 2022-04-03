@@ -16,7 +16,7 @@ pub const NUM_ENTITY_ACTIONS: usize = 6;
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct EntityId(usize);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EntityState {
     Idle,
     TrainingUnit(EntityType),
