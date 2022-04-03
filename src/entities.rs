@@ -121,15 +121,6 @@ impl Entity {
         }
     }
 
-    pub fn contains(&self, position: [u32; 2]) -> bool {
-        // TODO delegate to CellRect
-        let [w, h] = self.size();
-        position[0] >= self.position[0]
-            && position[0] < self.position[0] + w
-            && position[1] >= self.position[1]
-            && position[1] < self.position[1] + h
-    }
-
     pub fn cell_rect(&self) -> CellRect {
         CellRect {
             position: self.position,

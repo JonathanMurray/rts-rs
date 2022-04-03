@@ -59,3 +59,12 @@ pub struct CellRect {
     pub position: [u32; 2],
     pub size: [u32; 2],
 }
+
+impl CellRect {
+    pub fn contains(&self, point: [u32; 2]) -> bool {
+        point[0] >= self.position[0]
+            && point[0] < self.position[0] + self.size[0]
+            && point[1] >= self.position[1]
+            && point[1] < self.position[1] + self.size[1]
+    }
+}

@@ -228,7 +228,8 @@ impl Game {
     fn resource_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<&RefCell<Entity>> {
         // TODO we assume that all neutral entities are resources for now
         self.core.entities().iter().find_map(|(_id, entity)| {
-            if entity.borrow().contains(clicked_world_pos) && entity.borrow().team == Team::Neutral
+            if entity.borrow().cell_rect().contains(clicked_world_pos)
+                && entity.borrow().team == Team::Neutral
             {
                 Some(entity)
             } else {
@@ -240,7 +241,7 @@ impl Game {
     fn enemy_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<&RefCell<Entity>> {
         self.core.entities().iter().find_map(|(_id, entity)| {
             let entity_ref = entity.borrow();
-            if entity_ref.contains(clicked_world_pos)
+            if entity_ref.cell_rect().contains(clicked_world_pos)
                 && entity_ref.health.is_some()
                 && entity_ref.team == Team::Enemy
             {
@@ -259,7 +260,9 @@ impl Game {
         self.core.entities().iter().find_map(|(_id, entity)| {
             let entity_ref = entity.borrow();
             if let PhysicalType::Structure { .. } = &entity_ref.physical_type {
-                if entity_ref.contains(clicked_world_pos) && entity_ref.team == Team::Player {
+                if entity_ref.cell_rect().contains(clicked_world_pos)
+                    && entity_ref.team == Team::Player
+                {
                     drop(entity_ref);
                     return Some(entity);
                 }
@@ -549,7 +552,7 @@ impl EventHandler for Game {
                     .core
                     .entities()
                     .iter()
-                    .any(|(_id, e)| e.borrow().contains(hovered_world_pos));
+                    .any(|(_id, e)| e.borrow().cell_rect().contains(hovered_world_pos));
                 let icon = if is_hovering_some_entity {
                     CursorIcon::Hand
                 } else {
