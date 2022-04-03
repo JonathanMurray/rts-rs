@@ -1,5 +1,7 @@
 mod button;
+mod healthbar;
 mod minimap;
+mod trainingbar;
 
 use std::cell::Ref;
 use std::collections::HashMap;
@@ -12,7 +14,9 @@ use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
 use self::button::Button;
+use self::healthbar::Healthbar;
 use self::minimap::Minimap;
+use self::trainingbar::Trainingbar;
 use crate::core::TeamState;
 use crate::data::EntityType;
 use crate::entities::{
@@ -30,6 +34,8 @@ pub struct HudGraphics {
     hovered_button_index: Option<usize>,
     keycode_labels: HashMap<KeyCode, Text>,
     tooltip: Tooltip,
+    healthbar: Healthbar,
+    trainingbar: Trainingbar,
 }
 
 impl HudGraphics {
@@ -58,6 +64,8 @@ impl HudGraphics {
         let keycode_labels = create_keycode_labels(font);
 
         let tooltip = Tooltip::new(font, [position[0], position[1] + 420.0]);
+        let healthbar = Healthbar::new(font, [position[0], position[1] + 110.0]);
+        let trainingbar = Trainingbar::new(font, [position[0], position[1] + 160.0]);
 
         Ok(Self {
             position_on_screen: position,
@@ -67,6 +75,8 @@ impl HudGraphics {
             hovered_button_index: None,
             keycode_labels,
             tooltip,
+            healthbar,
+            trainingbar,
         })
     }
 
@@ -94,10 +104,8 @@ impl HudGraphics {
         resources_text.draw(ctx, DrawParam::new().dest([1200.0, 15.0]))?;
 
         let name_y = 28.0;
-        let health_y = 110.0;
+
         let resource_status_y = 180.0;
-        let training_status_y = 220.0;
-        let progress_y = 270.0;
 
         if num_selected_entities == 0 {
             let y = 28.0;
@@ -113,17 +121,13 @@ impl HudGraphics {
             self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
 
             if let Some(health) = &selected_entity.health {
-                let health = format!(
-                    "HP: [{}{}]",
-                    "=".repeat(health.current as usize),
-                    " ".repeat((health.max - health.current) as usize)
-                );
-                self.draw_text(ctx, [x, health_y], health, medium_font)?;
+                self.healthbar
+                    .draw(ctx, health.current as usize, health.max as usize)?;
             }
 
             self.draw_text(
                 ctx,
-                [x + 200.0, health_y],
+                [x + 200.0, 110.0],
                 format!("({:?})", selected_entity.state),
                 small_font,
             )?;
@@ -134,15 +138,8 @@ impl HudGraphics {
                     //is_training = true;
                     let training = selected_entity.training.as_ref().unwrap();
                     let progress = training.progress(trained_entity_type).unwrap();
-                    let training_status = format!("Training {:?}", trained_entity_type);
-                    self.draw_text(ctx, [x, training_status_y], training_status, medium_font)?;
-                    let progress_w = 20.0;
-                    let progress_bar = format!(
-                        "[{}{}]",
-                        "=".repeat((progress * progress_w) as usize),
-                        " ".repeat(((1.0 - progress) * progress_w) as usize)
-                    );
-                    self.draw_text(ctx, [x, progress_y], progress_bar, medium_font)?;
+                    self.trainingbar
+                        .draw(ctx, &format!("{:?}", trained_entity_type), progress)?;
                 }
                 if let PhysicalType::Unit(unit) = &selected_entity.physical_type {
                     if let Some(gathering) = unit.gathering.as_ref() {
