@@ -32,6 +32,8 @@ pub const WORLD_VIEWPORT: Rect = Rect {
     h: 650.0,
 };
 
+const SHOW_GRID: bool = false;
+
 //TODO
 const MAX_NUM_SELECTED_ENTITIES: usize = 2;
 
@@ -284,13 +286,13 @@ impl Game {
         self.player_state.selected_entity_ids = entity_ids;
         let mut actions = [None; NUM_ENTITY_ACTIONS];
 
-        let mut selected_entities = self.selected_entities();
-        if let Some(first_entity) = selected_entities.next() {
-            actions = first_entity.borrow().actions;
+        let mut player_entities = self.selected_player_entities();
+        if let Some(first) = player_entities.next() {
+            actions = first.borrow().actions;
         }
 
-        for additional_entity in selected_entities {
-            for (i, action) in additional_entity.borrow().actions.iter().enumerate() {
+        for additional in player_entities {
+            for (i, action) in additional.borrow().actions.iter().enumerate() {
                 if actions[i] != *action {
                     // Since not all selected entities have this action, it should not
                     // be shown in HUD.
@@ -540,6 +542,9 @@ impl EventHandler for Game {
             // TODO: what if you still have some selected entity, but it doesn't
             //       have any action corresponding to the cursor state?
             self.set_player_cursor_state(ctx, CursorState::Default);
+            self.hud
+                .borrow_mut()
+                .set_entity_actions([None; NUM_ENTITY_ACTIONS]);
         }
 
         self.player_state.update(ctx, dt);
@@ -570,11 +575,13 @@ impl EventHandler for Game {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, COLOR_BG);
 
-        self.assets.draw_grid(
-            ctx,
-            WORLD_VIEWPORT.point().into(),
-            self.player_state.camera.borrow().position_in_world,
-        )?;
+        if SHOW_GRID {
+            self.assets.draw_grid(
+                ctx,
+                WORLD_VIEWPORT.point().into(),
+                self.player_state.camera.borrow().position_in_world,
+            )?;
+        }
 
         let indicator = &self.player_state.movement_command_indicator;
         if let Some((world_pixel_position, scale)) = indicator.borrow().graphics() {

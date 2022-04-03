@@ -29,8 +29,8 @@ pub enum EntityState {
 
 #[derive(Debug)]
 pub struct Entity {
+    pub entity_type: EntityType,
     pub id: EntityId,
-    pub name: &'static str,
     pub position: [u32; 2],
     pub is_solid: bool,
     pub physical_type: PhysicalType,
@@ -49,7 +49,6 @@ pub enum PhysicalType {
 }
 
 pub struct EntityConfig {
-    pub name: &'static str,
     pub is_solid: bool,
     pub sprite: EntitySprite,
     pub max_health: Option<u32>,
@@ -63,7 +62,12 @@ pub enum PhysicalTypeConfig {
 }
 
 impl Entity {
-    pub fn new(config: EntityConfig, position: [u32; 2], team: Team) -> Self {
+    pub fn new(
+        entity_type: EntityType,
+        config: EntityConfig,
+        position: [u32; 2],
+        team: Team,
+    ) -> Self {
         // Make sure all entities have unique IDs
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
 
@@ -93,8 +97,8 @@ impl Entity {
         };
 
         Self {
+            entity_type,
             id,
-            name: config.name,
             position,
             is_solid: config.is_solid,
             physical_type,

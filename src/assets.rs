@@ -204,7 +204,7 @@ fn create_circle_unit(
             .circle(
                 DrawMode::fill(),
                 [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] / 2.0],
-                CELL_PIXEL_SIZE[0] * 0.25,
+                CELL_PIXEL_SIZE[0] * 0.35,
                 0.05,
                 color,
             )?

@@ -23,9 +23,9 @@ impl Button {
         let local_rect = Rect::new(0.0, 0.0, rect.w, rect.h);
         let border = MeshBuilder::new()
             .rectangle(
-                DrawMode::stroke(1.0),
+                DrawMode::stroke(3.0),
                 local_rect,
-                Color::new(0.7, 0.7, 0.7, 1.0),
+                Color::new(1.0, 1.0, 1.0, 1.0),
             )?
             .build(ctx)?;
         let outline_active = MeshBuilder::new()
@@ -62,45 +62,48 @@ impl Button {
         cursor_state: CursorState,
         active: bool,
     ) -> GameResult {
-        self.border
-            .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
-        if active {
-            self.outline_active
+        if let Some(action) = self.action {
+            self.border
                 .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
-        }
-
-        let matches_cursor_state = match cursor_state {
-            CursorState::Default => false,
-            CursorState::SelectingAttackTarget => self.action == Some(Action::Attack),
-            CursorState::SelectingMovementDestination => self.action == Some(Action::Move),
-            CursorState::PlacingStructure(structure_type) => {
-                self.action == Some(Action::Construct(structure_type))
+            if active {
+                self.outline_active
+                    .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
             }
-            CursorState::SelectingResourceTarget => self.action == Some(Action::GatherResource),
-            CursorState::DraggingSelectionArea(_) => false,
-        };
 
-        let offset = if self.is_down { [4.0, 4.0] } else { [0.0, 0.0] };
-        let scale = if self.is_down { [0.9, 0.9] } else { [1.0, 1.0] };
-        if let Some(text) = &self.text {
-            text.draw(
-                ctx,
-                DrawParam::default()
-                    .dest([
-                        self.rect.x + 30.0 + offset[0],
-                        self.rect.y + 20.0 + offset[1],
-                    ])
-                    .scale(scale),
-            )?;
+            let matches_cursor_state = match cursor_state {
+                CursorState::Default => false,
+                CursorState::SelectingAttackTarget => action == Action::Attack,
+                CursorState::SelectingMovementDestination => action == Action::Move,
+                CursorState::PlacingStructure(structure_type) => {
+                    action == Action::Construct(structure_type)
+                }
+                CursorState::SelectingResourceTarget => action == Action::GatherResource,
+                CursorState::DraggingSelectionArea(_) => false,
+            };
+
+            let offset = if self.is_down { [4.0, 4.0] } else { [0.0, 0.0] };
+            let scale = if self.is_down { [0.9, 0.9] } else { [1.0, 1.0] };
+            if let Some(text) = &self.text {
+                text.draw(
+                    ctx,
+                    DrawParam::default()
+                        .dest([
+                            self.rect.x + 30.0 + offset[0],
+                            self.rect.y + 20.0 + offset[1],
+                        ])
+                        .scale(scale),
+                )?;
+            }
+            if matches_cursor_state || hover {
+                self.highlight.draw(
+                    ctx,
+                    DrawParam::default()
+                        .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
+                        .scale(scale),
+                )?;
+            }
         }
-        if matches_cursor_state || (self.action.is_some() && hover) {
-            self.highlight.draw(
-                ctx,
-                DrawParam::default()
-                    .dest([self.rect.x + offset[0], self.rect.y + offset[1]])
-                    .scale(scale),
-            )?;
-        }
+
         Ok(())
     }
 

@@ -6,6 +6,8 @@ use crate::entities::{
     Action, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
     NUM_ENTITY_ACTIONS,
 };
+use ggez::graphics::{Color, DrawMode, Mesh, Rect};
+use ggez::{Context, GameResult};
 
 #[derive(Debug, PartialEq)]
 pub enum MapType {
@@ -17,6 +19,7 @@ pub enum MapType {
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
+    Resource,
     SquareUnit,
     CircleUnit,
     SmallBuilding,
@@ -36,19 +39,7 @@ impl WorldInitData {
             create_entity(EntityType::LargeBuilding, [1, 7], Team::Player),
         ];
 
-        let neutral_entity = Entity::new(
-            EntityConfig {
-                name: "Resource",
-                is_solid: true,
-                sprite: EntitySprite::Neutral,
-                max_health: None,
-                physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
-                actions: [None; NUM_ENTITY_ACTIONS],
-            },
-            [6, 4],
-            Team::Neutral,
-        );
-        entities.push(neutral_entity);
+        entities.push(create_entity(EntityType::Resource, [6, 4], Team::Neutral));
 
         match map_type {
             MapType::Empty => Self {
@@ -115,7 +106,7 @@ impl WorldInitData {
 
 pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) -> Entity {
     let config = entity_config(entity_type);
-    Entity::new(config, position, team)
+    Entity::new(entity_type, config, position, team)
 }
 
 pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
@@ -137,7 +128,6 @@ pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
 fn entity_config(entity_type: EntityType) -> EntityConfig {
     match entity_type {
         EntityType::SquareUnit => EntityConfig {
-            name: "Square",
             is_solid: true,
             sprite: EntitySprite::SquareUnit,
             max_health: Some(3),
@@ -152,7 +142,6 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::CircleUnit => EntityConfig {
-            name: "Circle",
             is_solid: true,
             sprite: EntitySprite::CircleUnit,
             max_health: Some(5),
@@ -167,7 +156,6 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::SmallBuilding => EntityConfig {
-            name: "Small building",
             is_solid: true,
             sprite: EntitySprite::SmallBuilding,
             max_health: Some(3),
@@ -188,7 +176,6 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::LargeBuilding => EntityConfig {
-            name: "Large building",
             is_solid: true,
             sprite: EntitySprite::LargeBuilding,
             max_health: Some(5),
@@ -208,5 +195,90 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 None,
             ],
         },
+        EntityType::Resource => EntityConfig {
+            is_solid: true,
+            sprite: EntitySprite::Neutral,
+            max_health: None,
+            physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
+            actions: [None; NUM_ENTITY_ACTIONS],
+        },
+    }
+}
+
+pub struct EntityHudConfig {
+    pub name: String,
+    pub portrait: Mesh,
+}
+
+pub struct HudAssets {
+    square_unit: EntityHudConfig,
+    circle_unit: EntityHudConfig,
+    small_building: EntityHudConfig,
+    large_building: EntityHudConfig,
+    resource: EntityHudConfig,
+}
+
+impl HudAssets {
+    pub fn new(ctx: &mut Context) -> GameResult<Self> {
+        let color = Color::new(0.6, 0.6, 0.6, 1.0);
+        Ok(Self {
+            square_unit: EntityHudConfig {
+                name: "Square unit".to_string(),
+                portrait: Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(0.0, 0.0, 50.0, 50.0),
+                    color,
+                )?,
+            },
+            circle_unit: EntityHudConfig {
+                name: "Circle unit".to_string(),
+                portrait: Mesh::new_circle(
+                    ctx,
+                    DrawMode::fill(),
+                    [25.0, 25.0],
+                    25.0,
+                    0.001,
+                    color,
+                )?,
+            },
+            small_building: EntityHudConfig {
+                name: "Small building".to_string(),
+                portrait: Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(0.0, 0.0, 50.0, 50.0),
+                    color,
+                )?,
+            },
+            large_building: EntityHudConfig {
+                name: "Large building".to_string(),
+                portrait: Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(0.0, 10.0, 50.0, 35.0),
+                    color,
+                )?,
+            },
+            resource: EntityHudConfig {
+                name: "Resource location".to_string(),
+                portrait: Mesh::new_rectangle(
+                    ctx,
+                    DrawMode::fill(),
+                    Rect::new(0.0, 0.0, 50.0, 50.0),
+                    color,
+                )?,
+            },
+        })
+    }
+
+    pub fn get(&self, entity_type: EntityType) -> &EntityHudConfig {
+        match entity_type {
+            EntityType::SquareUnit => &self.square_unit,
+            EntityType::CircleUnit => &self.circle_unit,
+            EntityType::SmallBuilding => &self.small_building,
+            EntityType::LargeBuilding => &self.large_building,
+            EntityType::Resource => &self.resource,
+        }
     }
 }

@@ -1,4 +1,5 @@
 mod button;
+mod entity_header;
 mod healthbar;
 mod minimap;
 mod trainingbar;
@@ -14,11 +15,10 @@ use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
 use self::button::Button;
-use self::healthbar::Healthbar;
+use self::entity_header::{EntityHeader, EntityHeaderContent};
 use self::minimap::Minimap;
-use self::trainingbar::Trainingbar;
 use crate::core::TeamState;
-use crate::data::EntityType;
+use crate::data::{EntityType, HudAssets};
 use crate::entities::{
     Action, Entity, EntityState, PhysicalType, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
@@ -34,8 +34,8 @@ pub struct HudGraphics {
     hovered_button_index: Option<usize>,
     keycode_labels: HashMap<KeyCode, Text>,
     tooltip: Tooltip,
-    healthbar: Healthbar,
-    trainingbar: Trainingbar,
+    entity_header: EntityHeader,
+    assets: HudAssets,
 }
 
 impl HudGraphics {
@@ -45,27 +45,31 @@ impl HudGraphics {
         font: Font,
         world_dimensions: [u32; 2],
     ) -> GameResult<Self> {
-        let w = 80.0;
-
-        let mut buttons = vec![];
-        let button_margin = 5.0;
-        let buttons_per_row = 3;
-        for i in 0..NUM_BUTTONS {
-            let x = position[0] + 5.0 + (i % buttons_per_row) as f32 * (w + button_margin);
-            let y = position[1] + 240.0 + (i / buttons_per_row) as f32 * (w + button_margin);
-            let rect = Rect::new(x, y, w, w);
-            buttons.push(Button::new(ctx, rect)?);
-        }
-        let buttons = buttons.try_into().unwrap();
-
         let minimap_pos = [900.0, position[1] + 30.0];
         let minimap = Minimap::new(ctx, minimap_pos, world_dimensions)?;
 
         let keycode_labels = create_keycode_labels(font);
 
         let tooltip = Tooltip::new(font, [position[0], position[1] + 420.0]);
-        let healthbar = Healthbar::new(font, [position[0], position[1] + 110.0]);
-        let trainingbar = Trainingbar::new(font, [position[0], position[1] + 160.0]);
+        let entity_header = EntityHeader::new(ctx, [position[0], position[1] + 20.0], font)?;
+
+        let buttons_x = position[0];
+        let buttons_y = position[1] + 240.0;
+        let mut buttons = vec![];
+        let button_size = [100.0, 70.0];
+        let button_hor_margin = 30.0;
+        let button_vert_margin = 15.0;
+        let buttons_per_row = 3;
+        for i in 0..NUM_BUTTONS {
+            let x = buttons_x + (i % buttons_per_row) as f32 * (button_size[0] + button_hor_margin);
+            let y =
+                buttons_y + (i / buttons_per_row) as f32 * (button_size[1] + button_vert_margin);
+            let rect = Rect::new(x, y, button_size[0], button_size[1]);
+            buttons.push(Button::new(ctx, rect)?);
+        }
+        let buttons = buttons.try_into().unwrap();
+
+        let assets = HudAssets::new(ctx)?;
 
         Ok(Self {
             position_on_screen: position,
@@ -75,8 +79,8 @@ impl HudGraphics {
             hovered_button_index: None,
             keycode_labels,
             tooltip,
-            healthbar,
-            trainingbar,
+            entity_header,
+            assets,
         })
     }
 
@@ -90,7 +94,6 @@ impl HudGraphics {
     ) -> GameResult {
         let x = 0.0;
 
-        let small_font = 20.0;
         let medium_font = 30.0;
         let large_font = 40.0;
 
@@ -103,57 +106,64 @@ impl HudGraphics {
         ));
         resources_text.draw(ctx, DrawParam::new().dest([1200.0, 15.0]))?;
 
-        let name_y = 28.0;
-
-        let resource_status_y = 180.0;
-
         if num_selected_entities == 0 {
-            let y = 28.0;
-            self.draw_text(ctx, [x, y], "[nothing selected]", large_font)?;
+            // draw nothing?
         } else if num_selected_entities > 1 {
             let mut y = 28.0;
             for entity in &selected_entities {
-                self.draw_text(ctx, [x, y], entity.name, large_font)?;
+                let config = self.assets.get(entity.entity_type);
+                self.draw_text(ctx, [x, y], &config.name, large_font)?;
                 y += 50.0;
             }
         } else if num_selected_entities == 1 {
-            let selected_entity = selected_entities.first().unwrap();
-            self.draw_text(ctx, [x, name_y], selected_entity.name, large_font)?;
+            let entity = selected_entities.first().unwrap();
+            let config = self.assets.get(entity.entity_type);
 
-            if let Some(health) = &selected_entity.health {
-                self.healthbar
-                    .draw(ctx, health.current as usize, health.max as usize)?;
-            }
-
-            self.draw_text(
-                ctx,
-                [x + 200.0, 110.0],
-                format!("({:?})", selected_entity.state),
-                small_font,
-            )?;
-
-            if selected_entity.team == Team::Player {
-                if let EntityState::TrainingUnit(trained_entity_type) = selected_entity.state {
-                    // TODO: Use some other way of determining when to hide buttons
-                    //is_training = true;
-                    let training = selected_entity.training.as_ref().unwrap();
-                    let progress = training.progress(trained_entity_type).unwrap();
-                    self.trainingbar
-                        .draw(ctx, &format!("{:?}", trained_entity_type), progress)?;
-                }
-                if let PhysicalType::Unit(unit) = &selected_entity.physical_type {
+            let mut entity_status_text = None;
+            let mut training_progress = None;
+            if entity.team == Team::Player {
+                if let PhysicalType::Unit(unit) = &entity.physical_type {
                     if let Some(gathering) = unit.gathering.as_ref() {
                         if gathering.is_carrying() {
-                            self.draw_text(
-                                ctx,
-                                [x, resource_status_y],
-                                "[HAS RESOURCE]",
-                                medium_font,
-                            )?;
+                            entity_status_text = Some("[carrying resource]".to_owned());
                         }
                     }
                 }
+                if let EntityState::TrainingUnit(trained_entity_type) = entity.state {
+                    // TODO: Use some other way of determining when to hide buttons
+                    //is_training = true;
+                    entity_status_text = Some(format!("[training {:?}]", trained_entity_type));
+                    let training = entity.training.as_ref().unwrap();
+                    training_progress = Some(training.progress(trained_entity_type).unwrap());
+                }
+            } else if entity.team == Team::Neutral {
+                entity_status_text = Some("[plenty of resources]".to_owned());
             }
+
+            let (current_health, max_health) = entity
+                .health
+                .as_ref()
+                .map(|h| (h.current as usize, h.max as usize))
+                .unwrap_or((0, 1));
+            self.entity_header.draw(
+                ctx,
+                EntityHeaderContent {
+                    current_health,
+                    max_health,
+                    portrait: &config.portrait,
+                    name: config.name.clone(),
+                    status: entity_status_text,
+                    training_progress,
+                    team: entity.team,
+                },
+            )?;
+
+            // self.draw_text(
+            //     ctx,
+            //     [x + 200.0, 110.0],
+            //     format!("({:?})", entity.state),
+            //     small_font,
+            // )?;
         }
 
         for (button_i, button) in self.buttons.iter().enumerate() {
