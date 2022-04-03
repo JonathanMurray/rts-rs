@@ -123,81 +123,67 @@ impl Core {
         //-------------------------------
         //     GATHERING RESOURCES
         //-------------------------------
-        let mut gathering_candidates = vec![];
-        for (entity_id, entity) in &self.entities {
-            let mut entity = entity.borrow_mut();
+        for (_entity_id, entity) in &self.entities {
+            let entity = entity.borrow_mut();
             if let EntityState::GatheringResource(resource_id) = entity.state {
-                let gatherer_id = entity_id;
-                if entity.unit_mut().sub_cell_movement.is_ready() {
-                    gathering_candidates.push((*gatherer_id, resource_id));
+                let mut gatherer = entity;
+                if gatherer.unit_mut().sub_cell_movement.is_ready() {
+                    let resource = self
+                        .find_entity(resource_id)
+                        .unwrap_or_else(|| panic!("Resource not found: {:?}", resource_id));
+                    let resource = resource.borrow();
+                    if is_unit_within_melee_range_of(
+                        gatherer.position,
+                        resource.position,
+                        resource.size(),
+                    ) {
+                        let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
+                        gathering.pick_up_resource(resource_id);
+                        self.unit_return_resource(gatherer, None);
+                    }
                 }
-            }
-        }
-        //TODO simplify now that we have RefCell?
-        for (gatherer_id, resource_id) in gathering_candidates {
-            let mut gatherer = self.entity(gatherer_id).borrow_mut();
-            let gatherer_pos = gatherer.position;
-            let success = if let Some(resource) = self.find_entity(resource_id) {
-                let resource = resource.borrow();
-                let resource_pos = resource.position;
-                let resource_size = resource.size();
-                is_unit_within_melee_range_of(gatherer_pos, resource_pos, resource_size)
-            } else {
-                panic!("Resource doesn't exist");
-            };
-            if success {
-                gatherer
-                    .unit_mut()
-                    .gathering
-                    .as_mut()
-                    .unwrap()
-                    .pick_up_resource(resource_id);
-                self.unit_return_resource(gatherer, None);
             }
         }
 
         //-------------------------------
         //     RETURNING RESOURCES
         //-------------------------------
-        let mut return_candidates = vec![];
-        for (entity_id, entity) in &self.entities {
-            let mut entity = entity.borrow_mut();
+        for (_entity_id, entity) in &self.entities {
+            let entity = entity.borrow_mut();
             if let EntityState::ReturningResource(structure_id) = entity.state {
-                if entity.unit_mut().sub_cell_movement.is_ready() {
-                    return_candidates.push((*entity_id, entity.team, structure_id));
+                let mut returner = entity;
+                if returner.unit_mut().sub_cell_movement.is_ready() {
+                    if let Some(structure) = self.find_entity(structure_id) {
+                        let structure = structure.borrow();
+                        if is_unit_within_melee_range_of(
+                            returner.position,
+                            structure.position,
+                            structure.size(),
+                        ) {
+                            self.team_state(&returner.team).borrow_mut().resources += 1;
+                            // Unit goes back out to gather more
+                            let gathering = returner.unit_mut().gathering.as_mut().unwrap();
+                            let resource_id = gathering.drop_resource();
+                            let resource = self.entity(resource_id).borrow();
+                            if let Some(plan) = pathfind::find_path(
+                                returner.position,
+                                Destination::AdjacentToEntity(resource.position, resource.size()),
+                                &self.entity_grid,
+                            ) {
+                                returner.unit_mut().movement_plan.set(plan);
+                                returner.state = EntityState::GatheringResource(resource_id);
+                            } else {
+                                returner.state = EntityState::Idle;
+                            }
+                        }
+                    } else {
+                        println!(
+                            "Tried to return resource to structure that doesn't exist anymore. Idling."
+                        );
+                        returner.state = EntityState::Idle;
+                    };
                 }
             }
-        }
-        //TODO simplify now that we have RefCell?
-        for (returner_id, returner_team, structure_id) in return_candidates {
-            let mut returner = self.entity(returner_id).borrow_mut();
-            let returner_pos = returner.position;
-            if let Some(structure) = self.find_entity(structure_id) {
-                let structure = structure.borrow();
-                if is_unit_within_melee_range_of(returner_pos, structure.position, structure.size())
-                {
-                    self.team_state(&returner_team).borrow_mut().resources += 1;
-                    // Unit goes back out to gather more
-                    let gathering = returner.unit_mut().gathering.as_mut().unwrap();
-                    let resource_id = gathering.drop_resource();
-                    let resource = self.entity(resource_id).borrow();
-                    if let Some(plan) = pathfind::find_path(
-                        returner.position,
-                        Destination::AdjacentToEntity(resource.position, resource.size()),
-                        &self.entity_grid,
-                    ) {
-                        returner.unit_mut().movement_plan.set(plan);
-                        returner.state = EntityState::GatheringResource(resource_id);
-                    } else {
-                        returner.state = EntityState::Idle;
-                    }
-                }
-            } else {
-                println!(
-                    "Tried to return resource to structure that doesn't exist anymore. Idling."
-                );
-                returner.state = EntityState::Idle;
-            };
         }
 
         //-------------------------------
@@ -436,33 +422,29 @@ impl Core {
     }
 
     fn unit_return_resource(&self, mut gatherer: RefMut<Entity>, structure: Option<Ref<Entity>>) {
-        let structure_id_pos_size = match structure {
-            Some(structure) => Some((structure.id, structure.position, structure.size())),
-            None => {
-                // No specific structure was selected as the destination, so we pick one
-                let mut structure_id_pos_size = None;
-                for (entity_id, entity) in &self.entities {
-                    match entity.try_borrow() {
-                        Ok(entity) if entity.team == gatherer.team => {
-                            // For now, resources can be returned to any friendly structure
-                            if let PhysicalType::Structure { size } = entity.physical_type {
-                                //TODO find the closest structure
-                                structure_id_pos_size = Some((*entity_id, entity.position, size));
-                            }
+        let structure = structure.or_else(|| {
+            // No specific structure was selected as the destination, so we pick one
+            for (_entity_id, entity) in &self.entities {
+                match entity.try_borrow() {
+                    Ok(entity) if entity.team == gatherer.team => {
+                        // For now, resources can be returned to any friendly structure
+                        if let PhysicalType::Structure { .. } = entity.physical_type {
+                            //TODO find the closest structure
+                            return Some(entity);
                         }
-                        _ => {}
-                    };
-                }
-                structure_id_pos_size
+                    }
+                    _ => {}
+                };
             }
-        };
-        // TODO simplify with RefCell?
-        if let Some((structure_id, structure_pos, structure_size)) = structure_id_pos_size {
-            gatherer.state = EntityState::ReturningResource(structure_id);
+            None
+        });
+
+        if let Some(structure) = structure {
+            gatherer.state = EntityState::ReturningResource(structure.id);
 
             if let Some(plan) = pathfind::find_path(
                 gatherer.position,
-                Destination::AdjacentToEntity(structure_pos, structure_size),
+                Destination::AdjacentToEntity(structure.position, structure.size()),
                 &self.entity_grid,
             ) {
                 gatherer.unit_mut().movement_plan.set(plan);
