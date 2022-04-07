@@ -37,8 +37,7 @@ pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
 
 const SHOW_GRID: bool = false;
 
-//TODO
-const MAX_NUM_SELECTED_ENTITIES: usize = 2;
+pub const MAX_NUM_SELECTED_ENTITIES: usize = 8;
 
 const TITLE: &str = "RTS";
 

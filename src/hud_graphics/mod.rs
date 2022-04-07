@@ -1,5 +1,7 @@
 mod button;
 mod entity_header;
+pub mod entity_portrait;
+mod group_header;
 mod healthbar;
 mod minimap;
 mod trainingbar;
@@ -8,31 +10,32 @@ use std::cell::Ref;
 use std::convert::TryInto;
 use std::time::Duration;
 
-use ggez::graphics::{self, Color, DrawParam, Drawable, Font, Mesh, Rect, Text};
+use ggez::graphics::{Color, DrawParam, Drawable, Font, Mesh, Rect, Text};
 use ggez::input::keyboard::KeyCode;
 use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
 use self::button::Button;
 use self::entity_header::{EntityHeader, EntityHeaderContent};
+use self::group_header::GroupHeader;
 use self::minimap::Minimap;
 use crate::core::TeamState;
 use crate::data::HudAssets;
 use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
-use crate::game::{CursorState, PlayerState};
+use crate::game::{CursorState, PlayerState, MAX_NUM_SELECTED_ENTITIES};
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 
 pub const HUD_BORDER_COLOR: Color = Color::new(0.7, 0.7, 0.7, 1.0);
 
 pub struct HudGraphics {
-    position_on_screen: [f32; 2],
     font: Font,
     buttons: [Button; NUM_BUTTONS],
     minimap: Minimap,
     hovered_button_index: Option<usize>,
     tooltip: Tooltip,
     entity_header: EntityHeader,
+    group_header: GroupHeader,
     assets: HudAssets,
 }
 
@@ -52,6 +55,7 @@ impl HudGraphics {
 
         let header_pos = [position[0], position[1] + 350.0];
         let entity_header = EntityHeader::new(ctx, header_pos, font)?;
+        let group_header = GroupHeader::new(ctx, header_pos)?;
         let tooltip = Tooltip::new(font, tooltip_position, &assets);
 
         let buttons_x = header_pos[0];
@@ -71,13 +75,13 @@ impl HudGraphics {
         let buttons = buttons.try_into().unwrap();
 
         Ok(Self {
-            position_on_screen: position,
             font,
             buttons,
             minimap,
             hovered_button_index: None,
             tooltip,
             entity_header,
+            group_header,
             assets,
         })
     }
@@ -89,27 +93,22 @@ impl HudGraphics {
         selected_entities: Vec<Ref<'a, Entity>>,
         player_state: &PlayerState,
     ) -> GameResult {
-        let x = 0.0;
-
-        let medium_font = 30.0;
-        let large_font = 40.0;
-
         let cursor_state = player_state.cursor_state();
 
         let resources_text = Text::new((
             format!("RESOURCES: {}", player_team_state.resources),
             self.font,
-            medium_font,
+            30.0,
         ));
         resources_text.draw(ctx, DrawParam::new().dest([1200.0, 15.0]))?;
 
         if selected_entities.len() > 1 {
-            let mut y = 28.0;
-            for entity in &selected_entities {
+            let mut portraits = [None; MAX_NUM_SELECTED_ENTITIES];
+            for (i, entity) in selected_entities.iter().enumerate() {
                 let config = self.assets.entity(entity.entity_type);
-                self.draw_text(ctx, [x, y], &config.name, large_font)?;
-                y += 50.0;
+                portraits[i] = Some(&config.portrait);
             }
+            self.group_header.draw(ctx, portraits)?;
         } else if selected_entities.len() == 1 {
             let entity = selected_entities.first().unwrap();
             let config = self.assets.entity(entity.entity_type);
@@ -248,24 +247,6 @@ impl HudGraphics {
                 self.buttons[i].set_action(None);
             }
         }
-    }
-
-    fn draw_text(
-        &self,
-        ctx: &mut Context,
-        position: [f32; 2],
-        line: impl Into<String>,
-        font_size: f32,
-    ) -> GameResult {
-        let text = Text::new((line.into(), self.font, font_size));
-        graphics::draw(
-            ctx,
-            &text,
-            DrawParam::new().dest([
-                self.position_on_screen[0] + position[0],
-                self.position_on_screen[1] + position[1],
-            ]),
-        )
     }
 }
 

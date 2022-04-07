@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use crate::entities::Action;
 use crate::game::CursorState;
+use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 use crate::hud_graphics::{DrawableWithDebug, HUD_BORDER_COLOR};
 
 #[derive(Debug)]
@@ -85,8 +86,8 @@ impl Button {
                     ctx,
                     DrawParam::default()
                         .dest([
-                            self.rect.x + 30.0 + offset[0],
-                            self.rect.y + 20.0 + offset[1],
+                            self.rect.x + (self.rect.w - PORTRAIT_DIMENSIONS[0]) / 2.0,
+                            self.rect.y + (self.rect.h - PORTRAIT_DIMENSIONS[1]) / 2.0,
                         ])
                         .scale(scale),
                 )?;

@@ -185,11 +185,11 @@ pub enum Team {
 
 #[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
 pub enum EntitySprite {
-    SquareUnit,
-    SmallBuilding,
-    CircleUnit,
-    LargeBuilding,
-    Neutral,
+    Fighter,
+    Barracks,
+    Worker,
+    Townhall,
+    Resource,
 }
 
 #[derive(Debug)]

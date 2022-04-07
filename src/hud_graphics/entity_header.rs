@@ -1,18 +1,20 @@
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Font, Mesh, Rect, Text};
+use ggez::graphics::{DrawMode, DrawParam, Drawable, Font, Mesh, Rect, Text};
 use ggez::{Context, GameResult};
 
+use super::entity_portrait::{EntityPortrait, PORTRAIT_DIMENSIONS};
 use super::healthbar::Healthbar;
 use super::trainingbar::Trainingbar;
 use super::HUD_BORDER_COLOR;
 use crate::entities::Team;
 
 pub struct EntityHeader {
-    position_on_screen: [f32; 2],
     border: Mesh,
-    portrait_border: Mesh,
+    portrait: EntityPortrait,
     font: Font,
     healthbar: Healthbar,
     trainingbar: Trainingbar,
+    status_position_on_screen: [f32; 2],
+    name_position_on_screen: [f32; 2],
 }
 
 impl EntityHeader {
@@ -23,32 +25,36 @@ impl EntityHeader {
             Rect::new(position_on_screen[0], position_on_screen[1], 390.0, 200.0),
             HUD_BORDER_COLOR,
         )?;
-        let portrait_border = Mesh::new_rectangle(
-            ctx,
-            DrawMode::stroke(2.0),
-            Rect::new(
-                position_on_screen[0] + 10.0,
-                position_on_screen[1] + 10.0,
-                60.0,
-                60.0,
-            ),
-            Color::new(0.7, 0.7, 1.0, 1.0),
-        )?;
+
+        let portrait_pos = [position_on_screen[0] + 10.0, position_on_screen[1] + 10.0];
+        let portrait = EntityPortrait::new(ctx, portrait_pos)?;
         let healthbar = Healthbar::new(
             font,
-            [position_on_screen[0] + 80.0, position_on_screen[1] + 10.0],
+            [
+                portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 10.0,
+                position_on_screen[1] + 10.0,
+            ],
         );
         let trainingbar = Trainingbar::new(
-            [position_on_screen[0] + 80.0, position_on_screen[1] + 70.0],
+            [
+                portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 10.0,
+                position_on_screen[1] + 70.0,
+            ],
             font,
         );
+        let status_position_on_screen = [
+            position_on_screen[0] + PORTRAIT_DIMENSIONS[0] + 10.0,
+            position_on_screen[1] + 60.0,
+        ];
+        let name_position_on_screen = [position_on_screen[0] + 20.0, position_on_screen[1] + 150.0];
         Ok(Self {
-            position_on_screen,
             border,
-            portrait_border,
+            portrait,
             font,
             healthbar,
             trainingbar,
+            status_position_on_screen,
+            name_position_on_screen,
         })
     }
 
@@ -60,33 +66,16 @@ impl EntityHeader {
             content.max_health,
             content.team,
         )?;
-        self.portrait_border.draw(ctx, DrawParam::new())?;
-        content.portrait.draw(
-            ctx,
-            DrawParam::new().dest([
-                self.position_on_screen[0] + 15.0,
-                self.position_on_screen[1] + 15.0,
-            ]),
-        )?;
+        self.portrait.draw(ctx, content.portrait)?;
         if let Some(status) = content.status {
-            Text::new((status, self.font, 24.0)).draw(
-                ctx,
-                DrawParam::new().dest([
-                    self.position_on_screen[0] + 80.0,
-                    self.position_on_screen[1] + 60.0,
-                ]),
-            )?;
+            Text::new((status, self.font, 24.0))
+                .draw(ctx, DrawParam::new().dest(self.status_position_on_screen))?;
         }
         if let Some(training_progress) = content.training_progress {
             self.trainingbar.draw(ctx, training_progress)?;
         }
-        Text::new((content.name, self.font, 35.0)).draw(
-            ctx,
-            DrawParam::new().dest([
-                self.position_on_screen[0] + 20.0,
-                self.position_on_screen[1] + 150.0,
-            ]),
-        )?;
+        Text::new((content.name, self.font, 35.0))
+            .draw(ctx, DrawParam::new().dest(self.name_position_on_screen))?;
         Ok(())
     }
 }

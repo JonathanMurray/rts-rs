@@ -41,10 +41,10 @@ impl Assets {
         let background_around_grid = build_background_around_grid(ctx, camera_size)?;
 
         let mut entity_batches = Default::default();
-        create_square_unit(ctx, &mut entity_batches)?;
-        create_circle_unit(ctx, &mut entity_batches)?;
-        create_small_building(ctx, &mut entity_batches)?;
-        create_large_building(ctx, &mut entity_batches)?;
+        create_fighter(ctx, &mut entity_batches)?;
+        create_worker(ctx, &mut entity_batches)?;
+        create_barracks(ctx, &mut entity_batches)?;
+        create_townhall(ctx, &mut entity_batches)?;
 
         let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
         let neutral_entity = MeshBuilder::new()
@@ -143,7 +143,7 @@ impl Assets {
     ) -> GameResult {
         let param = DrawParam::new().dest(screen_coords);
         match sprite {
-            EntitySprite::Neutral => self.neutral_entity.draw(ctx, param)?,
+            EntitySprite::Resource => self.neutral_entity.draw(ctx, param)?,
             entity_sprite => {
                 self.entity_batches
                     .get_mut(&(entity_sprite, team))
@@ -181,7 +181,7 @@ impl Assets {
     }
 }
 
-fn create_square_unit(
+fn create_fighter(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
 ) -> GameResult {
@@ -201,12 +201,12 @@ fn create_square_unit(
             .rounded_rectangle(DrawMode::fill(), rect, 5.0, color)?
             .build(ctx)?;
         let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::SquareUnit, team), batch);
+        sprite_batches.insert((EntitySprite::Fighter, team), batch);
     }
     Ok(())
 }
 
-fn create_circle_unit(
+fn create_worker(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
 ) -> GameResult {
@@ -225,12 +225,12 @@ fn create_circle_unit(
             )?
             .build(ctx)?;
         let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::CircleUnit, team), batch);
+        sprite_batches.insert((EntitySprite::Worker, team), batch);
     }
     Ok(())
 }
 
-fn create_small_building(
+fn create_barracks(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
 ) -> GameResult {
@@ -264,12 +264,12 @@ fn create_small_building(
             .build(ctx)?;
 
         let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::SmallBuilding, team), batch);
+        sprite_batches.insert((EntitySprite::Barracks, team), batch);
     }
     Ok(())
 }
 
-fn create_large_building(
+fn create_townhall(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
 ) -> GameResult {
@@ -300,7 +300,7 @@ fn create_large_building(
             .build(ctx)?;
 
         let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::LargeBuilding, team), batch);
+        sprite_batches.insert((EntitySprite::Townhall, team), batch);
     }
     Ok(())
 }

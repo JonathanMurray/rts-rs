@@ -10,6 +10,7 @@ use crate::entities::{
     Action, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
     NUM_ENTITY_ACTIONS,
 };
+use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 use crate::hud_graphics::DrawableWithDebug;
 
 #[derive(Debug, PartialEq)]
@@ -23,10 +24,10 @@ pub enum MapType {
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
     Resource,
-    SquareUnit,
-    CircleUnit,
-    SmallBuilding,
-    LargeBuilding,
+    Fighter,
+    Worker,
+    Barracks,
+    Townhall,
 }
 
 pub struct WorldInitData {
@@ -37,9 +38,9 @@ pub struct WorldInitData {
 impl WorldInitData {
     pub fn new(map_type: MapType) -> Self {
         let mut entities = vec![
-            create_entity(EntityType::CircleUnit, [6, 2], Team::Player),
-            create_entity(EntityType::SquareUnit, [8, 2], Team::Player),
-            create_entity(EntityType::LargeBuilding, [1, 7], Team::Player),
+            create_entity(EntityType::Worker, [6, 2], Team::Player),
+            create_entity(EntityType::Fighter, [8, 2], Team::Player),
+            create_entity(EntityType::Townhall, [1, 7], Team::Player),
         ];
 
         entities.push(create_entity(EntityType::Resource, [6, 4], Team::Neutral));
@@ -50,12 +51,8 @@ impl WorldInitData {
                 entities,
             },
             MapType::Small => {
-                entities.push(create_entity(EntityType::CircleUnit, [7, 7], Team::Enemy));
-                entities.push(create_entity(
-                    EntityType::LargeBuilding,
-                    [6, 8],
-                    Team::Enemy,
-                ));
+                entities.push(create_entity(EntityType::Worker, [7, 7], Team::Enemy));
+                entities.push(create_entity(EntityType::Townhall, [6, 8], Team::Enemy));
                 Self {
                     dimensions: [30, 20],
                     entities,
@@ -64,15 +61,11 @@ impl WorldInitData {
             MapType::Medium => {
                 let dimensions = [30, 20];
 
-                entities.push(create_entity(EntityType::CircleUnit, [5, 2], Team::Enemy));
-                entities.push(create_entity(EntityType::CircleUnit, [3, 0], Team::Enemy));
-                entities.push(create_entity(EntityType::CircleUnit, [0, 4], Team::Enemy));
-                entities.push(create_entity(EntityType::CircleUnit, [3, 4], Team::Enemy));
-                entities.push(create_entity(
-                    EntityType::LargeBuilding,
-                    [8, 4],
-                    Team::Enemy,
-                ));
+                entities.push(create_entity(EntityType::Worker, [5, 2], Team::Enemy));
+                entities.push(create_entity(EntityType::Worker, [3, 0], Team::Enemy));
+                entities.push(create_entity(EntityType::Worker, [0, 4], Team::Enemy));
+                entities.push(create_entity(EntityType::Worker, [3, 4], Team::Enemy));
+                entities.push(create_entity(EntityType::Townhall, [8, 4], Team::Enemy));
                 Self {
                     dimensions,
                     entities,
@@ -90,9 +83,9 @@ impl WorldInitData {
                                 Team::Enemy
                             };
                             let entity_type = if rng.gen_bool(0.5) {
-                                EntityType::CircleUnit
+                                EntityType::Worker
                             } else {
-                                EntityType::SquareUnit
+                                EntityType::Fighter
                             };
                             entities.push(create_entity(entity_type, [x, y], team));
                         }
@@ -114,7 +107,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
 
 pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
     let mut map: HashMap<EntityType, [u32; 2]> = Default::default();
-    let structure_types = [EntityType::SmallBuilding, EntityType::LargeBuilding];
+    let structure_types = [EntityType::Barracks, EntityType::Townhall];
     for structure_type in structure_types {
         let config = entity_config(structure_type);
         let size = match config.physical_type {
@@ -130,9 +123,9 @@ pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
 
 fn entity_config(entity_type: EntityType) -> EntityConfig {
     match entity_type {
-        EntityType::SquareUnit => EntityConfig {
+        EntityType::Fighter => EntityConfig {
             is_solid: true,
-            sprite: EntitySprite::SquareUnit,
+            sprite: EntitySprite::Fighter,
             max_health: Some(3),
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
             actions: [
@@ -144,28 +137,28 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 None,
             ],
         },
-        EntityType::CircleUnit => EntityConfig {
+        EntityType::Worker => EntityConfig {
             is_solid: true,
-            sprite: EntitySprite::CircleUnit,
+            sprite: EntitySprite::Worker,
             max_health: Some(5),
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
             actions: [
                 Some(Action::Move),
                 Some(Action::GatherResource),
                 Some(Action::ReturnResource),
-                Some(Action::Construct(EntityType::SmallBuilding)),
-                Some(Action::Construct(EntityType::LargeBuilding)),
+                Some(Action::Construct(EntityType::Barracks)),
+                Some(Action::Construct(EntityType::Townhall)),
                 None,
             ],
         },
-        EntityType::SmallBuilding => EntityConfig {
+        EntityType::Barracks => EntityConfig {
             is_solid: true,
-            sprite: EntitySprite::SmallBuilding,
+            sprite: EntitySprite::Barracks,
             max_health: Some(3),
             physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
             actions: [
                 Some(Action::Train(
-                    EntityType::SquareUnit,
+                    EntityType::Fighter,
                     TrainingConfig {
                         duration: Duration::from_secs(7),
                         cost: 1,
@@ -178,14 +171,14 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 None,
             ],
         },
-        EntityType::LargeBuilding => EntityConfig {
+        EntityType::Townhall => EntityConfig {
             is_solid: true,
-            sprite: EntitySprite::LargeBuilding,
+            sprite: EntitySprite::Townhall,
             max_health: Some(5),
             physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
             actions: [
                 Some(Action::Train(
-                    EntityType::CircleUnit,
+                    EntityType::Worker,
                     TrainingConfig {
                         duration: Duration::from_secs(4),
                         cost: 1,
@@ -200,7 +193,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
         },
         EntityType::Resource => EntityConfig {
             is_solid: true,
-            sprite: EntitySprite::Neutral,
+            sprite: EntitySprite::Resource,
             max_health: None,
             physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
             actions: [None; NUM_ENTITY_ACTIONS],
@@ -221,10 +214,10 @@ pub struct ActionHudConfig {
 
 pub struct HudAssets {
     font: Font,
-    square_unit: EntityHudConfig,
-    circle_unit: EntityHudConfig,
-    small_building: EntityHudConfig,
-    large_building: EntityHudConfig,
+    fighter: EntityHudConfig,
+    worker: EntityHudConfig,
+    barracks: EntityHudConfig,
+    townhall: EntityHudConfig,
     resource: EntityHudConfig,
 }
 
@@ -233,41 +226,59 @@ impl HudAssets {
         let color = Color::new(0.6, 0.6, 0.6, 1.0);
         Ok(Self {
             font,
-            square_unit: EntityHudConfig {
-                name: "Square unit".to_string(),
+            fighter: EntityHudConfig {
+                name: "Fighter".to_string(),
                 portrait: Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
-                    Rect::new(0.0, 0.0, 50.0, 50.0),
+                    Rect::new(
+                        5.0,
+                        5.0,
+                        PORTRAIT_DIMENSIONS[0] - 10.0,
+                        PORTRAIT_DIMENSIONS[1] - 10.0,
+                    ),
                     color,
                 )?,
             },
-            circle_unit: EntityHudConfig {
-                name: "Circle unit".to_string(),
+            worker: EntityHudConfig {
+                name: "Worker".to_string(),
                 portrait: Mesh::new_circle(
                     ctx,
                     DrawMode::fill(),
-                    [25.0, 25.0],
-                    25.0,
+                    [
+                        (PORTRAIT_DIMENSIONS[0]) / 2.0,
+                        (PORTRAIT_DIMENSIONS[1]) / 2.0,
+                    ],
+                    (PORTRAIT_DIMENSIONS[0] - 10.0) / 2.0,
                     0.001,
                     color,
                 )?,
             },
-            small_building: EntityHudConfig {
-                name: "Small building".to_string(),
+            barracks: EntityHudConfig {
+                name: "Barracks".to_string(),
                 portrait: Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
-                    Rect::new(0.0, 0.0, 50.0, 50.0),
+                    Rect::new(
+                        5.0,
+                        5.0,
+                        PORTRAIT_DIMENSIONS[0] - 10.0,
+                        PORTRAIT_DIMENSIONS[1] - 10.0,
+                    ),
                     color,
                 )?,
             },
-            large_building: EntityHudConfig {
-                name: "Large building".to_string(),
+            townhall: EntityHudConfig {
+                name: "Townhall".to_string(),
                 portrait: Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
-                    Rect::new(0.0, 10.0, 50.0, 35.0),
+                    Rect::new(
+                        5.0,
+                        5.0,
+                        PORTRAIT_DIMENSIONS[0] - 10.0,
+                        (PORTRAIT_DIMENSIONS[1] - 10.0) * 0.85,
+                    ),
                     color,
                 )?,
             },
@@ -276,7 +287,12 @@ impl HudAssets {
                 portrait: Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
-                    Rect::new(0.0, 0.0, 50.0, 50.0),
+                    Rect::new(
+                        5.0,
+                        5.0,
+                        PORTRAIT_DIMENSIONS[0] - 10.0,
+                        PORTRAIT_DIMENSIONS[1] - 10.0,
+                    ),
                     color,
                 )?,
             },
@@ -285,10 +301,10 @@ impl HudAssets {
 
     pub fn entity(&self, entity_type: EntityType) -> &EntityHudConfig {
         match entity_type {
-            EntityType::SquareUnit => &self.square_unit,
-            EntityType::CircleUnit => &self.circle_unit,
-            EntityType::SmallBuilding => &self.small_building,
-            EntityType::LargeBuilding => &self.large_building,
+            EntityType::Fighter => &self.fighter,
+            EntityType::Worker => &self.worker,
+            EntityType::Barracks => &self.barracks,
+            EntityType::Townhall => &self.townhall,
             EntityType::Resource => &self.resource,
         }
     }
@@ -302,8 +318,8 @@ impl HudAssets {
             Action::Train(entity_type, training_config) => {
                 let unit_config = self.entity(entity_type);
                 let keycode = match entity_type {
-                    EntityType::CircleUnit => KeyCode::C,
-                    EntityType::SquareUnit => KeyCode::S,
+                    EntityType::Worker => KeyCode::C,
+                    EntityType::Fighter => KeyCode::S,
                     _ => panic!("No keycode for training: {:?}", entity_type),
                 };
                 ActionHudConfig {
@@ -319,8 +335,8 @@ impl HudAssets {
             }
             Action::Construct(structure_type) => {
                 let keycode = match structure_type {
-                    EntityType::SmallBuilding => KeyCode::S,
-                    EntityType::LargeBuilding => KeyCode::L,
+                    EntityType::Barracks => KeyCode::S,
+                    EntityType::Townhall => KeyCode::L,
                     _ => panic!("No keycode for constructing: {:?}", structure_type),
                 };
                 let structure_config = self.entity(structure_type);
