@@ -23,14 +23,16 @@ use crate::hud_graphics::{HudGraphics, PlayerInput};
 
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
-const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 1200.0];
-pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
+const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 900.0];
+const WORLD_X: f32 = 450.0;
+const WORLD_Y: f32 = 70.0;
 pub const WORLD_VIEWPORT: Rect = Rect {
-    x: 50.0,
-    y: 70.0,
-    w: WINDOW_DIMENSIONS[0] - 100.0,
-    h: 650.0,
+    x: WORLD_X,
+    y: WORLD_Y,
+    w: WINDOW_DIMENSIONS[0] - WORLD_X - 25.0,
+    h: WINDOW_DIMENSIONS[1] - WORLD_Y - 25.0,
 };
+pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
 
 const SHOW_GRID: bool = false;
 
@@ -196,7 +198,7 @@ impl Game {
         let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState::new(camera);
 
-        let hud_pos = [WORLD_VIEWPORT.x, WORLD_VIEWPORT.y + WORLD_VIEWPORT.h + 15.0];
+        let hud_pos = [25.0, WORLD_VIEWPORT.y];
         let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions)?;
         let hud = RefCell::new(hud);
 
@@ -516,8 +518,10 @@ impl Game {
 
 impl EventHandler for Game {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        let fps = ggez::timer::fps(ctx) as u32;
-        graphics::set_window_title(ctx, &format!("{} (fps={})", TITLE, fps));
+        let [x, y]: [f32; 2] = ggez::input::mouse::position(ctx).into();
+        graphics::set_window_title(ctx, &format!("{} ({}, {})", TITLE, x, y));
+        // let fps = ggez::timer::fps(ctx) as u32;
+        // graphics::set_window_title(ctx, &format!("{} (fps={})", TITLE, fps));
 
         let dt = ggez::timer::delta(ctx);
 

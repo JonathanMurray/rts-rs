@@ -10,39 +10,36 @@ pub struct Minimap {
     camera_scale: [f32; 2],
     rect: Rect,
     is_mouse_dragging: bool,
+    padding: f32,
 }
 
 impl Minimap {
     pub fn new(
         ctx: &mut Context,
         position: [f32; 2],
+        width: f32,
         world_dimensions: [u32; 2],
     ) -> GameResult<Self> {
-        let minimap_width = 300.0;
         let aspect_ratio = world_dimensions[0] as f32 / world_dimensions[1] as f32;
-        let rect = Rect::new(
-            position[0],
-            position[1],
-            minimap_width,
-            minimap_width / aspect_ratio,
-        );
+        let rect = Rect::new(position[0], position[1], width, width / aspect_ratio);
 
         let border_mesh = MeshBuilder::new()
             .rectangle(DrawMode::stroke(2.0), rect, Color::new(1.0, 1.0, 1.0, 1.0))?
             .build(ctx)?;
 
         let camera_scale = [
-            minimap_width / world_dimensions[0] as f32 / CELL_PIXEL_SIZE[0],
-            minimap_width / world_dimensions[0] as f32 / CELL_PIXEL_SIZE[1],
+            width / world_dimensions[0] as f32 / CELL_PIXEL_SIZE[0],
+            width / world_dimensions[0] as f32 / CELL_PIXEL_SIZE[1],
         ];
+        let padding = 2.0;
         let camera_mesh = MeshBuilder::new()
             .rectangle(
                 DrawMode::stroke(1.0),
                 Rect::new(
                     position[0],
                     position[1],
-                    WORLD_VIEWPORT.w * camera_scale[0],
-                    WORLD_VIEWPORT.h * camera_scale[1],
+                    WORLD_VIEWPORT.w * camera_scale[0] - padding * 2.0,
+                    WORLD_VIEWPORT.h * camera_scale[1] - padding * 2.0,
                 ),
                 Color::new(1.0, 1.0, 1.0, 1.0),
             )?
@@ -54,6 +51,7 @@ impl Minimap {
             camera_scale,
             rect,
             is_mouse_dragging: false,
+            padding,
         })
     }
 
@@ -63,8 +61,8 @@ impl Minimap {
             ctx,
             &self.camera_mesh,
             DrawParam::default().dest([
-                camera_position_in_world[0] * self.camera_scale[0],
-                camera_position_in_world[1] * self.camera_scale[1],
+                camera_position_in_world[0] * self.camera_scale[0] + self.padding,
+                camera_position_in_world[1] * self.camera_scale[1] + self.padding,
             ]),
         )?;
         Ok(())

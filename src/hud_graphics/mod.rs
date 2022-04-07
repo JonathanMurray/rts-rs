@@ -41,16 +41,18 @@ impl HudGraphics {
         font: Font,
         world_dimensions: [u32; 2],
     ) -> GameResult<Self> {
-        let minimap_pos = [900.0, position[1] + 30.0];
-        let minimap = Minimap::new(ctx, minimap_pos, world_dimensions)?;
+        let minimap_pos = position;
+        let minimap_w = 350.0;
+        let minimap = Minimap::new(ctx, minimap_pos, minimap_w, world_dimensions)?;
 
         let assets = HudAssets::new(ctx, font)?;
 
-        let tooltip = Tooltip::new(font, [position[0], position[1] + 420.0], &assets);
-        let entity_header = EntityHeader::new(ctx, [position[0], position[1] + 20.0], font)?;
+        let header_pos = [position[0], position[1] + 350.0];
+        let entity_header = EntityHeader::new(ctx, header_pos, font)?;
+        let tooltip = Tooltip::new(font, [header_pos[0] - 20.0, header_pos[1] + 420.0], &assets);
 
-        let buttons_x = position[0];
-        let buttons_y = position[1] + 240.0;
+        let buttons_x = header_pos[0];
+        let buttons_y = header_pos[1] + 240.0;
         let mut buttons = vec![];
         let button_size = [100.0, 70.0];
         let button_hor_margin = 30.0;
@@ -163,9 +165,7 @@ impl HudGraphics {
         let tooltip_text = match cursor_state {
             CursorState::Default => {
                 if let Some(index) = self.hovered_button_index {
-                    self.buttons[index]
-                        .action()
-                        .map(|action| TooltipText::Action(action))
+                    self.buttons[index].action().map(TooltipText::Action)
                 } else {
                     None
                 }
@@ -291,7 +291,7 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
     }
 }
 
-const TOOLTIP_FONT_SIZE: f32 = 30.0;
+const TOOLTIP_FONT_SIZE: f32 = 28.0;
 
 struct Tooltip {
     position: [f32; 2],

@@ -299,25 +299,34 @@ impl HudAssets {
         // TODO: mind the allocations
 
         match action {
-            Action::Train(entity_type, training_config) => ActionHudConfig {
-                text: format!(
-                    "Train {:?} [cost {}, {}s]",
-                    entity_type,
-                    training_config.cost,
-                    training_config.duration.as_secs()
-                ),
-                icon: Box::new(self.entity(entity_type).portrait.clone()),
-                keycode: KeyCode::T,
-            },
+            Action::Train(entity_type, training_config) => {
+                let unit_config = self.entity(entity_type);
+                let keycode = match entity_type {
+                    EntityType::CircleUnit => KeyCode::C,
+                    EntityType::SquareUnit => KeyCode::S,
+                    _ => panic!("No keycode for training: {:?}", entity_type),
+                };
+                ActionHudConfig {
+                    text: format!(
+                        "Train {} [cost {}, {}s]",
+                        &unit_config.name,
+                        training_config.cost,
+                        training_config.duration.as_secs()
+                    ),
+                    icon: Box::new(unit_config.portrait.clone()),
+                    keycode,
+                }
+            }
             Action::Construct(structure_type) => {
                 let keycode = match structure_type {
                     EntityType::SmallBuilding => KeyCode::S,
                     EntityType::LargeBuilding => KeyCode::L,
-                    _ => panic!("No keycode for constructin: {:?}", structure_type),
+                    _ => panic!("No keycode for constructing: {:?}", structure_type),
                 };
+                let structure_config = self.entity(structure_type);
                 ActionHudConfig {
-                    text: format!("Construct {:?}", structure_type),
-                    icon: Box::new(self.entity(structure_type).portrait.clone()),
+                    text: format!("Construct {}", &structure_config.name),
+                    icon: Box::new(structure_config.portrait.clone()),
                     keycode,
                 }
             }
