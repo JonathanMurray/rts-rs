@@ -46,4 +46,10 @@ impl GroupHeader {
         }
         Ok(())
     }
+
+    pub fn portrait_containing(&self, x: f32, y: f32) -> Option<usize> {
+        self.portraits
+            .iter()
+            .position(|portrait| portrait.rect().contains([x, y]))
+    }
 }

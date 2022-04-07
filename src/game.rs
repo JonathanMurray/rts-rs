@@ -287,6 +287,10 @@ impl Game {
 
     fn set_selected_entities(&mut self, entity_ids: Vec<EntityId>) {
         self.player_state.selected_entity_ids = entity_ids;
+        self.update_hud_with_new_selection();
+    }
+
+    fn update_hud_with_new_selection(&mut self) {
         let mut actions = [None; NUM_ENTITY_ACTIONS];
 
         let mut player_entities = self.selected_player_entities();
@@ -304,10 +308,12 @@ impl Game {
             }
         }
 
-        self.hud.borrow_mut().set_entity_actions(actions);
+        let mut hud = self.hud.borrow_mut();
+        hud.set_entity_actions(actions);
+        hud.set_num_selected_entities(self.player_state.selected_entity_ids.len());
     }
 
-    fn handle_player_input(&self, ctx: &mut Context, player_input: PlayerInput) {
+    fn handle_player_input(&mut self, ctx: &mut Context, player_input: PlayerInput) {
         match player_input {
             PlayerInput::UseEntityAction(action) => {
                 for entity in self.selected_player_entities() {
@@ -319,6 +325,9 @@ impl Game {
             }
             PlayerInput::SetCameraPositionRelativeToWorldDimension([x_ratio, y_ratio]) => {
                 self.set_camera_position(x_ratio, y_ratio);
+            }
+            PlayerInput::LimitSelectionToIndex(i) => {
+                self.set_selected_entities(vec![self.player_state.selected_entity_ids[i]])
             }
         }
     }
@@ -539,17 +548,15 @@ impl EventHandler for Game {
 
         let removed_entity_ids = self.core.update(dt);
 
-        let had_some_selected = !self.player_state.selected_entity_ids.is_empty();
+        let num_selected_before = self.player_state.selected_entity_ids.len();
         self.player_state
             .selected_entity_ids
             .retain(|entity_id| !removed_entity_ids.contains(entity_id));
-        if had_some_selected && self.player_state.selected_entity_ids.is_empty() {
+        if num_selected_before != self.player_state.selected_entity_ids.len() {
             // TODO: what if you still have some selected entity, but it doesn't
             //       have any action corresponding to the cursor state?
             self.set_player_cursor_state(ctx, CursorState::Default);
-            self.hud
-                .borrow_mut()
-                .set_entity_actions([None; NUM_ENTITY_ACTIONS]);
+            self.update_hud_with_new_selection();
         }
 
         self.player_state.update(ctx, dt);
@@ -721,28 +728,40 @@ impl EventHandler for Game {
 
                 println!("SELECTION RECT: {:?}", selection_rect);
 
-                // TODO: prioritize player-owned
                 // TODO: prioritize units
                 if button == MouseButton::Left {
-                    let selected_entity_ids = self
-                        .core
-                        .entities()
-                        .iter()
-                        .filter_map(|(id, e)| {
-                            let e = e.borrow();
-                            if e.pixel_rect().overlaps(&selection_rect) {
-                                Some(*id)
-                            } else {
-                                None
+                    // Only player-owned entities can be selected in groups.
+                    // Player-owned entities are prioritized when drag-selecting.
+
+                    let mut player_entities = vec![];
+                    let mut non_player_entity = None;
+
+                    for (id, entity) in self.core.entities() {
+                        let entity = entity.borrow();
+                        if entity.team == Team::Player {
+                            if entity.pixel_rect().overlaps(&selection_rect) {
+                                player_entities.push(*id);
+                                if player_entities.len() == MAX_NUM_SELECTED_ENTITIES {
+                                    break;
+                                }
                             }
-                        })
-                        .take(MAX_NUM_SELECTED_ENTITIES)
-                        .collect();
-                    println!(
-                        "Selected {:?} by releasing mouse button",
-                        selected_entity_ids
-                    );
-                    self.set_selected_entities(selected_entity_ids);
+                        } else if non_player_entity.is_none() {
+                            if entity.pixel_rect().overlaps(&selection_rect) {
+                                non_player_entity = Some(*id);
+                            }
+                        }
+                    }
+
+                    let new_selection = if !player_entities.is_empty() {
+                        player_entities
+                    } else if let Some(other) = non_player_entity {
+                        vec![other]
+                    } else {
+                        vec![]
+                    };
+
+                    println!("Selected {:?} by releasing mouse button", new_selection);
+                    self.set_selected_entities(new_selection);
                 }
             } else {
                 println!("Didn't get any targets from the selection area")

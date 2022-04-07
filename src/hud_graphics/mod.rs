@@ -37,6 +37,7 @@ pub struct HudGraphics {
     entity_header: EntityHeader,
     group_header: GroupHeader,
     assets: HudAssets,
+    num_selected_entities: usize,
 }
 
 impl HudGraphics {
@@ -83,6 +84,7 @@ impl HudGraphics {
             entity_header,
             group_header,
             assets,
+            num_selected_entities: 0,
         })
     }
 
@@ -93,6 +95,8 @@ impl HudGraphics {
         selected_entities: Vec<Ref<'a, Entity>>,
         player_state: &PlayerState,
     ) -> GameResult {
+        assert_eq!(selected_entities.len(), self.num_selected_entities);
+
         let cursor_state = player_state.cursor_state();
 
         let resources_text = Text::new((
@@ -202,6 +206,12 @@ impl HudGraphics {
             }
         }
 
+        if self.num_selected_entities > 1 {
+            if let Some(portrait_index) = self.group_header.portrait_containing(x, y) {
+                return Some(PlayerInput::LimitSelectionToIndex(portrait_index));
+            }
+        }
+
         self.minimap
             .on_mouse_button_down(button, x, y)
             .map(PlayerInput::SetCameraPositionRelativeToWorldDimension)
@@ -247,6 +257,10 @@ impl HudGraphics {
                 self.buttons[i].set_action(None);
             }
         }
+    }
+
+    pub fn set_num_selected_entities(&mut self, num: usize) {
+        self.num_selected_entities = num;
     }
 }
 
@@ -350,6 +364,7 @@ enum TooltipText {
 pub enum PlayerInput {
     UseEntityAction(Action),
     SetCameraPositionRelativeToWorldDimension([f32; 2]),
+    LimitSelectionToIndex(usize),
 }
 
 pub trait DrawableWithDebug: Drawable + std::fmt::Debug {}

@@ -6,6 +6,7 @@ use crate::game::COLOR_BG;
 pub const PORTRAIT_DIMENSIONS: [f32; 2] = [80.0, 80.0];
 
 pub struct EntityPortrait {
+    rect: Rect,
     position_on_screen: [f32; 2],
     border: Mesh,
 }
@@ -23,6 +24,7 @@ impl EntityPortrait {
             .rectangle(DrawMode::stroke(2.0), rect, Color::new(0.1, 0.1, 0.1, 1.0))?
             .build(ctx)?;
         Ok(Self {
+            rect,
             position_on_screen,
             border,
         })
@@ -32,5 +34,9 @@ impl EntityPortrait {
         self.border.draw(ctx, DrawParam::new())?;
         portrait.draw(ctx, DrawParam::new().dest(self.position_on_screen))?;
         Ok(())
+    }
+
+    pub fn rect(&self) -> Rect {
+        self.rect
     }
 }
