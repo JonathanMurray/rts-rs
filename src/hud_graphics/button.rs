@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::entities::Action;
 use crate::game::CursorState;
-use crate::hud_graphics::DrawableWithDebug;
+use crate::hud_graphics::{DrawableWithDebug, HUD_BORDER_COLOR};
 
 #[derive(Debug)]
 pub struct Button {
@@ -23,11 +23,7 @@ impl Button {
     pub fn new(ctx: &mut Context, rect: Rect) -> GameResult<Button> {
         let local_rect = Rect::new(0.0, 0.0, rect.w, rect.h);
         let border = MeshBuilder::new()
-            .rectangle(
-                DrawMode::stroke(3.0),
-                local_rect,
-                Color::new(1.0, 1.0, 1.0, 1.0),
-            )?
+            .rectangle(DrawMode::stroke(3.0), local_rect, HUD_BORDER_COLOR)?
             .build(ctx)?;
         let outline_active = MeshBuilder::new()
             .rectangle(

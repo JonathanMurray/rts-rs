@@ -21,6 +21,7 @@ use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{Action, Entity, EntityId, PhysicalType, Team, NUM_ENTITY_ACTIONS};
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 
+pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
 const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 900.0];
@@ -30,7 +31,7 @@ pub const WORLD_VIEWPORT: Rect = Rect {
     x: WORLD_X,
     y: WORLD_Y,
     w: WINDOW_DIMENSIONS[0] - WORLD_X - 25.0,
-    h: WINDOW_DIMENSIONS[1] - WORLD_Y - 25.0,
+    h: WINDOW_DIMENSIONS[1] - WORLD_Y - 70.0,
 };
 pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
 
@@ -199,7 +200,8 @@ impl Game {
         let player_state = PlayerState::new(camera);
 
         let hud_pos = [25.0, WORLD_VIEWPORT.y];
-        let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions)?;
+        let tooltip_pos = [WORLD_VIEWPORT.x, WINDOW_DIMENSIONS[1] - 50.0];
+        let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions, tooltip_pos)?;
         let hud = RefCell::new(hud);
 
         let core = Core::new(entities, world_dimensions);
@@ -578,7 +580,10 @@ impl EventHandler for Game {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        graphics::clear(ctx, COLOR_BG);
+        graphics::clear(ctx, COLOR_FG);
+
+        self.assets
+            .draw_world_bg(ctx, WORLD_VIEWPORT.point().into())?;
 
         if SHOW_GRID {
             self.assets.draw_grid(

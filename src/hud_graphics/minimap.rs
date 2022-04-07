@@ -2,10 +2,11 @@ use ggez::graphics::{Color, DrawMode, DrawParam, Mesh, MeshBuilder, Rect};
 use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
-use crate::game::{CELL_PIXEL_SIZE, WORLD_VIEWPORT};
+use super::HUD_BORDER_COLOR;
+use crate::game::{CELL_PIXEL_SIZE, COLOR_BG, WORLD_VIEWPORT};
 
 pub struct Minimap {
-    border_mesh: Mesh,
+    bg_mesh: Mesh,
     camera_mesh: Mesh,
     camera_scale: [f32; 2],
     rect: Rect,
@@ -23,8 +24,9 @@ impl Minimap {
         let aspect_ratio = world_dimensions[0] as f32 / world_dimensions[1] as f32;
         let rect = Rect::new(position[0], position[1], width, width / aspect_ratio);
 
-        let border_mesh = MeshBuilder::new()
-            .rectangle(DrawMode::stroke(2.0), rect, Color::new(1.0, 1.0, 1.0, 1.0))?
+        let bg_mesh = MeshBuilder::new()
+            .rectangle(DrawMode::fill(), rect, COLOR_BG)?
+            .rectangle(DrawMode::stroke(2.0), rect, HUD_BORDER_COLOR)?
             .build(ctx)?;
 
         let camera_scale = [
@@ -34,7 +36,7 @@ impl Minimap {
         let padding = 2.0;
         let camera_mesh = MeshBuilder::new()
             .rectangle(
-                DrawMode::stroke(1.0),
+                DrawMode::stroke(2.0),
                 Rect::new(
                     position[0],
                     position[1],
@@ -46,7 +48,7 @@ impl Minimap {
             .build(ctx)?;
 
         Ok(Self {
-            border_mesh,
+            bg_mesh,
             camera_mesh,
             camera_scale,
             rect,
@@ -56,7 +58,7 @@ impl Minimap {
     }
 
     pub fn draw(&self, ctx: &mut Context, camera_position_in_world: [f32; 2]) -> GameResult {
-        ggez::graphics::draw(ctx, &self.border_mesh, DrawParam::default())?;
+        ggez::graphics::draw(ctx, &self.bg_mesh, DrawParam::default())?;
         ggez::graphics::draw(
             ctx,
             &self.camera_mesh,

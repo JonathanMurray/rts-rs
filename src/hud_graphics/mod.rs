@@ -8,7 +8,7 @@ use std::cell::Ref;
 use std::convert::TryInto;
 use std::time::Duration;
 
-use ggez::graphics::{self, DrawParam, Drawable, Font, Mesh, Rect, Text};
+use ggez::graphics::{self, Color, DrawParam, Drawable, Font, Mesh, Rect, Text};
 use ggez::input::keyboard::KeyCode;
 use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
@@ -22,6 +22,8 @@ use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTIT
 use crate::game::{CursorState, PlayerState};
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
+
+pub const HUD_BORDER_COLOR: Color = Color::new(0.7, 0.7, 0.7, 1.0);
 
 pub struct HudGraphics {
     position_on_screen: [f32; 2],
@@ -40,23 +42,24 @@ impl HudGraphics {
         position: [f32; 2],
         font: Font,
         world_dimensions: [u32; 2],
+        tooltip_position: [f32; 2],
     ) -> GameResult<Self> {
         let minimap_pos = position;
-        let minimap_w = 350.0;
+        let minimap_w = 390.0;
         let minimap = Minimap::new(ctx, minimap_pos, minimap_w, world_dimensions)?;
 
         let assets = HudAssets::new(ctx, font)?;
 
         let header_pos = [position[0], position[1] + 350.0];
         let entity_header = EntityHeader::new(ctx, header_pos, font)?;
-        let tooltip = Tooltip::new(font, [header_pos[0] - 20.0, header_pos[1] + 420.0], &assets);
+        let tooltip = Tooltip::new(font, tooltip_position, &assets);
 
         let buttons_x = header_pos[0];
         let buttons_y = header_pos[1] + 240.0;
         let mut buttons = vec![];
-        let button_size = [100.0, 70.0];
+        let button_size = [110.0, 90.0];
         let button_hor_margin = 30.0;
-        let button_vert_margin = 15.0;
+        let button_vert_margin = 30.0;
         let buttons_per_row = 3;
         for i in 0..NUM_BUTTONS {
             let x = buttons_x + (i % buttons_per_row) as f32 * (button_size[0] + button_hor_margin);
@@ -291,7 +294,7 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
     }
 }
 
-const TOOLTIP_FONT_SIZE: f32 = 28.0;
+const TOOLTIP_FONT_SIZE: f32 = 35.0;
 
 struct Tooltip {
     position: [f32; 2],

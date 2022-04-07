@@ -6,12 +6,13 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::entities::{EntitySprite, Team};
-use crate::game::{CELL_PIXEL_SIZE, COLOR_BG};
+use crate::game::{CELL_PIXEL_SIZE, COLOR_BG, COLOR_FG};
 use crate::images;
 
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 
 pub struct Assets {
+    world_bg: Mesh,
     grid: Mesh,
     grid_border: Mesh,
     background_around_grid: Vec<Mesh>,
@@ -23,12 +24,18 @@ pub struct Assets {
 
 impl Assets {
     pub fn new(ctx: &mut Context, camera_size: [f32; 2]) -> GameResult<Assets> {
+        let world_bg = Mesh::new_rectangle(
+            ctx,
+            DrawMode::fill(),
+            Rect::new(0.0, 0.0, camera_size[0], camera_size[1]),
+            COLOR_BG,
+        )?;
         let grid = build_grid(ctx, camera_size)?;
         let grid_border = MeshBuilder::new()
             .rectangle(
-                DrawMode::stroke(3.0),
+                DrawMode::stroke(2.0),
                 Rect::new(0.0, 0.0, camera_size[0], camera_size[1]),
-                Color::new(6.0, 3.0, 6.0, 1.0),
+                Color::new(0.0, 0.0, 0.0, 1.0),
             )?
             .build(ctx)?;
         let background_around_grid = build_background_around_grid(ctx, camera_size)?;
@@ -65,6 +72,7 @@ impl Assets {
 
         let selections = Default::default();
         let assets = Assets {
+            world_bg,
             grid,
             grid_border,
             background_around_grid,
@@ -115,6 +123,13 @@ impl Assets {
                 screen_coords[1] - camera_position_in_world[1] % CELL_PIXEL_SIZE[1],
             ]),
         )?;
+
+        Ok(())
+    }
+
+    pub fn draw_world_bg(&self, ctx: &mut Context, screen_coords: [f32; 2]) -> GameResult {
+        self.world_bg
+            .draw(ctx, DrawParam::new().dest(screen_coords))?;
 
         Ok(())
     }
@@ -323,7 +338,7 @@ fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Gam
             .rectangle(
                 DrawMode::fill(),
                 Rect::new(-margin, -margin, camera_size[0] + 2.0 * margin, margin),
-                COLOR_BG,
+                COLOR_FG,
             )?
             .build(ctx)?,
         // BOTTOM
@@ -336,7 +351,7 @@ fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Gam
                     camera_size[0] + 2.0 * margin,
                     margin,
                 ),
-                COLOR_BG,
+                COLOR_FG,
             )?
             .build(ctx)?,
         // LEFT
@@ -344,7 +359,7 @@ fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Gam
             .rectangle(
                 DrawMode::fill(),
                 Rect::new(-margin, 0.0, margin, camera_size[1]),
-                COLOR_BG,
+                COLOR_FG,
             )?
             .build(ctx)?,
         // RIGHT
@@ -352,7 +367,7 @@ fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Gam
             .rectangle(
                 DrawMode::fill(),
                 Rect::new(camera_size[0], 0.0, margin, camera_size[1]),
-                COLOR_BG,
+                COLOR_FG,
             )?
             .build(ctx)?,
     ];

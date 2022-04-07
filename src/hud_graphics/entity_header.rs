@@ -3,6 +3,7 @@ use ggez::{Context, GameResult};
 
 use super::healthbar::Healthbar;
 use super::trainingbar::Trainingbar;
+use super::HUD_BORDER_COLOR;
 use crate::entities::Team;
 
 pub struct EntityHeader {
@@ -19,8 +20,8 @@ impl EntityHeader {
         let border = Mesh::new_rectangle(
             ctx,
             DrawMode::stroke(3.0),
-            Rect::new(position_on_screen[0], position_on_screen[1], 360.0, 200.0),
-            Color::new(1.0, 1.0, 1.0, 1.0),
+            Rect::new(position_on_screen[0], position_on_screen[1], 390.0, 200.0),
+            HUD_BORDER_COLOR,
         )?;
         let portrait_border = Mesh::new_rectangle(
             ctx,
@@ -79,7 +80,7 @@ impl EntityHeader {
         if let Some(training_progress) = content.training_progress {
             self.trainingbar.draw(ctx, training_progress)?;
         }
-        Text::new((content.name, self.font, 32.0)).draw(
+        Text::new((content.name, self.font, 35.0)).draw(
             ctx,
             DrawParam::new().dest([
                 self.position_on_screen[0] + 20.0,
