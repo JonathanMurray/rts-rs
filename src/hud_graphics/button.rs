@@ -1,10 +1,11 @@
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Mesh, MeshBuilder, Rect, Text};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Mesh, MeshBuilder, Rect};
 use ggez::{Context, GameResult};
 
 use std::time::Duration;
 
 use crate::entities::Action;
 use crate::game::CursorState;
+use crate::hud_graphics::DrawableWithDebug;
 
 #[derive(Debug)]
 pub struct Button {
@@ -15,7 +16,7 @@ pub struct Button {
     highlight: Mesh,
     is_down: bool,
     down_cooldown: Duration,
-    text: Option<Text>,
+    graphics: Option<Box<dyn DrawableWithDebug>>,
 }
 
 impl Button {
@@ -51,7 +52,7 @@ impl Button {
             highlight,
             is_down: false,
             down_cooldown: Duration::ZERO,
-            text: None,
+            graphics: None,
         })
     }
 
@@ -83,8 +84,8 @@ impl Button {
 
             let offset = if self.is_down { [4.0, 4.0] } else { [0.0, 0.0] };
             let scale = if self.is_down { [0.9, 0.9] } else { [1.0, 1.0] };
-            if let Some(text) = &self.text {
-                text.draw(
+            if let Some(graphics) = &self.graphics {
+                graphics.draw(
                     ctx,
                     DrawParam::default()
                         .dest([
@@ -124,13 +125,13 @@ impl Button {
         })
     }
 
-    pub fn set_action(&mut self, action_and_text: Option<(Action, Text)>) {
+    pub fn set_action(&mut self, action_and_text: Option<(Action, Box<dyn DrawableWithDebug>)>) {
         if let Some((action, text)) = action_and_text {
             self.action = Some(action);
-            self.text = Some(text);
+            self.graphics = Some(text);
         } else {
             self.action = None;
-            self.text = None;
+            self.graphics = None;
         }
     }
 

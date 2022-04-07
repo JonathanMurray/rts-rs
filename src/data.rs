@@ -2,12 +2,15 @@ use rand::Rng;
 use std::collections::HashMap;
 use std::time::Duration;
 
+use ggez::graphics::{Color, DrawMode, Font, Mesh, Rect, Text};
+use ggez::input::keyboard::KeyCode;
+use ggez::{Context, GameResult};
+
 use crate::entities::{
     Action, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
     NUM_ENTITY_ACTIONS,
 };
-use ggez::graphics::{Color, DrawMode, Mesh, Rect};
-use ggez::{Context, GameResult};
+use crate::hud_graphics::DrawableWithDebug;
 
 #[derive(Debug, PartialEq)]
 pub enum MapType {
@@ -210,7 +213,14 @@ pub struct EntityHudConfig {
     pub portrait: Mesh,
 }
 
+pub struct ActionHudConfig {
+    pub text: String,
+    pub icon: Box<dyn DrawableWithDebug>,
+    pub keycode: KeyCode,
+}
+
 pub struct HudAssets {
+    font: Font,
     square_unit: EntityHudConfig,
     circle_unit: EntityHudConfig,
     small_building: EntityHudConfig,
@@ -219,9 +229,10 @@ pub struct HudAssets {
 }
 
 impl HudAssets {
-    pub fn new(ctx: &mut Context) -> GameResult<Self> {
+    pub fn new(ctx: &mut Context, font: Font) -> GameResult<Self> {
         let color = Color::new(0.6, 0.6, 0.6, 1.0);
         Ok(Self {
+            font,
             square_unit: EntityHudConfig {
                 name: "Square unit".to_string(),
                 portrait: Mesh::new_rectangle(
@@ -272,13 +283,64 @@ impl HudAssets {
         })
     }
 
-    pub fn get(&self, entity_type: EntityType) -> &EntityHudConfig {
+    pub fn entity(&self, entity_type: EntityType) -> &EntityHudConfig {
         match entity_type {
             EntityType::SquareUnit => &self.square_unit,
             EntityType::CircleUnit => &self.circle_unit,
             EntityType::SmallBuilding => &self.small_building,
             EntityType::LargeBuilding => &self.large_building,
             EntityType::Resource => &self.resource,
+        }
+    }
+
+    pub fn action(&self, action: Action) -> ActionHudConfig {
+        let font_size = 30.0;
+
+        // TODO: mind the allocations
+
+        match action {
+            Action::Train(entity_type, training_config) => ActionHudConfig {
+                text: format!(
+                    "Train {:?} [cost {}, {}s]",
+                    entity_type,
+                    training_config.cost,
+                    training_config.duration.as_secs()
+                ),
+                icon: Box::new(self.entity(entity_type).portrait.clone()),
+                keycode: KeyCode::T,
+            },
+            Action::Construct(structure_type) => {
+                let keycode = match structure_type {
+                    EntityType::SmallBuilding => KeyCode::S,
+                    EntityType::LargeBuilding => KeyCode::L,
+                    _ => panic!("No keycode for constructin: {:?}", structure_type),
+                };
+                ActionHudConfig {
+                    text: format!("Construct {:?}", structure_type),
+                    icon: Box::new(self.entity(structure_type).portrait.clone()),
+                    keycode,
+                }
+            }
+            Action::Move => ActionHudConfig {
+                text: "Move".to_owned(),
+                icon: Box::new(Text::new(("M", self.font, font_size))),
+                keycode: KeyCode::M,
+            },
+            Action::Attack => ActionHudConfig {
+                text: "Attack".to_owned(),
+                icon: Box::new(Text::new(("A", self.font, font_size))),
+                keycode: KeyCode::A,
+            },
+            Action::GatherResource => ActionHudConfig {
+                text: "Gather".to_owned(),
+                icon: Box::new(Text::new(("G", self.font, font_size))),
+                keycode: KeyCode::G,
+            },
+            Action::ReturnResource => ActionHudConfig {
+                text: "Return".to_owned(),
+                icon: Box::new(Text::new(("R", self.font, font_size))),
+                keycode: KeyCode::R,
+            },
         }
     }
 }
