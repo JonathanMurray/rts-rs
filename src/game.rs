@@ -745,10 +745,10 @@ impl EventHandler for Game {
                                     break;
                                 }
                             }
-                        } else if non_player_entity.is_none() {
-                            if entity.pixel_rect().overlaps(&selection_rect) {
-                                non_player_entity = Some(*id);
-                            }
+                        } else if non_player_entity.is_none()
+                            && entity.pixel_rect().overlaps(&selection_rect)
+                        {
+                            non_player_entity = Some(*id);
                         }
                     }
 

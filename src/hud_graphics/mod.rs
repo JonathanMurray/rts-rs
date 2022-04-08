@@ -207,8 +207,8 @@ impl HudGraphics {
         }
 
         if self.num_selected_entities > 1 {
-            if let Some(portrait_index) = self.group_header.portrait_containing(x, y) {
-                return Some(PlayerInput::LimitSelectionToIndex(portrait_index));
+            if let Some(player_input) = self.group_header.on_mouse_button_down(x, y) {
+                return Some(player_input);
             }
         }
 
@@ -222,6 +222,10 @@ impl HudGraphics {
             .buttons
             .iter()
             .position(|button| button.contains([x, y]));
+
+        if self.num_selected_entities > 1 {
+            self.group_header.on_mouse_motion(x, y);
+        }
 
         self.minimap
             .on_mouse_motion(x, y)

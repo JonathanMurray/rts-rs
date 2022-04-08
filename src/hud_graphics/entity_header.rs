@@ -66,7 +66,7 @@ impl EntityHeader {
             content.max_health,
             content.team,
         )?;
-        self.portrait.draw(ctx, content.portrait)?;
+        self.portrait.draw(ctx, content.portrait, false)?;
         if let Some(status) = content.status {
             Text::new((status, self.font, 24.0))
                 .draw(ctx, DrawParam::new().dest(self.status_position_on_screen))?;

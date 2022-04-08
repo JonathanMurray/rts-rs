@@ -9,6 +9,7 @@ pub struct EntityPortrait {
     rect: Rect,
     position_on_screen: [f32; 2],
     border: Mesh,
+    highlight: Mesh,
 }
 
 impl EntityPortrait {
@@ -23,16 +24,23 @@ impl EntityPortrait {
             .rectangle(DrawMode::fill(), rect, COLOR_BG)?
             .rectangle(DrawMode::stroke(2.0), rect, Color::new(0.1, 0.1, 0.1, 1.0))?
             .build(ctx)?;
+        let highlight = MeshBuilder::new()
+            .rectangle(DrawMode::stroke(1.0), rect, Color::new(0.6, 0.6, 0.6, 1.0))?
+            .build(ctx)?;
         Ok(Self {
             rect,
             position_on_screen,
             border,
+            highlight,
         })
     }
 
-    pub fn draw(&self, ctx: &mut Context, portrait: &Mesh) -> GameResult {
+    pub fn draw(&self, ctx: &mut Context, portrait: &Mesh, highlight: bool) -> GameResult {
         self.border.draw(ctx, DrawParam::new())?;
         portrait.draw(ctx, DrawParam::new().dest(self.position_on_screen))?;
+        if highlight {
+            self.highlight.draw(ctx, DrawParam::new())?;
+        }
         Ok(())
     }
 
