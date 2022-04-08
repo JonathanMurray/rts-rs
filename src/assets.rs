@@ -17,6 +17,7 @@ pub struct Assets {
     grid_border: Mesh,
     background_around_grid: Vec<Mesh>,
     selections: HashMap<([u32; 2], Team), Mesh>,
+    construction_outlines: HashMap<[u32; 2], Mesh>,
     neutral_entity: Mesh,
     entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
     movement_command_indicator: Mesh,
@@ -70,13 +71,13 @@ impl Assets {
             )?
             .build(ctx)?;
 
-        let selections = Default::default();
         let assets = Assets {
             world_bg,
             grid,
             grid_border,
             background_around_grid,
-            selections,
+            selections: Default::default(),
+            construction_outlines: Default::default(),
             neutral_entity,
             entity_batches,
             movement_command_indicator,
@@ -94,6 +95,19 @@ impl Assets {
         let mesh = match self.selections.entry((size, team)) {
             Entry::Occupied(o) => o.into_mut(),
             Entry::Vacant(v) => v.insert(create_selection_mesh(ctx, size, team)?),
+        };
+        mesh.draw(ctx, DrawParam::new().dest(screen_coords))
+    }
+
+    pub fn draw_construction_outline(
+        &mut self,
+        ctx: &mut Context,
+        size: [u32; 2],
+        screen_coords: [f32; 2],
+    ) -> GameResult {
+        let mesh = match self.construction_outlines.entry(size) {
+            Entry::Occupied(o) => o.into_mut(),
+            Entry::Vacant(v) => v.insert(create_construction_outline_mesh(ctx, size)?),
         };
         mesh.draw(ctx, DrawParam::new().dest(screen_coords))
     }
@@ -322,6 +336,19 @@ fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameR
             ),
             color,
         )?
+        .build(ctx)
+}
+
+fn create_construction_outline_mesh(ctx: &mut Context, size: [u32; 2]) -> GameResult<Mesh> {
+    let rect = Rect::new(
+        0.0,
+        0.0,
+        CELL_PIXEL_SIZE[0] * size[0] as f32,
+        CELL_PIXEL_SIZE[1] * size[1] as f32,
+    );
+    MeshBuilder::new()
+        .rectangle(DrawMode::fill(), rect, Color::new(0.4, 0.8, 0.4, 0.05))?
+        .rectangle(DrawMode::stroke(2.0), rect, Color::new(0.6, 0.9, 0.6, 1.0))?
         .build(ctx)
 }
 

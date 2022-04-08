@@ -638,6 +638,13 @@ impl EventHandler for Game {
             if self.player_state.selected_entity_ids.contains(entity_id) {
                 self.assets
                     .draw_selection(ctx, entity.size(), entity.team, screen_coords)?;
+
+                if let EntityState::Constructing(structure_type, grid_pos) = entity.state {
+                    let screen_coords = self.player_state.world_to_screen(grid_to_world(grid_pos));
+                    let size = *self.core.structure_size(&structure_type);
+                    self.assets
+                        .draw_construction_outline(ctx, size, screen_coords)?;
+                }
             }
 
             self.assets
@@ -650,11 +657,11 @@ impl EventHandler for Game {
             CursorState::PlacingStructure(structure_type) => {
                 if let Some(hovered_world_pos) = self.screen_to_grid(mouse_position) {
                     let size = *self.core.structure_size(&structure_type);
-                    let world_coords = grid_to_world(hovered_world_pos);
-                    let screen_coords = self.player_state.world_to_screen(world_coords);
-                    // TODO: Draw transparent filled rect instead of selection outline
+                    let screen_coords = self
+                        .player_state
+                        .world_to_screen(grid_to_world(hovered_world_pos));
                     self.assets
-                        .draw_selection(ctx, size, Team::Player, screen_coords)?;
+                        .draw_construction_outline(ctx, size, screen_coords)?;
                 }
             }
             CursorState::DraggingSelectionArea(start_world_pixel_coords) => {
