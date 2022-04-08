@@ -182,8 +182,9 @@ impl Core {
         for (entity_id, entity) in &self.entities {
             let mut entity = entity.borrow_mut();
             if let EntityState::Constructing(structure_type, structure_position) = entity.state {
-                if entity.unit_mut().movement_plan.peek().is_none() {
-                    //TODO Check if we have _fully_ arrived to the target cell
+                let has_arrived = entity.unit_mut().movement_plan.peek().is_none()
+                    && entity.unit_mut().sub_cell_movement.is_ready();
+                if has_arrived {
                     let size = self.structure_sizes.get(&structure_type).unwrap();
                     let mut sufficient_space = true;
                     println!(
