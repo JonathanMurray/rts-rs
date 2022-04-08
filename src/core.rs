@@ -480,6 +480,10 @@ impl Core {
             .expect("Unknown structure type")
     }
 
+    pub fn grid(&self) -> &EntityGrid {
+        &self.entity_grid
+    }
+
     fn try_add_trained_entity(
         &mut self,
         entity_type: EntityType,

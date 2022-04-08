@@ -200,7 +200,7 @@ impl Game {
         let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState::new(camera);
 
-        let hud_pos = [25.0, WORLD_VIEWPORT.y];
+        let hud_pos = [25.0, 25.0];
         let tooltip_pos = [WORLD_VIEWPORT.x, WINDOW_DIMENSIONS[1] - 50.0];
         let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions, tooltip_pos)?;
         let hud = RefCell::new(hud);
@@ -538,10 +538,10 @@ impl Game {
 
 impl EventHandler for Game {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        let [x, y]: [f32; 2] = ggez::input::mouse::position(ctx).into();
-        graphics::set_window_title(ctx, &format!("{} ({}, {})", TITLE, x, y));
-        // let fps = ggez::timer::fps(ctx) as u32;
-        // graphics::set_window_title(ctx, &format!("{} (fps={})", TITLE, fps));
+        // let [x, y]: [f32; 2] = ggez::input::mouse::position(ctx).into();
+        // graphics::set_window_title(ctx, &format!("{} ({}, {})", TITLE, x, y));
+        let fps = ggez::timer::fps(ctx) as u32;
+        graphics::set_window_title(ctx, &format!("{} (fps={})", TITLE, fps));
 
         let dt = ggez::timer::delta(ctx);
 
@@ -685,11 +685,12 @@ impl EventHandler for Game {
             .map(|entity| entity.borrow())
             .collect();
 
-        self.hud.borrow().draw(
+        self.hud.borrow_mut().draw(
             ctx,
             self.core.team_state(&Team::Player).borrow(),
             selected_entities,
             &self.player_state,
+            self.core.grid(),
         )?;
 
         graphics::present(ctx)?;

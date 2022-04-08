@@ -23,6 +23,7 @@ use crate::core::TeamState;
 use crate::data::{EntityType, HudAssets};
 use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
 use crate::game::{CursorState, PlayerState, MAX_NUM_SELECTED_ENTITIES};
+use crate::grid::EntityGrid;
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 
@@ -54,7 +55,7 @@ impl HudGraphics {
 
         let assets = HudAssets::new(ctx, font)?;
 
-        let header_pos = [position[0], position[1] + 350.0];
+        let header_pos = [position[0], position[1] + 400.0];
         let entity_header = EntityHeader::new(ctx, header_pos, font)?;
         let group_header = GroupHeader::new(ctx, header_pos)?;
         let tooltip = Tooltip::new(font, tooltip_position, &assets);
@@ -89,11 +90,12 @@ impl HudGraphics {
     }
 
     pub fn draw<'a>(
-        &self,
+        &mut self,
         ctx: &mut Context,
         player_team_state: Ref<TeamState>,
         selected_entities: Vec<Ref<'a, Entity>>,
         player_state: &PlayerState,
+        grid: &EntityGrid,
     ) -> GameResult {
         assert_eq!(selected_entities.len(), self.num_selected_entities);
 
@@ -192,7 +194,7 @@ impl HudGraphics {
         self.tooltip.draw(ctx, tooltip_text, &self.assets)?;
 
         self.minimap
-            .draw(ctx, player_state.camera_position_in_world())?;
+            .draw(ctx, player_state.camera_position_in_world(), grid)?;
 
         Ok(())
     }
