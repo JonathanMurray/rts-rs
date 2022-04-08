@@ -14,11 +14,13 @@ use crate::assets::Assets;
 use crate::camera::Camera;
 use crate::core::{
     AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, MoveCommand,
-    ReturnResourceCommand, TrainCommand,
+    ReturnResourceCommand, TrainCommand, UpdateOutcome,
 };
 use crate::data::{EntityType, MapType, WorldInitData};
 use crate::enemy_ai::EnemyPlayerAi;
-use crate::entities::{Action, Entity, EntityId, PhysicalType, Team, NUM_ENTITY_ACTIONS};
+use crate::entities::{
+    Action, Entity, EntityId, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS,
+};
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
@@ -295,12 +297,20 @@ impl Game {
 
         let mut player_entities = self.selected_player_entities();
         if let Some(first) = player_entities.next() {
-            actions = first.borrow().actions;
+            let first = first.borrow();
+            let is_under_construction = matches!(first.state, EntityState::UnderConstruction(..));
+            if !is_under_construction {
+                actions = first.actions;
+            }
         }
 
         for additional in player_entities {
-            for (i, action) in additional.borrow().actions.iter().enumerate() {
-                if actions[i] != *action {
+            let additional = additional.borrow();
+
+            let is_under_construction =
+                matches!(additional.state, EntityState::UnderConstruction(..));
+            for (i, action) in additional.actions.iter().enumerate() {
+                if is_under_construction || actions[i] != *action {
                     // Since not all selected entities have this action, it should not
                     // be shown in HUD.
                     actions[i] = None;
@@ -546,16 +556,29 @@ impl EventHandler for Game {
             self.core.issue_command(command, Team::Enemy);
         }
 
-        let removed_entity_ids = self.core.update(dt);
+        let UpdateOutcome {
+            removed_entities,
+            finished_structures,
+        } = self.core.update(dt);
 
         let num_selected_before = self.player_state.selected_entity_ids.len();
         self.player_state
             .selected_entity_ids
-            .retain(|entity_id| !removed_entity_ids.contains(entity_id));
+            .retain(|entity_id| !removed_entities.contains(entity_id));
+        let mut should_update_hud = false;
         if num_selected_before != self.player_state.selected_entity_ids.len() {
             // TODO: what if you still have some selected entity, but it doesn't
             //       have any action corresponding to the cursor state?
             self.set_player_cursor_state(ctx, CursorState::Default);
+            should_update_hud = true;
+        }
+        for selected_entity_id in &self.player_state.selected_entity_ids {
+            if finished_structures.contains(selected_entity_id) {
+                should_update_hud = true;
+                break;
+            }
+        }
+        if should_update_hud {
             self.update_hud_with_new_selection();
         }
 

@@ -3,7 +3,7 @@ use ggez::{Context, GameResult};
 
 use super::entity_portrait::{EntityPortrait, PORTRAIT_DIMENSIONS};
 use super::healthbar::Healthbar;
-use super::trainingbar::Trainingbar;
+use super::progress_bar::ProgressBar;
 use super::HUD_BORDER_COLOR;
 use crate::entities::Team;
 
@@ -12,7 +12,7 @@ pub struct EntityHeader {
     portrait: EntityPortrait,
     font: Font,
     healthbar: Healthbar,
-    trainingbar: Trainingbar,
+    progress_bar: ProgressBar,
     status_position_on_screen: [f32; 2],
     name_position_on_screen: [f32; 2],
 }
@@ -35,7 +35,7 @@ impl EntityHeader {
                 position_on_screen[1] + 10.0,
             ],
         );
-        let trainingbar = Trainingbar::new(
+        let progress_bar = ProgressBar::new(
             [
                 portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 10.0,
                 position_on_screen[1] + 70.0,
@@ -43,7 +43,7 @@ impl EntityHeader {
             font,
         );
         let status_position_on_screen = [
-            position_on_screen[0] + PORTRAIT_DIMENSIONS[0] + 10.0,
+            portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 10.0,
             position_on_screen[1] + 60.0,
         ];
         let name_position_on_screen = [position_on_screen[0] + 20.0, position_on_screen[1] + 150.0];
@@ -52,7 +52,7 @@ impl EntityHeader {
             portrait,
             font,
             healthbar,
-            trainingbar,
+            progress_bar,
             status_position_on_screen,
             name_position_on_screen,
         })
@@ -71,8 +71,8 @@ impl EntityHeader {
             Text::new((status, self.font, 24.0))
                 .draw(ctx, DrawParam::new().dest(self.status_position_on_screen))?;
         }
-        if let Some(training_progress) = content.training_progress {
-            self.trainingbar.draw(ctx, training_progress)?;
+        if let Some(progress) = content.progress {
+            self.progress_bar.draw(ctx, progress)?;
         }
         Text::new((content.name, self.font, 35.0))
             .draw(ctx, DrawParam::new().dest(self.name_position_on_screen))?;
@@ -86,6 +86,6 @@ pub struct EntityHeaderContent<'a> {
     pub portrait: &'a Mesh,
     pub name: String,
     pub status: Option<String>,
-    pub training_progress: Option<f32>,
+    pub progress: Option<f32>,
     pub team: Team,
 }

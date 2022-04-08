@@ -43,7 +43,7 @@ impl Core {
         }
     }
 
-    pub fn update(&mut self, dt: Duration) -> Vec<EntityId> {
+    pub fn update(&mut self, dt: Duration) -> UpdateOutcome {
         //-------------------------------
         //          MOVEMENT
         //-------------------------------
@@ -175,7 +175,7 @@ impl Core {
         }
 
         //-------------------------------
-        //       CONSTRUCTION 1
+        //     PREPARE CONSTRUCTION
         //-------------------------------
         let mut builders_to_remove = Vec::new();
         let mut structures_to_add = Vec::new();
@@ -217,7 +217,7 @@ impl Core {
         //-------------------------------
         //       ENTITY REMOVAL
         //-------------------------------
-        let mut removed_entity_ids = vec![];
+        let mut removed_entities = vec![];
         self.entities.retain(|(entity_id, entity)| {
             let entity = entity.borrow();
             let is_dead = entity
@@ -230,7 +230,7 @@ impl Core {
                 if entity.is_solid {
                     self.entity_grid.set_area(entity.cell_rect(), false);
                 }
-                removed_entity_ids.push(*entity_id);
+                removed_entities.push(*entity_id);
                 false
             } else {
                 true
@@ -238,12 +238,33 @@ impl Core {
         });
 
         //-------------------------------
-        //       CONSTRUCTION 2
+        //     START CONSTRUCTION
         //-------------------------------
         // Now that the builder has been removed, and no longer occupies a cell, the structure can
         // be placed.
         for (team, position, structure_type) in structures_to_add {
-            self.add_entity(structure_type, position, team);
+            let mut new_structure = data::create_entity(structure_type, position, team);
+            let construction_time = Duration::from_secs(4); //TODO should come from entity config
+            new_structure.state =
+                EntityState::UnderConstruction(construction_time, construction_time);
+            self.add_entity(new_structure);
+        }
+
+        //-------------------------------
+        //     CONSTRUCTION
+        //-------------------------------
+        let mut finished_structures = vec![];
+        for (id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
+            if let EntityState::UnderConstruction(remaining, total) = entity.state {
+                let remaining = remaining.saturating_sub(dt);
+                if remaining.is_zero() {
+                    entity.state = EntityState::Idle;
+                    finished_structures.push(*id);
+                } else {
+                    entity.state = EntityState::UnderConstruction(remaining, total);
+                }
+            }
         }
 
         //-------------------------------
@@ -273,7 +294,10 @@ impl Core {
             }
         }
 
-        removed_entity_ids
+        UpdateOutcome {
+            removed_entities,
+            finished_structures,
+        }
     }
 
     pub fn issue_command(&self, command: Command, issuing_team: Team) {
@@ -475,7 +499,8 @@ impl Core {
         for x in left..right + 1 {
             for y in top..bot + 1 {
                 if !self.entity_grid.get(&[x, y]) {
-                    self.add_entity(entity_type, [x, y], team);
+                    let new_unit = data::create_entity(entity_type, [x, y], team);
+                    self.add_entity(new_unit);
                     return Some([x, y]);
                 }
             }
@@ -483,8 +508,7 @@ impl Core {
         None
     }
 
-    fn add_entity(&mut self, entity_type: EntityType, position: [u32; 2], team: Team) {
-        let new_entity = data::create_entity(entity_type, position, team);
+    fn add_entity(&mut self, new_entity: Entity) {
         let rect = new_entity.cell_rect();
         self.entities
             .push((new_entity.id, RefCell::new(new_entity)));
@@ -576,4 +600,9 @@ pub struct ReturnResourceCommand<'a> {
 
 pub struct TeamState {
     pub resources: u32,
+}
+
+pub struct UpdateOutcome {
+    pub removed_entities: Vec<EntityId>,
+    pub finished_structures: Vec<EntityId>,
 }

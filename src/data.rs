@@ -318,8 +318,8 @@ impl HudAssets {
             Action::Train(entity_type, training_config) => {
                 let unit_config = self.entity(entity_type);
                 let keycode = match entity_type {
-                    EntityType::Worker => KeyCode::C,
-                    EntityType::Fighter => KeyCode::S,
+                    EntityType::Worker => KeyCode::W,
+                    EntityType::Fighter => KeyCode::F,
                     _ => panic!("No keycode for training: {:?}", entity_type),
                 };
                 ActionHudConfig {
@@ -335,8 +335,8 @@ impl HudAssets {
             }
             Action::Construct(structure_type) => {
                 let keycode = match structure_type {
-                    EntityType::Barracks => KeyCode::S,
-                    EntityType::Townhall => KeyCode::L,
+                    EntityType::Barracks => KeyCode::B,
+                    EntityType::Townhall => KeyCode::T,
                     _ => panic!("No keycode for constructing: {:?}", structure_type),
                 };
                 let structure_config = self.entity(structure_type);

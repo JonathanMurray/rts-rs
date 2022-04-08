@@ -25,6 +25,7 @@ pub enum EntityState {
     Attacking(EntityId),
     GatheringResource(EntityId),
     ReturningResource(EntityId),
+    UnderConstruction(Duration, Duration),
 }
 
 #[derive(Debug)]

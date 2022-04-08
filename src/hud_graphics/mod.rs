@@ -4,7 +4,7 @@ pub mod entity_portrait;
 mod group_header;
 mod healthbar;
 mod minimap;
-mod trainingbar;
+mod progress_bar;
 
 use std::cell::Ref;
 use std::convert::TryInto;
@@ -20,7 +20,7 @@ use self::entity_header::{EntityHeader, EntityHeaderContent};
 use self::group_header::GroupHeader;
 use self::minimap::Minimap;
 use crate::core::TeamState;
-use crate::data::HudAssets;
+use crate::data::{EntityType, HudAssets};
 use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
 use crate::game::{CursorState, PlayerState, MAX_NUM_SELECTED_ENTITIES};
 
@@ -118,7 +118,7 @@ impl HudGraphics {
             let config = self.assets.entity(entity.entity_type);
 
             let mut entity_status_text = None;
-            let mut training_progress = None;
+            let mut progress = None;
             if entity.team == Team::Player {
                 if let PhysicalType::Unit(unit) = &entity.physical_type {
                     if let Some(gathering) = unit.gathering.as_ref() {
@@ -130,10 +130,15 @@ impl HudGraphics {
                 if let EntityState::TrainingUnit(trained_entity_type) = entity.state {
                     entity_status_text = Some(format!("[training {:?}]", trained_entity_type));
                     let training = entity.training.as_ref().unwrap();
-                    training_progress = Some(training.progress(trained_entity_type).unwrap());
+                    progress = Some(training.progress(trained_entity_type).unwrap());
                 }
-            } else if entity.team == Team::Neutral {
+            }
+            if entity.entity_type == EntityType::Resource {
                 entity_status_text = Some("[plenty of resources]".to_owned());
+            }
+            if let EntityState::UnderConstruction(remaining, total) = entity.state {
+                entity_status_text = Some("[under construction]".to_owned());
+                progress = Some((total - remaining).as_secs_f32() / total.as_secs_f32());
             }
 
             let (current_health, max_health) = entity
@@ -149,7 +154,7 @@ impl HudGraphics {
                     portrait: &config.portrait,
                     name: config.name.clone(),
                     status: entity_status_text,
-                    training_progress,
+                    progress,
                     team: entity.team,
                 },
             )?;

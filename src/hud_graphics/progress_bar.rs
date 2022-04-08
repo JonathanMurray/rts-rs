@@ -1,12 +1,12 @@
 use ggez::graphics::{DrawParam, Drawable, Font, Text};
 use ggez::{Context, GameResult};
 
-pub struct Trainingbar {
+pub struct ProgressBar {
     position_on_screen: [f32; 2],
     font: Font,
 }
 
-impl Trainingbar {
+impl ProgressBar {
     pub fn new(position_on_screen: [f32; 2], font: Font) -> Self {
         Self {
             position_on_screen,
@@ -15,10 +15,6 @@ impl Trainingbar {
     }
 
     pub fn draw(&self, ctx: &mut Context, progress: f32) -> GameResult {
-        // let header = format!("Training {:?}", unit_name);
-        // Text::new((header, self.font, 30.0))
-        //     .draw(ctx, DrawParam::new().dest(self.position_on_screen))?;
-
         let w = 14.0;
         let bar = format!(
             "[{}{}]",
