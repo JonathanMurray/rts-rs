@@ -16,13 +16,14 @@ use crate::core::{
     AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, MoveCommand,
     ReturnResourceCommand, TrainCommand, UpdateOutcome,
 };
-use crate::data::{EntityType, MapType, WorldInitData};
+use crate::data::EntityType;
 use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
     Action, Entity, EntityId, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS,
 };
 use crate::grid::Grid;
 use crate::hud_graphics::{HudGraphics, PlayerInput};
+use crate::map::{MapType, WorldInitData};
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
