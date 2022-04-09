@@ -18,6 +18,7 @@ pub fn mesh_into_image(ctx: &mut Context, mesh: Mesh) -> Result<Image, GameError
 
     // Change drawing mode: draw to canvas
     graphics::set_canvas(ctx, Some(&canvas));
+    let original_screen_coordinates = graphics::screen_coordinates(ctx);
     graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, width, height))?;
 
     let transparent_bg = Color::new(0.0, 0.0, 0.0, 0.0);
@@ -27,8 +28,7 @@ pub fn mesh_into_image(ctx: &mut Context, mesh: Mesh) -> Result<Image, GameError
 
     // Change back drawing mode: draw to screen
     graphics::set_canvas(ctx, None);
-    let size = graphics::drawable_size(ctx);
-    graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, size.0, size.1))?;
+    graphics::set_screen_coordinates(ctx, original_screen_coordinates)?;
 
     Ok(image)
 }

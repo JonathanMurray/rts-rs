@@ -1,5 +1,5 @@
 use ggez::graphics::spritebatch::SpriteBatch;
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Mesh, MeshBuilder, Rect};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Image, Mesh, MeshBuilder, Rect};
 use ggez::{Context, GameError, GameResult};
 
 use std::collections::hash_map::Entry;
@@ -21,6 +21,7 @@ pub struct Assets {
     neutral_entity: Mesh,
     entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
     movement_command_indicator: Mesh,
+    ground_tile: SpriteBatch,
 }
 
 impl Assets {
@@ -71,6 +72,8 @@ impl Assets {
             )?
             .build(ctx)?;
 
+        let ground_tile = SpriteBatch::new(Image::new(ctx, "/images/dirt_tile.png")?);
+
         let assets = Assets {
             world_bg,
             grid,
@@ -81,6 +84,7 @@ impl Assets {
             neutral_entity,
             entity_batches,
             movement_command_indicator,
+            ground_tile,
         };
         Ok(assets)
     }
@@ -141,9 +145,28 @@ impl Assets {
         Ok(())
     }
 
-    pub fn draw_world_bg(&self, ctx: &mut Context, screen_coords: [f32; 2]) -> GameResult {
+    pub fn draw_world_bg(
+        &mut self,
+        ctx: &mut Context,
+        screen_coords: [f32; 2],
+        camera_position_in_world: [f32; 2],
+    ) -> GameResult {
         self.world_bg
             .draw(ctx, DrawParam::new().dest(screen_coords))?;
+
+        let x = screen_coords[0] - camera_position_in_world[0] % CELL_PIXEL_SIZE[0];
+        let y = screen_coords[1] - camera_position_in_world[1] % CELL_PIXEL_SIZE[1];
+        // TODO This is very lazy and inexact
+        for i in 0..20 {
+            for j in 0..20 {
+                self.ground_tile.add(DrawParam::new().dest([
+                    x + i as f32 * CELL_PIXEL_SIZE[0],
+                    y + j as f32 * CELL_PIXEL_SIZE[1],
+                ]));
+            }
+        }
+        self.ground_tile.draw(ctx, DrawParam::new())?;
+        self.ground_tile.clear();
 
         Ok(())
     }

@@ -26,16 +26,16 @@ use crate::hud_graphics::{HudGraphics, PlayerInput};
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
-const WINDOW_DIMENSIONS: [f32; 2] = [1600.0, 900.0];
+const SCREEN_SIZE: [f32; 2] = [1600.0, 900.0];
 const WORLD_X: f32 = 450.0;
 const WORLD_Y: f32 = 70.0;
 pub const WORLD_VIEWPORT: Rect = Rect {
     x: WORLD_X,
     y: WORLD_Y,
-    w: WINDOW_DIMENSIONS[0] - WORLD_X - 25.0,
-    h: WINDOW_DIMENSIONS[1] - WORLD_Y - 70.0,
+    w: SCREEN_SIZE[0] - WORLD_X - 25.0,
+    h: SCREEN_SIZE[1] - WORLD_Y - 70.0,
 };
-pub const CELL_PIXEL_SIZE: [f32; 2] = [50.0, 50.0];
+pub const CELL_PIXEL_SIZE: [f32; 2] = [64.0, 64.0];
 
 const SHOW_GRID: bool = false;
 
@@ -46,10 +46,16 @@ const TITLE: &str = "RTS";
 pub fn run(map_type: MapType) -> GameResult {
     let (mut ctx, event_loop) = ContextBuilder::new("rts", "jm")
         .window_setup(WindowSetup::default().title(TITLE))
-        .window_mode(WindowMode::default().dimensions(WINDOW_DIMENSIONS[0], WINDOW_DIMENSIONS[1]))
+        .window_mode(WindowMode::default().dimensions(SCREEN_SIZE[0] * 1.5, SCREEN_SIZE[1] * 1.5))
         .add_resource_path("resources")
         .build()
         .expect("Creating ggez context");
+
+    graphics::set_screen_coordinates(
+        &mut ctx,
+        Rect::new(0.0, 0.0, SCREEN_SIZE[0], SCREEN_SIZE[1]),
+    )
+    .unwrap();
 
     let game = Game::new(&mut ctx, map_type)?;
     ggez::event::run(ctx, event_loop, game)
@@ -201,7 +207,7 @@ impl Game {
         let player_state = PlayerState::new(camera);
 
         let hud_pos = [25.0, 25.0];
-        let tooltip_pos = [WORLD_VIEWPORT.x, WINDOW_DIMENSIONS[1] - 50.0];
+        let tooltip_pos = [WORLD_VIEWPORT.x, SCREEN_SIZE[1] - 50.0];
         let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions, tooltip_pos)?;
         let hud = RefCell::new(hud);
 
@@ -538,7 +544,7 @@ impl Game {
 
 impl EventHandler for Game {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        // let [x, y]: [f32; 2] = ggez::input::mouse::position(ctx).into();
+        // let [x, y]: [f32; 2] = mouse_position(ctx);
         // graphics::set_window_title(ctx, &format!("{} ({}, {})", TITLE, x, y));
         let fps = ggez::timer::fps(ctx) as u32;
         graphics::set_window_title(ctx, &format!("{} (fps={})", TITLE, fps));
@@ -584,10 +590,7 @@ impl EventHandler for Game {
 
         self.player_state.update(ctx, dt);
 
-        if let Some(pixel_coords) = self
-            .player_state
-            .screen_to_world(ggez::input::mouse::position(ctx).into())
-        {
+        if let Some(pixel_coords) = self.player_state.screen_to_world(mouse_position(ctx)) {
             if self.player_state.cursor_state() == CursorState::Default {
                 let is_hovering_some_entity = self
                     .core
@@ -611,15 +614,13 @@ impl EventHandler for Game {
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, COLOR_FG);
 
+        let camera_pos_in_world = self.player_state.camera.borrow().position_in_world;
         self.assets
-            .draw_world_bg(ctx, WORLD_VIEWPORT.point().into())?;
+            .draw_world_bg(ctx, WORLD_VIEWPORT.point().into(), camera_pos_in_world)?;
 
         if SHOW_GRID {
-            self.assets.draw_grid(
-                ctx,
-                WORLD_VIEWPORT.point().into(),
-                self.player_state.camera.borrow().position_in_world,
-            )?;
+            self.assets
+                .draw_grid(ctx, WORLD_VIEWPORT.point().into(), camera_pos_in_world)?;
         }
 
         let indicator = &self.player_state.movement_command_indicator;
@@ -652,7 +653,7 @@ impl EventHandler for Game {
         }
         self.assets.flush_entity_sprite_batch(ctx)?;
 
-        let mouse_position: [f32; 2] = ggez::input::mouse::position(ctx).into();
+        let mouse_position: [f32; 2] = mouse_position(ctx);
         match self.player_state.cursor_state() {
             CursorState::PlacingStructure(structure_type) => {
                 if let Some(hovered_world_pos) = self.screen_to_grid(mouse_position) {
@@ -698,6 +699,7 @@ impl EventHandler for Game {
     }
 
     fn mouse_button_down_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+        let [x, y] = physical_to_logical(ctx, [x, y]);
         if let Some(clicked_world_pixel_coords) = self.player_state.screen_to_world([x, y]) {
             let clicked_world_pos = world_to_grid(clicked_world_pixel_coords);
             match self.player_state.cursor_state() {
@@ -748,6 +750,7 @@ impl EventHandler for Game {
     }
 
     fn mouse_button_up_event(&mut self, ctx: &mut Context, button: MouseButton, x: f32, y: f32) {
+        let [x, y] = physical_to_logical(ctx, [x, y]);
         if let CursorState::DraggingSelectionArea(start_world_pixel_coords) =
             self.player_state.cursor_state()
         {
@@ -803,6 +806,7 @@ impl EventHandler for Game {
     }
 
     fn mouse_motion_event(&mut self, ctx: &mut Context, x: f32, y: f32, _dx: f32, _dy: f32) {
+        let [x, y] = physical_to_logical(ctx, [x, y]);
         let mut hud = self.hud.borrow_mut();
         if let Some(player_input) = hud.on_mouse_motion(x, y) {
             drop(hud); // HUD may need to be updated, as part of handling the input
@@ -843,4 +847,17 @@ fn world_to_grid(world_coordinates: [f32; 2]) -> [u32; 2] {
     let grid_x = grid_x as u32;
     let grid_y = grid_y as u32;
     [grid_x, grid_y]
+}
+
+fn mouse_position(ctx: &mut Context) -> [f32; 2] {
+    physical_to_logical(ctx, ggez::input::mouse::position(ctx).into())
+}
+
+fn physical_to_logical(ctx: &mut Context, coordinates: [f32; 2]) -> [f32; 2] {
+    let screen_rect = graphics::screen_coordinates(ctx);
+    let size = graphics::window(ctx).inner_size();
+    [
+        screen_rect.x + coordinates[0] / size.width as f32 * screen_rect.w,
+        screen_rect.y + coordinates[1] / size.height as f32 * screen_rect.h,
+    ]
 }
