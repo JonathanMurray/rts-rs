@@ -4,8 +4,9 @@ use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
 
 use super::HUD_BORDER_COLOR;
+use crate::core::ObstacleType;
 use crate::game::{CELL_PIXEL_SIZE, COLOR_BG, WORLD_VIEWPORT};
-use crate::grid::EntityGrid;
+use crate::grid::Grid;
 use crate::images;
 
 pub struct Minimap {
@@ -83,10 +84,10 @@ impl Minimap {
         &mut self,
         ctx: &mut Context,
         camera_position_in_world: [f32; 2],
-        grid: &EntityGrid,
+        grid: &Grid<ObstacleType>,
     ) -> GameResult {
         self.bg.draw(ctx, DrawParam::default())?;
-        self.draw_entities(ctx, grid)?;
+        self.draw_entity_markers(ctx, grid)?;
         self.camera.draw(
             ctx,
             DrawParam::default().dest([
@@ -100,11 +101,11 @@ impl Minimap {
         Ok(())
     }
 
-    fn draw_entities(&mut self, ctx: &mut Context, grid: &EntityGrid) -> GameResult {
+    fn draw_entity_markers(&mut self, ctx: &mut Context, grid: &Grid<ObstacleType>) -> GameResult {
         let [w, h] = grid.dimensions;
         for x in 0..w {
             for y in 0..h {
-                if grid.get(&[x, y]) {
+                if let Some(ObstacleType::Entity) = grid.get(&[x, y]) {
                     self.entity_sprite_batch.add(DrawParam::default().dest([
                         (x as f32 / w as f32) * self.rect.w - 5.0,
                         (y as f32 / h as f32) * self.rect.h - 5.0,

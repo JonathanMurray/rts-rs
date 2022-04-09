@@ -7,6 +7,7 @@ use std::collections::HashMap;
 
 use crate::entities::{EntitySprite, Team};
 use crate::game::{CELL_PIXEL_SIZE, COLOR_BG, COLOR_FG};
+use crate::grid::Grid;
 use crate::images;
 
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
@@ -153,6 +154,7 @@ impl Assets {
         ctx: &mut Context,
         screen_coords: [f32; 2],
         camera_position_in_world: [f32; 2],
+        water_grid: &Grid<()>,
     ) -> GameResult {
         self.world_bg
             .draw(ctx, DrawParam::new().dest(screen_coords))?;
@@ -171,8 +173,9 @@ impl Assets {
                     x + i as f32 * CELL_PIXEL_SIZE[0],
                     y + j as f32 * CELL_PIXEL_SIZE[1],
                 ];
-                let water_cell =
-                    (camera_grid_pos[0] + i) % 4 == 0 && (camera_grid_pos[1] + j) % 3 == 1;
+                let water_cell = water_grid
+                    .get(&[camera_grid_pos[0] + i, camera_grid_pos[1] + j])
+                    .is_some();
                 if water_cell {
                     self.water_tile.add(DrawParam::new().dest(position));
                 } else {

@@ -21,6 +21,7 @@ use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
     Action, Entity, EntityId, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS,
 };
+use crate::grid::Grid;
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
@@ -180,6 +181,7 @@ struct Game {
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
     core: Core,
+    water_grid: Grid<()>,
 }
 
 impl Game {
@@ -187,6 +189,7 @@ impl Game {
         let WorldInitData {
             dimensions: world_dimensions,
             entities,
+            water_grid,
         } = WorldInitData::new(map_type);
 
         println!("Created {} entities", entities.len());
@@ -211,7 +214,16 @@ impl Game {
         let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions, tooltip_pos)?;
         let hud = RefCell::new(hud);
 
-        let core = Core::new(entities, world_dimensions);
+        let mut water_cells = vec![];
+        for x in 0..world_dimensions[0] {
+            for y in 0..world_dimensions[1] {
+                if water_grid.get(&[x, y]).is_some() {
+                    water_cells.push([x, y]);
+                }
+            }
+        }
+
+        let core = Core::new(entities, world_dimensions, water_cells);
 
         Ok(Self {
             assets,
@@ -220,6 +232,7 @@ impl Game {
             enemy_player_ai,
             rng,
             core,
+            water_grid,
         })
     }
 
@@ -615,8 +628,12 @@ impl EventHandler for Game {
         graphics::clear(ctx, COLOR_FG);
 
         let camera_pos_in_world = self.player_state.camera.borrow().position_in_world;
-        self.assets
-            .draw_world_bg(ctx, WORLD_VIEWPORT.point().into(), camera_pos_in_world)?;
+        self.assets.draw_world_bg(
+            ctx,
+            WORLD_VIEWPORT.point().into(),
+            camera_pos_in_world,
+            &self.water_grid,
+        )?;
 
         if SHOW_GRID {
             self.assets
@@ -691,7 +708,7 @@ impl EventHandler for Game {
             self.core.team_state(&Team::Player).borrow(),
             selected_entities,
             &self.player_state,
-            self.core.grid(),
+            self.core.obstacle_grid(),
         )?;
 
         graphics::present(ctx)?;

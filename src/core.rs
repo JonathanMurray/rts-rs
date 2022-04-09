@@ -8,26 +8,35 @@ use crate::entities::{
     Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig, TrainingPerformStatus,
     TrainingUpdateStatus,
 };
-use crate::grid::{CellRect, EntityGrid};
+use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
 
 pub struct Core {
     teams: HashMap<Team, RefCell<TeamState>>,
     entities: Vec<(EntityId, RefCell<Entity>)>,
-    entity_grid: EntityGrid,
+    obstacle_grid: Grid<ObstacleType>,
     structure_sizes: HashMap<EntityType, [u32; 2]>,
 }
 
 impl Core {
-    pub fn new(entities: Vec<Entity>, world_dimensions: [u32; 2]) -> Self {
+    pub fn new(
+        entities: Vec<Entity>,
+        world_dimensions: [u32; 2],
+        water_cells: Vec<[u32; 2]>,
+    ) -> Self {
         let mut teams = HashMap::new();
         teams.insert(Team::Player, RefCell::new(TeamState { resources: 5 }));
         teams.insert(Team::Enemy, RefCell::new(TeamState { resources: 5 }));
 
-        let mut entity_grid = EntityGrid::new(world_dimensions);
+        let mut obstacle_grid = Grid::new(world_dimensions);
+        for water_cell in water_cells {
+            obstacle_grid.set(water_cell, Some(ObstacleType::Water));
+        }
         for entity in &entities {
             if entity.is_solid {
-                entity_grid.set_area(entity.cell_rect(), true);
+                // TODO Store EntityId's instead, to get constant position->entity_id lookup?
+                //      (although entity_id->entity is still not constant currently)
+                obstacle_grid.set_area(entity.cell_rect(), Some(ObstacleType::Entity));
             }
         }
         let entities = entities
@@ -38,7 +47,7 @@ impl Core {
         Self {
             teams,
             entities,
-            entity_grid,
+            obstacle_grid,
             structure_sizes,
         }
     }
@@ -54,14 +63,14 @@ impl Core {
                 unit.sub_cell_movement.update(dt, pos);
                 if unit.sub_cell_movement.is_ready() {
                     if let Some(next_pos) = unit.movement_plan.peek() {
-                        let occupied = self.entity_grid.get(next_pos);
-                        if !occupied {
+                        let obstacle = self.obstacle_grid.get(next_pos);
+                        if obstacle.is_none() {
                             let old_pos = pos;
                             let new_pos = unit.movement_plan.advance();
-                            self.entity_grid.set(old_pos, false);
+                            self.obstacle_grid.set(old_pos, None);
                             unit.sub_cell_movement.set_moving(old_pos, new_pos);
                             entity.position = new_pos;
-                            self.entity_grid.set(new_pos, true);
+                            self.obstacle_grid.set(new_pos, Some(ObstacleType::Entity));
                         }
                     } else if entity.state == EntityState::Moving {
                         entity.state = EntityState::Idle;
@@ -103,7 +112,7 @@ impl Core {
                             if let Some(plan) = pathfind::find_path(
                                 attacker.position,
                                 Destination::AdjacentToEntity(victim.cell_rect()),
-                                &self.entity_grid,
+                                &self.obstacle_grid,
                             ) {
                                 attacker.unit_mut().movement_plan.set(plan);
                             }
@@ -156,7 +165,7 @@ impl Core {
                             if let Some(plan) = pathfind::find_path(
                                 returner.position,
                                 Destination::AdjacentToEntity(resource.cell_rect()),
-                                &self.entity_grid,
+                                &self.obstacle_grid,
                             ) {
                                 returner.unit_mut().movement_plan.set(plan);
                                 returner.state = EntityState::GatheringResource(resource_id);
@@ -196,7 +205,7 @@ impl Core {
                             if [x, y] != entity.position {
                                 // Don't check for collision on the cell that the builder stands on,
                                 // since it will be removed when structure is added.
-                                if self.entity_grid.get(&[x, y]) {
+                                if self.obstacle_grid.get(&[x, y]).is_some() {
                                     sufficient_space = false;
                                     println!("Not enough space. Occupied cell: {:?}", [x, y]);
                                 }
@@ -228,7 +237,7 @@ impl Core {
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
             if is_dead || is_transforming_into_structure {
                 if entity.is_solid {
-                    self.entity_grid.set_area(entity.cell_rect(), false);
+                    self.obstacle_grid.set_area(entity.cell_rect(), None);
                 }
                 removed_entities.push(*entity_id);
                 false
@@ -337,7 +346,7 @@ impl Core {
                 if let Some(plan) = pathfind::find_path(
                     builder.position,
                     Destination::AdjacentToEntity(structure_rect),
-                    &self.entity_grid,
+                    &self.obstacle_grid,
                 ) {
                     builder.unit_mut().movement_plan.set(plan);
                 }
@@ -351,7 +360,7 @@ impl Core {
                 if let Some(plan) = pathfind::find_path(
                     mover.position,
                     Destination::Point(destination),
-                    &self.entity_grid,
+                    &self.obstacle_grid,
                 ) {
                     mover.state = EntityState::Moving;
                     mover.unit_mut().movement_plan.set(plan);
@@ -368,7 +377,7 @@ impl Core {
                 if let Some(plan) = pathfind::find_path(
                     attacker.position,
                     Destination::AdjacentToEntity(victim.cell_rect()),
-                    &self.entity_grid,
+                    &self.obstacle_grid,
                 ) {
                     attacker.unit_mut().movement_plan.set(plan);
                 }
@@ -398,7 +407,7 @@ impl Core {
                 if let Some(plan) = pathfind::find_path(
                     gatherer.position,
                     Destination::AdjacentToEntity(resource.cell_rect()),
-                    &self.entity_grid,
+                    &self.obstacle_grid,
                 ) {
                     gatherer.unit_mut().movement_plan.set(plan);
                 }
@@ -452,7 +461,7 @@ impl Core {
             if let Some(plan) = pathfind::find_path(
                 gatherer.position,
                 Destination::AdjacentToEntity(structure.cell_rect()),
-                &self.entity_grid,
+                &self.obstacle_grid,
             ) {
                 gatherer.unit_mut().movement_plan.set(plan);
             }
@@ -471,7 +480,7 @@ impl Core {
     }
 
     pub fn dimensions(&self) -> [u32; 2] {
-        self.entity_grid.dimensions
+        self.obstacle_grid.dimensions
     }
 
     pub fn structure_size(&self, structure_type: &EntityType) -> &[u32; 2] {
@@ -480,8 +489,8 @@ impl Core {
             .expect("Unknown structure type")
     }
 
-    pub fn grid(&self) -> &EntityGrid {
-        &self.entity_grid
+    pub fn obstacle_grid(&self) -> &Grid<ObstacleType> {
+        &self.obstacle_grid
     }
 
     fn try_add_trained_entity(
@@ -494,15 +503,15 @@ impl Core {
         let top = source_rect.position[1].saturating_sub(1);
         let right = min(
             source_rect.position[0] + source_rect.size[0],
-            self.entity_grid.dimensions[0] - 1,
+            self.obstacle_grid.dimensions[0] - 1,
         );
         let bot = min(
             source_rect.position[1] + source_rect.size[1],
-            self.entity_grid.dimensions[1] - 1,
+            self.obstacle_grid.dimensions[1] - 1,
         );
         for x in left..right + 1 {
             for y in top..bot + 1 {
-                if !self.entity_grid.get(&[x, y]) {
+                if self.obstacle_grid.get(&[x, y]).is_none() {
                     let new_unit = data::create_entity(entity_type, [x, y], team);
                     self.add_entity(new_unit);
                     return Some([x, y]);
@@ -516,7 +525,8 @@ impl Core {
         let rect = new_entity.cell_rect();
         self.entities
             .push((new_entity.id, RefCell::new(new_entity)));
-        self.entity_grid.set_area(rect, true);
+        self.obstacle_grid
+            .set_area(rect, Some(ObstacleType::Entity));
     }
 
     fn entity(&self, id: EntityId) -> &RefCell<Entity> {
@@ -609,4 +619,10 @@ pub struct TeamState {
 pub struct UpdateOutcome {
     pub removed_entities: Vec<EntityId>,
     pub finished_structures: Vec<EntityId>,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ObstacleType {
+    Entity,
+    Water,
 }

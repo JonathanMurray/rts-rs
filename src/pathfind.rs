@@ -1,12 +1,14 @@
-use crate::grid::{CellRect, EntityGrid};
 use std::cmp::{Eq, Ordering};
 use std::collections::binary_heap::BinaryHeap;
 use std::collections::HashMap;
 
+use crate::core::ObstacleType;
+use crate::grid::{CellRect, Grid};
+
 pub fn find_path(
     start: [u32; 2],
     destination: Destination,
-    grid: &EntityGrid,
+    grid: &Grid<ObstacleType>,
 ) -> Option<Vec<[u32; 2]>> {
     let center = destination.center();
     let rect = destination.rect();
@@ -41,7 +43,7 @@ fn naive_path(start: [u32; 2], goal: [u32; 2]) -> Vec<[u32; 2]> {
     plan
 }
 
-fn a_star(start: [u32; 2], destination: Rect, grid: &EntityGrid) -> Option<Vec<[u32; 2]>> {
+fn a_star(start: [u32; 2], destination: Rect, grid: &Grid<ObstacleType>) -> Option<Vec<[u32; 2]>> {
     let [w, h] = grid.dimensions;
 
     let mut open_set = BinaryHeap::new();
@@ -71,7 +73,7 @@ fn a_star(start: [u32; 2], destination: Rect, grid: &EntityGrid) -> Option<Vec<[
                         && neighbor[1] < h as i32
                     {
                         let neighbor = [neighbor[0] as u32, neighbor[1] as u32];
-                        if !grid.get(&neighbor) {
+                        if grid.get(&neighbor).is_none() {
                             // println!("neighbor={:?}", neighbor);
 
                             let maybe_shortest_to_neighbor =
@@ -248,7 +250,7 @@ mod test {
 
     #[test]
     fn trivial_straight_line_path() {
-        let grid = EntityGrid::new([10, 10]);
+        let grid = Grid::new([10, 10]);
         let path = find_path([0, 0], Destination::Point([2, 0]), &grid);
         let expected = vec![[2, 0], [1, 0]];
         assert_eq!(path, Some(expected));
@@ -256,7 +258,7 @@ mod test {
 
     #[test]
     fn diagonal_line_path() {
-        let grid = EntityGrid::new([10, 10]);
+        let grid = Grid::new([10, 10]);
         let path = find_path([0, 0], Destination::Point([2, 2]), &grid);
         let expected = vec![[2, 2], [1, 1]];
         assert_eq!(path, Some(expected));
@@ -264,8 +266,8 @@ mod test {
 
     #[test]
     fn path_going_around_obstacle() {
-        let mut grid = EntityGrid::new([10, 10]);
-        grid.set([1, 0], true);
+        let mut grid = Grid::new([10, 10]);
+        grid.set([1, 0], Some(ObstacleType::Entity));
         let path = find_path([0, 0], Destination::Point([2, 0]), &grid);
         let expected = vec![[2, 0], [1, 1]];
         assert_eq!(path, Some(expected));
@@ -273,22 +275,22 @@ mod test {
 
     #[test]
     fn impossible_path() {
-        let mut grid = EntityGrid::new([10, 2]);
-        grid.set([2, 0], true);
-        grid.set([2, 1], true);
+        let mut grid = Grid::new([10, 2]);
+        grid.set([2, 0], Some(ObstacleType::Entity));
+        grid.set([2, 1], Some(ObstacleType::Entity));
         let path = find_path([0, 0], Destination::Point([4, 0]), &grid);
         assert_eq!(path, None);
     }
 
     #[test]
     fn zigzag_path() {
-        let mut grid = EntityGrid::new([10, 4]);
-        grid.set([2, 0], true);
-        grid.set([2, 1], true);
-        grid.set([2, 2], true);
-        grid.set([4, 3], true);
-        grid.set([4, 2], true);
-        grid.set([4, 1], true);
+        let mut grid = Grid::new([10, 4]);
+        grid.set([2, 0], Some(ObstacleType::Entity));
+        grid.set([2, 1], Some(ObstacleType::Entity));
+        grid.set([2, 2], Some(ObstacleType::Entity));
+        grid.set([4, 3], Some(ObstacleType::Entity));
+        grid.set([4, 2], Some(ObstacleType::Entity));
+        grid.set([4, 1], Some(ObstacleType::Entity));
         let start = [0, 0];
         let path = find_path(start, Destination::Point([6, 3]), &grid).unwrap();
         visualize_path(&grid, start, &path[..]);
@@ -308,17 +310,17 @@ mod test {
 
     #[test]
     fn to_structure_path() {
-        let mut grid = EntityGrid::new([10, 10]);
+        let mut grid = Grid::new([10, 10]);
         let structure_cell_rect = CellRect {
             position: [7, 3],
             size: [3, 2],
         };
-        grid.set([7, 3], true);
-        grid.set([8, 3], true);
-        grid.set([9, 3], true);
-        grid.set([7, 4], true);
-        grid.set([8, 4], true);
-        grid.set([9, 4], true);
+        grid.set([7, 3], Some(ObstacleType::Entity));
+        grid.set([8, 3], Some(ObstacleType::Entity));
+        grid.set([9, 3], Some(ObstacleType::Entity));
+        grid.set([7, 4], Some(ObstacleType::Entity));
+        grid.set([8, 4], Some(ObstacleType::Entity));
+        grid.set([9, 4], Some(ObstacleType::Entity));
 
         let start = [4, 4];
         let path = find_path(
@@ -332,7 +334,7 @@ mod test {
         assert_eq!(path, expected);
     }
 
-    fn visualize_path(grid: &EntityGrid, start: [u32; 2], path: &[[u32; 2]]) {
+    fn visualize_path(grid: &Grid<ObstacleType>, start: [u32; 2], path: &[[u32; 2]]) {
         let w = grid.dimensions[0];
         let h = grid.dimensions[1];
         print!("+");
@@ -343,7 +345,7 @@ mod test {
         for y in 0..h {
             print!("|");
             for x in 0..w {
-                if grid.get(&[x, y]) {
+                if grid.get(&[x, y]).is_some() {
                     print!("#");
                 } else if path.contains(&[x, y]) {
                     print!(".");
