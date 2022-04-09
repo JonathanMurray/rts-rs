@@ -21,7 +21,6 @@ use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
     Action, Entity, EntityId, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS,
 };
-use crate::grid::Grid;
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 use crate::map::{MapConfig, WorldInitData};
 
@@ -182,7 +181,6 @@ struct Game {
     enemy_player_ai: EnemyPlayerAi,
     rng: ThreadRng,
     core: Core,
-    water_grid: Grid<()>,
 }
 
 impl Game {
@@ -191,11 +189,12 @@ impl Game {
             dimensions: world_dimensions,
             entities,
             water_grid,
+            tile_grid,
         } = WorldInitData::load(ctx, map_config);
 
         println!("Created {} entities", entities.len());
 
-        let assets = Assets::new(ctx, [WORLD_VIEWPORT.w, WORLD_VIEWPORT.h])?;
+        let assets = Assets::new(ctx, [WORLD_VIEWPORT.w, WORLD_VIEWPORT.h], &tile_grid)?;
 
         let rng = rand::thread_rng();
 
@@ -233,7 +232,6 @@ impl Game {
             enemy_player_ai,
             rng,
             core,
-            water_grid,
         })
     }
 
@@ -629,11 +627,10 @@ impl EventHandler for Game {
         graphics::clear(ctx, COLOR_FG);
 
         let camera_pos_in_world = self.player_state.camera.borrow().position_in_world;
-        self.assets.draw_world_bg(
+        self.assets.draw_world_background(
             ctx,
             WORLD_VIEWPORT.point().into(),
             camera_pos_in_world,
-            &self.water_grid,
         )?;
 
         if SHOW_GRID {

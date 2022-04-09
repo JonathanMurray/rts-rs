@@ -1,19 +1,24 @@
 use ggez::graphics::spritebatch::SpriteBatch;
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Image, Mesh, MeshBuilder, Rect};
-use ggez::{Context, GameError, GameResult};
+use ggez::graphics::{
+    Canvas, Color, DrawMode, DrawParam, Drawable, FilterMode, Image, Mesh, MeshBuilder, Rect,
+};
+use ggez::{graphics, Context, GameError, GameResult};
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::entities::{EntitySprite, Team};
-use crate::game::{CELL_PIXEL_SIZE, COLOR_BG, COLOR_FG};
+use crate::game::{CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
 use crate::grid::Grid;
 use crate::images;
+use crate::map::TileId;
+use ggez::conf::NumSamples;
 
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 
+const TILE_PIXEL_SIZE: [f32; 2] = [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] / 2.0];
+
 pub struct Assets {
-    world_bg: Mesh,
     grid: Mesh,
     grid_border: Mesh,
     background_around_grid: Vec<Mesh>,
@@ -22,19 +27,17 @@ pub struct Assets {
     neutral_entity: Mesh,
     entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
     movement_command_indicator: Mesh,
-    ground_tile: SpriteBatch,
-    water_tile: SpriteBatch,
+    world_background: Image,
+    world_size: [f32; 2],
 }
 
 impl Assets {
-    pub fn new(ctx: &mut Context, camera_size: [f32; 2]) -> GameResult<Assets> {
-        let world_bg = Mesh::new_rectangle(
-            ctx,
-            DrawMode::fill(),
-            Rect::new(0.0, 0.0, camera_size[0], camera_size[1]),
-            COLOR_BG,
-        )?;
-        let grid = build_grid(ctx, camera_size)?;
+    pub fn new(
+        ctx: &mut Context,
+        camera_size: [f32; 2],
+        tile_grid: &Grid<TileId>,
+    ) -> GameResult<Assets> {
+        let grid = create_grid(ctx, camera_size)?;
         let grid_border = MeshBuilder::new()
             .rectangle(
                 DrawMode::stroke(2.0),
@@ -42,7 +45,7 @@ impl Assets {
                 Color::new(0.0, 0.0, 0.0, 1.0),
             )?
             .build(ctx)?;
-        let background_around_grid = build_background_around_grid(ctx, camera_size)?;
+        let background_around_grid = create_background_around_grid(ctx, camera_size)?;
 
         let mut entity_batches = Default::default();
         create_fighter(ctx, &mut entity_batches)?;
@@ -74,11 +77,17 @@ impl Assets {
             )?
             .build(ctx)?;
 
-        let ground_tile = SpriteBatch::new(Image::new(ctx, "/images/dirt_tile.png")?);
-        let water_tile = SpriteBatch::new(Image::new(ctx, "/images/water_tile.png")?);
+        let mut tile_map = Image::new(ctx, "/images/tile_map.png")?;
+        tile_map.set_filter(FilterMode::Nearest); // Make sure our pixels are preserved exactly
+
+        let world_background = Self::create_background_from_tile_map(ctx, &tile_map, tile_grid)?;
+
+        let world_size = [
+            tile_grid.dimensions[0] as f32 * TILE_PIXEL_SIZE[0],
+            tile_grid.dimensions[1] as f32 * TILE_PIXEL_SIZE[1],
+        ];
 
         let assets = Assets {
-            world_bg,
             grid,
             grid_border,
             background_around_grid,
@@ -87,8 +96,8 @@ impl Assets {
             neutral_entity,
             entity_batches,
             movement_command_indicator,
-            ground_tile,
-            water_tile,
+            world_background,
+            world_size,
         };
         Ok(assets)
     }
@@ -149,44 +158,97 @@ impl Assets {
         Ok(())
     }
 
-    pub fn draw_world_bg(
+    fn create_background_from_tile_map(
+        ctx: &mut Context,
+        tile_map: &Image,
+        tile_grid: &Grid<TileId>,
+    ) -> GameResult<Image> {
+        let width = tile_grid.dimensions[0] as f32 * TILE_PIXEL_SIZE[0];
+        let height = tile_grid.dimensions[1] as f32 * TILE_PIXEL_SIZE[1];
+        let color_format = graphics::get_window_color_format(ctx);
+        let canvas = Canvas::new(
+            ctx,
+            width as u16,
+            height as u16,
+            NumSamples::One,
+            color_format,
+        )?;
+
+        // Change drawing mode: draw to canvas
+        graphics::set_canvas(ctx, Some(&canvas));
+        let original_screen_coordinates = graphics::screen_coordinates(ctx);
+        graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, width, height))?;
+
+        for x in 0..tile_grid.dimensions[0] {
+            for y in 0..tile_grid.dimensions[1] {
+                if let Some(tile) = tile_grid.get(&[x, y]) {
+                    // One tile takes up a fraction of the entire tile-map
+                    // ggez requires us to specify the src of the tile-map in "relative" terms
+                    // (where [0.0, 0.0] is the top-left corner and [1.0, 1.0] is the bottom-right)
+                    let fraction = 1.0 / 8.0;
+
+                    // Our tile-map consists of 16x16 pixel tiles
+                    // Each tile should take up 32x32 logical game pixels
+                    let tile_scale = [2.0, 2.0];
+
+                    let position_of_tile_in_tilemap = match tile {
+                        TileId::Ground => [0, 0],
+                        TileId::WaterCenter => [1, 2],
+                        TileId::WaterEdgeNorth => [1, 1],
+                        TileId::WaterCornerNE => [2, 1],
+                        TileId::WaterEdgeEast => [2, 2],
+                        TileId::WaterCornerSE => [2, 3],
+                        TileId::WaterEdgeSouth => [1, 3],
+                        TileId::WaterCornerSW => [0, 3],
+                        TileId::WaterEdgeWest => [0, 2],
+                        TileId::WaterCornerNW => [0, 1],
+                        TileId::WaterConcaveNE => [0, 5],
+                        TileId::WaterConcaveSE => [0, 4],
+                        TileId::WaterConcaveSW => [1, 4],
+                        TileId::WaterConcaveNW => [1, 5],
+                    };
+
+                    tile_map.draw(
+                        ctx,
+                        DrawParam::new()
+                            .src(Rect::new(
+                                fraction * position_of_tile_in_tilemap[0] as f32,
+                                fraction * position_of_tile_in_tilemap[1] as f32,
+                                fraction,
+                                fraction,
+                            ))
+                            .dest([x as f32 * TILE_PIXEL_SIZE[0], y as f32 * TILE_PIXEL_SIZE[1]])
+                            .scale(tile_scale),
+                    )?;
+                }
+            }
+        }
+        let image = canvas.to_image(ctx)?;
+
+        // Change back drawing mode: draw to screen
+        graphics::set_canvas(ctx, None);
+        graphics::set_screen_coordinates(ctx, original_screen_coordinates)?;
+
+        Ok(image)
+    }
+
+    pub fn draw_world_background(
         &mut self,
         ctx: &mut Context,
         screen_coords: [f32; 2],
         camera_position_in_world: [f32; 2],
-        water_grid: &Grid<()>,
     ) -> GameResult {
-        self.world_bg
-            .draw(ctx, DrawParam::new().dest(screen_coords))?;
-
-        let camera_grid_pos = [
-            (camera_position_in_world[0] / CELL_PIXEL_SIZE[0]) as u32,
-            (camera_position_in_world[1] / CELL_PIXEL_SIZE[1]) as u32,
-        ];
-
-        let x = screen_coords[0] - camera_position_in_world[0] % CELL_PIXEL_SIZE[0];
-        let y = screen_coords[1] - camera_position_in_world[1] % CELL_PIXEL_SIZE[1];
-        // TODO This is very lazy and inexact
-        for i in 0..20 {
-            for j in 0..20 {
-                let position = [
-                    x + i as f32 * CELL_PIXEL_SIZE[0],
-                    y + j as f32 * CELL_PIXEL_SIZE[1],
-                ];
-                let water_cell = water_grid
-                    .get(&[camera_grid_pos[0] + i, camera_grid_pos[1] + j])
-                    .is_some();
-                if water_cell {
-                    self.water_tile.add(DrawParam::new().dest(position));
-                } else {
-                    self.ground_tile.add(DrawParam::new().dest(position));
-                }
-            }
-        }
-        self.ground_tile.draw(ctx, DrawParam::new())?;
-        self.water_tile.draw(ctx, DrawParam::new())?;
-        self.ground_tile.clear();
-        self.water_tile.clear();
+        // Image src is "relative" in ggez, i.e. not measured in number of pixels
+        let relative_src_rect = Rect::new(
+            camera_position_in_world[0] / self.world_size[0],
+            camera_position_in_world[1] / self.world_size[1],
+            WORLD_VIEWPORT.w / self.world_size[0],
+            WORLD_VIEWPORT.h / self.world_size[1],
+        );
+        self.world_background.draw(
+            ctx,
+            DrawParam::new().src(relative_src_rect).dest(screen_coords),
+        )?;
 
         Ok(())
     }
@@ -395,7 +457,10 @@ fn create_construction_outline_mesh(ctx: &mut Context, size: [u32; 2]) -> GameRe
         .build(ctx)
 }
 
-fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> GameResult<Vec<Mesh>> {
+fn create_background_around_grid(
+    ctx: &mut Context,
+    camera_size: [f32; 2],
+) -> GameResult<Vec<Mesh>> {
     // HACK: We use 4 huge meshes that are placed surrounding the grid as a way to
     // draw a background over any entities that were rendered (either fully or just partially)
     // outside of the game world area. Is there some nicer way to do this, supported by ggez?
@@ -444,7 +509,7 @@ fn build_background_around_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Gam
     Ok(meshes)
 }
 
-fn build_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Mesh, GameError> {
+fn create_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Mesh, GameError> {
     let mut builder = MeshBuilder::new();
     const LINE_WIDTH: f32 = 2.0;
 
