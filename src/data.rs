@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use ggez::graphics::{Color, DrawMode, Font, Mesh, Rect, Text};
+use ggez::graphics::spritebatch::SpriteBatch;
+use ggez::graphics::{Color, DrawMode, Font, Mesh, MeshBuilder, Rect, Text};
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
@@ -9,8 +10,10 @@ use crate::entities::{
     Action, Entity, EntityConfig, EntitySprite, PhysicalTypeConfig, Team, TrainingConfig,
     NUM_ENTITY_ACTIONS,
 };
+use crate::game::CELL_PIXEL_SIZE;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 use crate::hud_graphics::DrawableWithDebug;
+use crate::images;
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
@@ -289,4 +292,164 @@ impl HudAssets {
             },
         }
     }
+}
+
+pub fn create_entity_sprites(
+    ctx: &mut Context,
+) -> GameResult<HashMap<(EntitySprite, Team), SpriteBatch>> {
+    let mut sprite_batches = Default::default();
+    create_fighter(ctx, &mut sprite_batches)?;
+    create_worker(ctx, &mut sprite_batches)?;
+    create_barracks(ctx, &mut sprite_batches)?;
+    create_townhall(ctx, &mut sprite_batches)?;
+    create_resource(ctx, &mut sprite_batches)?;
+
+    Ok(sprite_batches)
+}
+
+fn create_fighter(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
+    let rect = Rect::new(
+        (CELL_PIXEL_SIZE[0] - size[0]) / 2.0,
+        (CELL_PIXEL_SIZE[1] - size[1]) / 2.0,
+        size[0],
+        size[1],
+    );
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let mesh = MeshBuilder::new()
+            .rounded_rectangle(DrawMode::fill(), rect, 5.0, color)?
+            .build(ctx)?;
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::Fighter, team), batch);
+    }
+    Ok(())
+}
+
+fn create_worker(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let mesh = MeshBuilder::new()
+            .circle(
+                DrawMode::fill(),
+                [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] / 2.0],
+                CELL_PIXEL_SIZE[0] * 0.35,
+                0.05,
+                color,
+            )?
+            .build(ctx)?;
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::Worker, team), batch);
+    }
+    Ok(())
+}
+
+fn create_barracks(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let size = [CELL_PIXEL_SIZE[0] * 1.9, CELL_PIXEL_SIZE[1] * 1.9];
+        let mesh = MeshBuilder::new()
+            .rectangle(
+                DrawMode::fill(),
+                Rect::new(
+                    (CELL_PIXEL_SIZE[0] * 2.0 - size[0]) / 2.0,
+                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
+                    size[0],
+                    size[1],
+                ),
+                color,
+            )?
+            .rectangle(
+                DrawMode::stroke(2.0),
+                Rect::new(
+                    CELL_PIXEL_SIZE[0] * 0.75,
+                    CELL_PIXEL_SIZE[1] * 0.5,
+                    CELL_PIXEL_SIZE[0] * 0.5,
+                    CELL_PIXEL_SIZE[1] * 0.5,
+                ),
+                Color::new(0.0, 0.0, 0.0, 1.0),
+            )?
+            .build(ctx)?;
+
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::Barracks, team), batch);
+    }
+    Ok(())
+}
+
+fn create_townhall(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let colors = HashMap::from([
+        (Team::Player, Color::new(0.5, 0.7, 0.5, 1.0)),
+        (Team::Enemy, Color::new(0.7, 0.3, 0.3, 1.0)),
+    ]);
+    for (team, color) in colors {
+        let size = [CELL_PIXEL_SIZE[0] * 2.9, CELL_PIXEL_SIZE[1] * 1.9];
+        let mesh = MeshBuilder::new()
+            .rectangle(
+                DrawMode::fill(),
+                Rect::new(
+                    (CELL_PIXEL_SIZE[0] * 3.0 - size[0]) / 2.0,
+                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
+                    size[0],
+                    size[1],
+                ),
+                color,
+            )?
+            .circle(
+                DrawMode::stroke(4.0),
+                [CELL_PIXEL_SIZE[0] * 1.5, CELL_PIXEL_SIZE[1] * 0.7],
+                CELL_PIXEL_SIZE[0] * 0.4,
+                0.05,
+                Color::new(0.0, 0.0, 0.0, 1.0),
+            )?
+            .build(ctx)?;
+
+        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+        sprite_batches.insert((EntitySprite::Townhall, team), batch);
+    }
+    Ok(())
+}
+
+fn create_resource(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
+) -> GameResult {
+    let size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
+    let mesh = MeshBuilder::new()
+        .rectangle(
+            DrawMode::fill(),
+            Rect::new(
+                (CELL_PIXEL_SIZE[0] - size[0]) / 2.0,
+                (CELL_PIXEL_SIZE[1] - size[1]) / 2.0,
+                size[0],
+                size[1],
+            ),
+            Color::new(0.8, 0.6, 0.2, 1.0),
+        )?
+        .build(ctx)?;
+
+    let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
+    sprite_batches.insert((EntitySprite::Resource, Team::Neutral), batch);
+    Ok(())
 }

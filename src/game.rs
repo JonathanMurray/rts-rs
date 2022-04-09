@@ -664,9 +664,9 @@ impl EventHandler for Game {
             }
 
             self.assets
-                .draw_entity(ctx, entity.sprite, entity.team, screen_coords)?;
+                .draw_entity(entity.sprite, entity.team, screen_coords)?;
         }
-        self.assets.flush_entity_sprite_batch(ctx)?;
+        self.assets.flush_entity_sprite_batches(ctx)?;
 
         let mouse_position: [f32; 2] = mouse_position(ctx);
         match self.player_state.cursor_state() {

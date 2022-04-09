@@ -1,3 +1,4 @@
+use ggez::conf::NumSamples;
 use ggez::graphics::spritebatch::SpriteBatch;
 use ggez::graphics::{
     Canvas, Color, DrawMode, DrawParam, Drawable, FilterMode, Image, Mesh, MeshBuilder, Rect,
@@ -7,12 +8,11 @@ use ggez::{graphics, Context, GameError, GameResult};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
+use crate::data;
 use crate::entities::{EntitySprite, Team};
 use crate::game::{CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
 use crate::grid::Grid;
-use crate::images;
 use crate::map::TileId;
-use ggez::conf::NumSamples;
 
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 
@@ -23,8 +23,7 @@ pub struct Assets {
     foreground_around_world: Mesh,
     selections: HashMap<([u32; 2], Team), Mesh>,
     construction_outlines: HashMap<[u32; 2], Mesh>,
-    neutral_entity: Mesh,
-    entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
+    entity_sprite_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
     movement_command_indicator: Mesh,
     world_background: Image,
     world_size: [f32; 2],
@@ -40,25 +39,7 @@ impl Assets {
 
         let foreground_around_world = create_foreground_around_world(ctx, camera_size)?;
 
-        let mut entity_batches = Default::default();
-        create_fighter(ctx, &mut entity_batches)?;
-        create_worker(ctx, &mut entity_batches)?;
-        create_barracks(ctx, &mut entity_batches)?;
-        create_townhall(ctx, &mut entity_batches)?;
-
-        let neutral_size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
-        let neutral_entity = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    (CELL_PIXEL_SIZE[0] - neutral_size[0]) / 2.0,
-                    (CELL_PIXEL_SIZE[1] - neutral_size[1]) / 2.0,
-                    neutral_size[0],
-                    neutral_size[1],
-                ),
-                Color::new(0.8, 0.6, 0.2, 1.0),
-            )?
-            .build(ctx)?;
+        let entity_sprite_batches = data::create_entity_sprites(ctx)?;
 
         let movement_command_indicator = MeshBuilder::new()
             .circle(
@@ -85,8 +66,7 @@ impl Assets {
             foreground_around_world,
             selections: Default::default(),
             construction_outlines: Default::default(),
-            neutral_entity,
-            entity_batches,
+            entity_sprite_batches,
             movement_command_indicator,
             world_background,
             world_size,
@@ -245,21 +225,15 @@ impl Assets {
 
     pub fn draw_entity(
         &mut self,
-        ctx: &mut Context,
         sprite: EntitySprite,
         team: Team,
         screen_coords: [f32; 2],
     ) -> GameResult {
         let param = DrawParam::new().dest(screen_coords);
-        match sprite {
-            EntitySprite::Resource => self.neutral_entity.draw(ctx, param)?,
-            entity_sprite => {
-                self.entity_batches
-                    .get_mut(&(entity_sprite, team))
-                    .unwrap_or_else(|| panic!("Unhandled sprite: {:?}", entity_sprite))
-                    .add(param);
-            }
-        };
+        self.entity_sprite_batches
+            .get_mut(&(sprite, team))
+            .unwrap_or_else(|| panic!("Unhandled sprite/team: {:?}/{:?}", sprite, team))
+            .add(param);
         Ok(())
     }
 
@@ -274,137 +248,13 @@ impl Assets {
         )
     }
 
-    pub fn flush_entity_sprite_batch(&mut self, ctx: &mut Context) -> GameResult {
-        for batch in self.entity_batches.values_mut() {
+    pub fn flush_entity_sprite_batches(&mut self, ctx: &mut Context) -> GameResult {
+        for batch in self.entity_sprite_batches.values_mut() {
             batch.draw(ctx, DrawParam::default())?;
             batch.clear();
         }
         Ok(())
     }
-}
-
-fn create_fighter(
-    ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
-) -> GameResult {
-    let size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
-    let rect = Rect::new(
-        (CELL_PIXEL_SIZE[0] - size[0]) / 2.0,
-        (CELL_PIXEL_SIZE[1] - size[1]) / 2.0,
-        size[0],
-        size[1],
-    );
-    let colors = HashMap::from([
-        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
-        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
-    ]);
-    for (team, color) in colors {
-        let mesh = MeshBuilder::new()
-            .rounded_rectangle(DrawMode::fill(), rect, 5.0, color)?
-            .build(ctx)?;
-        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::Fighter, team), batch);
-    }
-    Ok(())
-}
-
-fn create_worker(
-    ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
-) -> GameResult {
-    let colors = HashMap::from([
-        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
-        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
-    ]);
-    for (team, color) in colors {
-        let mesh = MeshBuilder::new()
-            .circle(
-                DrawMode::fill(),
-                [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] / 2.0],
-                CELL_PIXEL_SIZE[0] * 0.35,
-                0.05,
-                color,
-            )?
-            .build(ctx)?;
-        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::Worker, team), batch);
-    }
-    Ok(())
-}
-
-fn create_barracks(
-    ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
-) -> GameResult {
-    let colors = HashMap::from([
-        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
-        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
-    ]);
-    for (team, color) in colors {
-        let size = [CELL_PIXEL_SIZE[0] * 1.9, CELL_PIXEL_SIZE[1] * 1.9];
-        let mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    (CELL_PIXEL_SIZE[0] * 2.0 - size[0]) / 2.0,
-                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
-                    size[0],
-                    size[1],
-                ),
-                color,
-            )?
-            .rectangle(
-                DrawMode::stroke(2.0),
-                Rect::new(
-                    CELL_PIXEL_SIZE[0] * 0.75,
-                    CELL_PIXEL_SIZE[1] * 0.5,
-                    CELL_PIXEL_SIZE[0] * 0.5,
-                    CELL_PIXEL_SIZE[1] * 0.5,
-                ),
-                Color::new(0.0, 0.0, 0.0, 1.0),
-            )?
-            .build(ctx)?;
-
-        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::Barracks, team), batch);
-    }
-    Ok(())
-}
-
-fn create_townhall(
-    ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntitySprite, Team), SpriteBatch>,
-) -> GameResult {
-    let colors = HashMap::from([
-        (Team::Player, Color::new(0.5, 0.7, 0.5, 1.0)),
-        (Team::Enemy, Color::new(0.7, 0.3, 0.3, 1.0)),
-    ]);
-    for (team, color) in colors {
-        let size = [CELL_PIXEL_SIZE[0] * 2.9, CELL_PIXEL_SIZE[1] * 1.9];
-        let mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    (CELL_PIXEL_SIZE[0] * 3.0 - size[0]) / 2.0,
-                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
-                    size[0],
-                    size[1],
-                ),
-                color,
-            )?
-            .circle(
-                DrawMode::stroke(4.0),
-                [CELL_PIXEL_SIZE[0] * 1.5, CELL_PIXEL_SIZE[1] * 0.7],
-                CELL_PIXEL_SIZE[0] * 0.4,
-                0.05,
-                Color::new(0.0, 0.0, 0.0, 1.0),
-            )?
-            .build(ctx)?;
-
-        let batch = SpriteBatch::new(images::mesh_into_image(ctx, mesh)?);
-        sprite_batches.insert((EntitySprite::Townhall, team), batch);
-    }
-    Ok(())
 }
 
 fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameResult<Mesh> {
