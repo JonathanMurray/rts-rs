@@ -23,7 +23,7 @@ use crate::entities::{
 };
 use crate::grid::Grid;
 use crate::hud_graphics::{HudGraphics, PlayerInput};
-use crate::map::{MapType, WorldInitData};
+use crate::map::{MapConfig, WorldInitData};
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -45,7 +45,7 @@ pub const MAX_NUM_SELECTED_ENTITIES: usize = 8;
 
 const TITLE: &str = "RTS";
 
-pub fn run(map_type: MapType) -> GameResult {
+pub fn run(map_config: MapConfig) -> GameResult {
     let (mut ctx, event_loop) = ContextBuilder::new("rts", "jm")
         .window_setup(WindowSetup::default().title(TITLE))
         .window_mode(WindowMode::default().dimensions(SCREEN_SIZE[0] * 1.5, SCREEN_SIZE[1] * 1.5))
@@ -59,7 +59,7 @@ pub fn run(map_type: MapType) -> GameResult {
     )
     .unwrap();
 
-    let game = Game::new(&mut ctx, map_type)?;
+    let game = Game::new(&mut ctx, map_config)?;
     ggez::event::run(ctx, event_loop, game)
 }
 
@@ -186,12 +186,12 @@ struct Game {
 }
 
 impl Game {
-    fn new(ctx: &mut Context, map_type: MapType) -> Result<Self, GameError> {
+    fn new(ctx: &mut Context, map_config: MapConfig) -> Result<Self, GameError> {
         let WorldInitData {
             dimensions: world_dimensions,
             entities,
             water_grid,
-        } = WorldInitData::new(map_type);
+        } = WorldInitData::load(ctx, map_config);
 
         println!("Created {} entities", entities.len());
 

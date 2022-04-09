@@ -59,7 +59,7 @@ impl Minimap {
             )?
             .build(ctx)?;
 
-        let entity_width = 10.0;
+        let entity_width = 13.0;
         let entity_mesh = Mesh::new_rectangle(
             ctx,
             DrawMode::fill(),
