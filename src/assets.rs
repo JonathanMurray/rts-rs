@@ -20,8 +20,7 @@ const TILE_PIXEL_SIZE: [f32; 2] = [CELL_PIXEL_SIZE[0] / 2.0, CELL_PIXEL_SIZE[1] 
 
 pub struct Assets {
     grid: Mesh,
-    grid_border: Mesh,
-    background_around_grid: Vec<Mesh>,
+    foreground_around_world: Mesh,
     selections: HashMap<([u32; 2], Team), Mesh>,
     construction_outlines: HashMap<[u32; 2], Mesh>,
     neutral_entity: Mesh,
@@ -38,14 +37,8 @@ impl Assets {
         tile_grid: &Grid<TileId>,
     ) -> GameResult<Assets> {
         let grid = create_grid(ctx, camera_size)?;
-        let grid_border = MeshBuilder::new()
-            .rectangle(
-                DrawMode::stroke(2.0),
-                Rect::new(0.0, 0.0, camera_size[0], camera_size[1]),
-                Color::new(0.0, 0.0, 0.0, 1.0),
-            )?
-            .build(ctx)?;
-        let background_around_grid = create_background_around_grid(ctx, camera_size)?;
+
+        let foreground_around_world = create_foreground_around_world(ctx, camera_size)?;
 
         let mut entity_batches = Default::default();
         create_fighter(ctx, &mut entity_batches)?;
@@ -89,8 +82,7 @@ impl Assets {
 
         let assets = Assets {
             grid,
-            grid_border,
-            background_around_grid,
+            foreground_around_world,
             selections: Default::default(),
             construction_outlines: Default::default(),
             neutral_entity,
@@ -153,9 +145,7 @@ impl Assets {
                 screen_coords[0] - camera_position_in_world[0] % CELL_PIXEL_SIZE[0],
                 screen_coords[1] - camera_position_in_world[1] % CELL_PIXEL_SIZE[1],
             ]),
-        )?;
-
-        Ok(())
+        )
     }
 
     fn create_background_from_tile_map(
@@ -278,17 +268,10 @@ impl Assets {
         ctx: &mut Context,
         screen_coords: [f32; 2],
     ) -> GameResult {
-        for mesh in &self.background_around_grid {
-            mesh.draw(
-                ctx,
-                DrawParam::new().dest([screen_coords[0], screen_coords[1]]),
-            )?;
-        }
-        self.grid_border.draw(
+        self.foreground_around_world.draw(
             ctx,
             DrawParam::new().dest([screen_coords[0], screen_coords[1]]),
-        )?;
-        Ok(())
+        )
     }
 
     pub fn flush_entity_sprite_batch(&mut self, ctx: &mut Context) -> GameResult {
@@ -457,56 +440,57 @@ fn create_construction_outline_mesh(ctx: &mut Context, size: [u32; 2]) -> GameRe
         .build(ctx)
 }
 
-fn create_background_around_grid(
-    ctx: &mut Context,
-    camera_size: [f32; 2],
-) -> GameResult<Vec<Mesh>> {
-    // HACK: We use 4 huge meshes that are placed surrounding the grid as a way to
-    // draw a background over any entities that were rendered (either fully or just partially)
+fn create_foreground_around_world(ctx: &mut Context, camera_size: [f32; 2]) -> GameResult<Mesh> {
+    // HACK: We use 4 huge meshes that are placed surrounding the world view port as a way to
+    // draw over any entities that were rendered (either fully or just partially)
     // outside of the game world area. Is there some nicer way to do this, supported by ggez?
     // Essentially what we want is an inverted Rect: "Draw a background on the entire screen except
     // this rect."
     let margin = 1000.0;
-    let meshes = vec![
-        // TOP
-        MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(-margin, -margin, camera_size[0] + 2.0 * margin, margin),
-                COLOR_FG,
-            )?
-            .build(ctx)?,
-        // BOTTOM
-        MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    -margin,
-                    camera_size[1],
-                    camera_size[0] + 2.0 * margin,
-                    margin,
-                ),
-                COLOR_FG,
-            )?
-            .build(ctx)?,
-        // LEFT
-        MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(-margin, 0.0, margin, camera_size[1]),
-                COLOR_FG,
-            )?
-            .build(ctx)?,
-        // RIGHT
-        MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(camera_size[0], 0.0, margin, camera_size[1]),
-                COLOR_FG,
-            )?
-            .build(ctx)?,
-    ];
-    Ok(meshes)
+    let mut mesh = MeshBuilder::new();
+    // TOP
+    mesh.rectangle(
+        DrawMode::fill(),
+        Rect::new(-margin, -margin, camera_size[0] + 2.0 * margin, margin),
+        COLOR_FG,
+    )?
+    .build(ctx)?;
+    // BOTTOM
+    mesh.rectangle(
+        DrawMode::fill(),
+        Rect::new(
+            -margin,
+            camera_size[1],
+            camera_size[0] + 2.0 * margin,
+            margin,
+        ),
+        COLOR_FG,
+    )?
+    .build(ctx)?;
+    // LEFT
+    mesh.rectangle(
+        DrawMode::fill(),
+        Rect::new(-margin, 0.0, margin, camera_size[1]),
+        COLOR_FG,
+    )?
+    .build(ctx)?;
+    // RIGHT
+    mesh.rectangle(
+        DrawMode::fill(),
+        Rect::new(camera_size[0], 0.0, margin, camera_size[1]),
+        COLOR_FG,
+    )?
+    .build(ctx)?;
+
+    mesh.rectangle(
+        DrawMode::stroke(2.0),
+        Rect::new(0.0, 0.0, camera_size[0], camera_size[1]),
+        Color::new(0.0, 0.0, 0.0, 1.0),
+    )?;
+
+    let mesh = mesh.build(ctx)?;
+
+    Ok(mesh)
 }
 
 fn create_grid(ctx: &mut Context, camera_size: [f32; 2]) -> Result<Mesh, GameError> {
