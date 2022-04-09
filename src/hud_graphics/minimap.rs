@@ -31,8 +31,13 @@ impl Minimap {
         let container_h = width;
         let container_rect = Rect::new(position[0], position[1], width, container_h);
 
-        let h = width / aspect_ratio;
-        let rect = Rect::new(position[0], position[1] + (container_h - h) / 2.0, width, h);
+        let height = width / aspect_ratio;
+        let rect = Rect::new(
+            position[0],
+            position[1] + (container_h - height) / 2.0,
+            width,
+            height,
+        );
 
         let container_border = MeshBuilder::new()
             .rectangle(DrawMode::stroke(2.0), container_rect, HUD_BORDER_COLOR)?
@@ -59,11 +64,15 @@ impl Minimap {
             )?
             .build(ctx)?;
 
-        let entity_width = 13.0;
+        let entity_size = [
+            width / world_dimensions[0] as f32 + 1.0,
+            height / world_dimensions[1] as f32 + 1.0,
+        ];
+
         let entity_mesh = Mesh::new_rectangle(
             ctx,
             DrawMode::fill(),
-            Rect::new(0.0, 0.0, entity_width, entity_width),
+            Rect::new(0.0, 0.0, entity_size[0], entity_size[1]),
             Color::new(0.5, 0.5, 0.5, 1.0),
         )?;
         let entity_sprite_batch = SpriteBatch::new(images::mesh_into_image(ctx, entity_mesh)?);
@@ -107,8 +116,8 @@ impl Minimap {
             for y in 0..h {
                 if let Some(ObstacleType::Entity) = grid.get(&[x, y]) {
                     self.entity_sprite_batch.add(DrawParam::default().dest([
-                        (x as f32 / w as f32) * self.rect.w - 5.0,
-                        (y as f32 / h as f32) * self.rect.h - 5.0,
+                        (x as f32 / w as f32) * self.rect.w,
+                        (y as f32 / h as f32) * self.rect.h,
                     ]));
                 }
             }

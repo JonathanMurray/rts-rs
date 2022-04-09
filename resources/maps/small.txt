@@ -1,10 +1,16 @@
-XXXXXXXXXX
-X1       X
-X      W X
-X    WWW X
-X   WWWW X
-X  WWW   X
-X        X
-X    WW  X
-X    WW  X
-XXXXXXXXXX
+XXXXXXXXXXXXXXXXXXXX
+X1                 X
+X      W    WWW  WWX
+X    WWW     WWWWWWX
+X   WWWWW          X
+X  WWW WW      W   X
+X    WWWW          X
+X    WW          WWX
+X    WW         WWWX
+X                  X
+X                  X
+X                  X
+X        WWWWW     X
+X        WWWWW     X
+X          WW      X
+XXXXXXXXXXXXXXXXXXXX
