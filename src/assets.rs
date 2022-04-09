@@ -22,6 +22,7 @@ pub struct Assets {
     entity_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
     movement_command_indicator: Mesh,
     ground_tile: SpriteBatch,
+    water_tile: SpriteBatch,
 }
 
 impl Assets {
@@ -73,6 +74,7 @@ impl Assets {
             .build(ctx)?;
 
         let ground_tile = SpriteBatch::new(Image::new(ctx, "/images/dirt_tile.png")?);
+        let water_tile = SpriteBatch::new(Image::new(ctx, "/images/water_tile.png")?);
 
         let assets = Assets {
             world_bg,
@@ -85,6 +87,7 @@ impl Assets {
             entity_batches,
             movement_command_indicator,
             ground_tile,
+            water_tile,
         };
         Ok(assets)
     }
@@ -154,19 +157,33 @@ impl Assets {
         self.world_bg
             .draw(ctx, DrawParam::new().dest(screen_coords))?;
 
+        let camera_grid_pos = [
+            (camera_position_in_world[0] / CELL_PIXEL_SIZE[0]) as u32,
+            (camera_position_in_world[1] / CELL_PIXEL_SIZE[1]) as u32,
+        ];
+
         let x = screen_coords[0] - camera_position_in_world[0] % CELL_PIXEL_SIZE[0];
         let y = screen_coords[1] - camera_position_in_world[1] % CELL_PIXEL_SIZE[1];
         // TODO This is very lazy and inexact
         for i in 0..20 {
             for j in 0..20 {
-                self.ground_tile.add(DrawParam::new().dest([
+                let position = [
                     x + i as f32 * CELL_PIXEL_SIZE[0],
                     y + j as f32 * CELL_PIXEL_SIZE[1],
-                ]));
+                ];
+                let water_cell =
+                    (camera_grid_pos[0] + i) % 4 == 0 && (camera_grid_pos[1] + j) % 3 == 1;
+                if water_cell {
+                    self.water_tile.add(DrawParam::new().dest(position));
+                } else {
+                    self.ground_tile.add(DrawParam::new().dest(position));
+                }
             }
         }
         self.ground_tile.draw(ctx, DrawParam::new())?;
+        self.water_tile.draw(ctx, DrawParam::new())?;
         self.ground_tile.clear();
+        self.water_tile.clear();
 
         Ok(())
     }
