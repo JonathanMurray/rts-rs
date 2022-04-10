@@ -321,7 +321,7 @@ impl Tooltip {
 
         Self {
             position,
-            font: font,
+            font,
             text_attack: text(assets.action(Action::Attack).text.as_ref()),
             text_move: text(assets.action(Action::Move).text.as_ref()),
             text_gather: text(assets.action(Action::GatherResource).text.as_ref()),

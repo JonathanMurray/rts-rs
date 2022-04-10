@@ -61,20 +61,31 @@ impl Core {
             let pos = entity.position;
             if let PhysicalType::Unit(unit) = &mut entity.physical_type {
                 unit.sub_cell_movement.update(dt, pos);
+                let mut is_moving = false;
                 if unit.sub_cell_movement.is_ready() {
                     if let Some(next_pos) = unit.movement_plan.peek() {
                         let obstacle = self.obstacle_grid.get(next_pos);
                         if obstacle.is_none() {
+                            is_moving = true;
                             let old_pos = pos;
                             let new_pos = unit.movement_plan.advance();
-                            self.obstacle_grid.set(old_pos, None);
-                            unit.sub_cell_movement.set_moving(old_pos, new_pos);
+                            unit.move_to_adjacent_cell(old_pos, new_pos);
                             entity.position = new_pos;
+                            self.obstacle_grid.set(old_pos, None);
                             self.obstacle_grid.set(new_pos, Some(ObstacleType::Entity));
                         }
                     } else if entity.state == EntityState::Moving {
                         entity.state = EntityState::Idle;
                     }
+                } else {
+                    is_moving = true;
+                }
+
+                if is_moving {
+                    entity.animation.ms_counter = entity
+                        .animation
+                        .ms_counter
+                        .wrapping_add(dt.as_millis() as u16);
                 }
             }
         }

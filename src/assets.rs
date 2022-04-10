@@ -1,5 +1,5 @@
 use ggez::conf::NumSamples;
-use ggez::graphics::spritebatch::SpriteBatch;
+
 use ggez::graphics::{
     Canvas, Color, DrawMode, DrawParam, Drawable, FilterMode, Image, Mesh, MeshBuilder, Rect,
 };
@@ -8,8 +8,8 @@ use ggez::{graphics, Context, GameError, GameResult};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
-use crate::data;
-use crate::entities::{EntitySprite, Team};
+use crate::data::{self, Animation, EntityType};
+use crate::entities::{ AnimationState, Direction, Team};
 use crate::game::{CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
 use crate::grid::Grid;
 use crate::map::TileId;
@@ -23,7 +23,7 @@ pub struct Assets {
     foreground_around_world: Mesh,
     selections: HashMap<([u32; 2], Team), Mesh>,
     construction_outlines: HashMap<[u32; 2], Mesh>,
-    entity_sprite_batches: HashMap<(EntitySprite, Team), SpriteBatch>,
+    entity_sprite_batches: HashMap<(EntityType, Team), Animation>,
     movement_command_indicator: Mesh,
     world_background: Image,
     world_size: [f32; 2],
@@ -220,15 +220,18 @@ impl Assets {
 
     pub fn draw_entity(
         &mut self,
-        sprite: EntitySprite,
+        ctx: &mut Context,
+        entity_type: EntityType,
+        animation_state: &AnimationState,
+        direction: Direction,
         team: Team,
         screen_coords: [f32; 2],
     ) -> GameResult {
-        let param = DrawParam::new().dest(screen_coords);
-        self.entity_sprite_batches
-            .get_mut(&(sprite, team))
-            .unwrap_or_else(|| panic!("Unhandled sprite/team: {:?}/{:?}", sprite, team))
-            .add(param);
+        let animation = self
+            .entity_sprite_batches
+            .get_mut(&(entity_type, team))
+            .unwrap_or_else(|| panic!("Unhandled sprite/team: {:?}", (entity_type, team)));
+        animation.draw(ctx, animation_state, direction, screen_coords)?;
         Ok(())
     }
 
@@ -241,14 +244,6 @@ impl Assets {
             ctx,
             DrawParam::new().dest([screen_coords[0], screen_coords[1]]),
         )
-    }
-
-    pub fn flush_entity_sprite_batches(&mut self, ctx: &mut Context) -> GameResult {
-        for batch in self.entity_sprite_batches.values_mut() {
-            batch.draw(ctx, DrawParam::default())?;
-            batch.clear();
-        }
-        Ok(())
     }
 }
 

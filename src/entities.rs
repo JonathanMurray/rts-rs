@@ -28,19 +28,36 @@ pub enum EntityState {
     UnderConstruction(Duration, Duration),
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Hash, Eq)]
+pub enum Direction {
+    North,
+    NorthEast,
+    East,
+    SouthEast,
+    South,
+    SouthWest,
+    West,
+    NorthWest,
+}
+
 #[derive(Debug)]
 pub struct Entity {
     pub entity_type: EntityType,
     pub id: EntityId,
     pub position: [u32; 2],
-    pub is_solid: bool,
+    pub is_solid: bool, // TODO: not needed?
     pub physical_type: PhysicalType,
     pub team: Team,
-    pub sprite: EntitySprite,
+    pub animation: AnimationState,
     pub health: Option<HealthComponent>,
     pub training: Option<TrainingComponent>,
     pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
     pub state: EntityState,
+}
+
+#[derive(Debug)]
+pub struct AnimationState {
+    pub ms_counter: u16,
 }
 
 #[derive(Debug)]
@@ -51,7 +68,6 @@ pub enum PhysicalType {
 
 pub struct EntityConfig {
     pub is_solid: bool,
-    pub sprite: EntitySprite,
     pub max_health: Option<u32>,
     pub physical_type: PhysicalTypeConfig,
     pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
@@ -96,6 +112,9 @@ impl Entity {
             }
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
+        let animation = AnimationState {
+            ms_counter: 0,
+        };
 
         Self {
             entity_type,
@@ -104,7 +123,7 @@ impl Entity {
             is_solid: config.is_solid,
             physical_type,
             team,
-            sprite: config.sprite,
+            animation,
             health,
             training,
             actions: config.actions,
@@ -150,6 +169,13 @@ impl Entity {
             PhysicalType::Structure { .. } => panic!("Not a unit"),
         }
     }
+
+    pub fn direction(&self) -> Direction {
+        match &self.physical_type {
+            PhysicalType::Unit(unit) => unit.direction,
+            PhysicalType::Structure { .. } => Direction::South,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -184,19 +210,11 @@ pub enum Team {
     Neutral,
 }
 
-#[derive(Debug, Hash, Copy, Clone, Eq, PartialEq)]
-pub enum EntitySprite {
-    Fighter,
-    Barracks,
-    Worker,
-    Townhall,
-    Resource,
-}
-
 #[derive(Debug)]
 pub struct UnitComponent {
     pub sub_cell_movement: SubCellMovement,
     pub movement_plan: MovementPlan,
+    pub direction: Direction,
     pub combat: Option<Combat>,
     pub gathering: Option<Gathering>,
 }
@@ -211,9 +229,28 @@ impl UnitComponent {
         Self {
             sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
             movement_plan: MovementPlan::new(),
+            direction: Direction::South,
             combat,
             gathering,
         }
+    }
+
+    pub fn move_to_adjacent_cell(&mut self, old_position: [u32; 2], new_position: [u32; 2]) {
+        let dx = new_position[0] as i32 - old_position[0] as i32;
+        let dy = new_position[1] as i32 - old_position[1] as i32;
+        self.direction = match (dx, dy) {
+            (0, -1) => Direction::North,
+            (1, -1) => Direction::NorthEast,
+            (1, 0) => Direction::East,
+            (1, 1) => Direction::SouthEast,
+            (0, 1) => Direction::South,
+            (-1, 1) => Direction::SouthWest,
+            (-1, 0) => Direction::West,
+            (-1, -1) => Direction::NorthWest,
+            _ => panic!("Invalid movement: {:?} -> {:?}", old_position, new_position),
+        };
+        self.sub_cell_movement
+            .set_moving(old_position, new_position);
     }
 }
 
@@ -295,7 +332,7 @@ impl SubCellMovement {
         self.remaining.is_zero()
     }
 
-    pub fn set_moving(&mut self, old_position: [u32; 2], new_position: [u32; 2]) {
+    fn set_moving(&mut self, old_position: [u32; 2], new_position: [u32; 2]) {
         assert!(self.remaining.is_zero());
         match SubCellMovement::direction(old_position, new_position) {
             MovementDirection::Straight => self.remaining = self.straight_movement_cooldown,

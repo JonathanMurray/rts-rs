@@ -38,6 +38,12 @@ pub const WORLD_VIEWPORT: Rect = Rect {
     h: GAME_SIZE[1] - WORLD_Y - 35.0,
 };
 pub const CELL_PIXEL_SIZE: [f32; 2] = [32.0, 32.0];
+const ENTITY_VISIBILITY_RECT: Rect = Rect {
+    x: WORLD_VIEWPORT.x - CELL_PIXEL_SIZE[0] * 4.0,
+    y: WORLD_VIEWPORT.y - CELL_PIXEL_SIZE[1] * 4.0,
+    w: WORLD_VIEWPORT.w + CELL_PIXEL_SIZE[0] * 5.0,
+    h: WORLD_VIEWPORT.h + CELL_PIXEL_SIZE[1] * 5.0,
+};
 
 const SHOW_GRID: bool = false;
 
@@ -668,10 +674,17 @@ impl EventHandler for Game {
                 }
             }
 
-            self.assets
-                .draw_entity(entity.sprite, entity.team, screen_coords)?;
+            if ENTITY_VISIBILITY_RECT.contains(screen_coords) {
+                self.assets.draw_entity(
+                    ctx,
+                    entity.entity_type,
+                    &entity.animation,
+                    entity.direction(),
+                    entity.team,
+                    screen_coords,
+                )?;
+            }
         }
-        self.assets.flush_entity_sprite_batches(ctx)?;
 
         let mouse_position: [f32; 2] = mouse_position(ctx);
         match self.player_state.cursor_state() {
