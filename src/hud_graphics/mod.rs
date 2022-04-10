@@ -10,7 +10,7 @@ use std::cell::Ref;
 use std::convert::TryInto;
 use std::time::Duration;
 
-use ggez::graphics::{Color, DrawParam, Drawable, Font, Mesh, Rect, Text};
+use ggez::graphics::{Color, Rect};
 use ggez::input::keyboard::KeyCode;
 use ggez::input::mouse::MouseButton;
 use ggez::{Context, GameResult};
@@ -24,13 +24,14 @@ use crate::data::{EntityType, HudAssets};
 use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
 use crate::game::{CursorState, PlayerState, MAX_NUM_SELECTED_ENTITIES};
 use crate::grid::Grid;
+use crate::text::{SharpFont, SharpText};
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;
 
 pub const HUD_BORDER_COLOR: Color = Color::new(0.7, 0.7, 0.7, 1.0);
 
 pub struct HudGraphics {
-    font: Font,
+    font: SharpFont,
     buttons: [Button; NUM_BUTTONS],
     minimap: Minimap,
     hovered_button_index: Option<usize>,
@@ -46,7 +47,7 @@ impl HudGraphics {
     pub fn new(
         ctx: &mut Context,
         position: [f32; 2],
-        font: Font,
+        font: SharpFont,
         world_dimensions: [u32; 2],
         tooltip_position: [f32; 2],
     ) -> GameResult<Self> {
@@ -103,12 +104,9 @@ impl HudGraphics {
 
         let cursor_state = player_state.cursor_state();
 
-        let resources_text = Text::new((
-            format!("RESOURCES: {}", player_team_state.resources),
-            self.font,
-            15.0,
-        ));
-        resources_text.draw(ctx, DrawParam::new().dest(self.resources_position))?;
+        self.font
+            .text(15.0, format!("RESOURCES: {}", player_team_state.resources))
+            .draw(ctx, self.resources_position)?;
 
         if selected_entities.len() > 1 {
             let mut portraits = [None; MAX_NUM_SELECTED_ENTITIES];
@@ -306,24 +304,24 @@ const TOOLTIP_FONT_SIZE: f32 = 17.5;
 
 struct Tooltip {
     position: [f32; 2],
-    font: Font,
-    text_attack: Text,
-    text_move: Text,
-    text_gather: Text,
-    text_return: Text,
-    text_select_attack_target: Text,
-    text_select_movement_destination: Text,
-    text_place_structure: Text,
-    text_select_resource: Text,
+    font: SharpFont,
+    text_attack: SharpText,
+    text_move: SharpText,
+    text_gather: SharpText,
+    text_return: SharpText,
+    text_select_attack_target: SharpText,
+    text_select_movement_destination: SharpText,
+    text_place_structure: SharpText,
+    text_select_resource: SharpText,
 }
 
 impl Tooltip {
-    fn new(font: Font, position: [f32; 2], assets: &HudAssets) -> Self {
-        let text = |t| Text::new((t, font, TOOLTIP_FONT_SIZE));
+    fn new(font: SharpFont, position: [f32; 2], assets: &HudAssets) -> Self {
+        let text = |t| font.text(TOOLTIP_FONT_SIZE, t);
 
         Self {
             position,
-            font,
+            font: font,
             text_attack: text(assets.action(Action::Attack).text.as_ref()),
             text_move: text(assets.action(Action::Move).text.as_ref()),
             text_gather: text(assets.action(Action::GatherResource).text.as_ref()),
@@ -336,29 +334,40 @@ impl Tooltip {
     }
 
     fn draw(&self, ctx: &mut Context, text: Option<TooltipText>, assets: &HudAssets) -> GameResult {
-        let param = DrawParam::default().dest(self.position);
         if let Some(text) = text {
             match text {
-                TooltipText::Action(Action::Attack) => self.text_attack.draw(ctx, param)?,
-                TooltipText::Action(Action::Move) => self.text_move.draw(ctx, param)?,
-                TooltipText::Action(Action::GatherResource) => self.text_gather.draw(ctx, param)?,
-                TooltipText::Action(Action::ReturnResource) => self.text_return.draw(ctx, param)?,
+                TooltipText::Action(Action::Attack) => self.text_attack.draw(ctx, self.position)?,
+                TooltipText::Action(Action::Move) => self.text_move.draw(ctx, self.position)?,
+                TooltipText::Action(Action::GatherResource) => {
+                    self.text_gather.draw(ctx, self.position)?
+                }
+                TooltipText::Action(Action::ReturnResource) => {
+                    self.text_return.draw(ctx, self.position)?
+                }
                 TooltipText::Action(Action::Train(trained_entity_type, training_config)) => {
                     let config = assets.action(Action::Train(trained_entity_type, training_config));
-                    Text::new((config.text, self.font, TOOLTIP_FONT_SIZE)).draw(ctx, param)?;
+                    self.font
+                        .text(TOOLTIP_FONT_SIZE, &config.text)
+                        .draw(ctx, self.position)?;
                 }
                 TooltipText::Action(Action::Construct(structure_type)) => {
                     let config = assets.action(Action::Construct(structure_type));
-                    Text::new((config.text, self.font, TOOLTIP_FONT_SIZE)).draw(ctx, param)?;
+                    self.font
+                        .text(TOOLTIP_FONT_SIZE, &config.text)
+                        .draw(ctx, self.position)?;
                 }
                 TooltipText::CursorSelectAttackTarget => {
-                    self.text_select_attack_target.draw(ctx, param)?
+                    self.text_select_attack_target.draw(ctx, self.position)?
                 }
-                TooltipText::CursorSelectMovementDestination => {
-                    self.text_select_movement_destination.draw(ctx, param)?
+                TooltipText::CursorSelectMovementDestination => self
+                    .text_select_movement_destination
+                    .draw(ctx, self.position)?,
+                TooltipText::CursorPlaceStructure => {
+                    self.text_place_structure.draw(ctx, self.position)?
                 }
-                TooltipText::CursorPlaceStructure => self.text_place_structure.draw(ctx, param)?,
-                TooltipText::CursorSelectResource => self.text_select_resource.draw(ctx, param)?,
+                TooltipText::CursorSelectResource => {
+                    self.text_select_resource.draw(ctx, self.position)?
+                }
             }
         };
         Ok(())
@@ -379,7 +388,3 @@ pub enum PlayerInput {
     SetCameraPositionRelativeToWorldDimension([f32; 2]),
     LimitSelectionToIndex(usize),
 }
-
-pub trait DrawableWithDebug: Drawable + std::fmt::Debug {}
-impl DrawableWithDebug for Text {}
-impl DrawableWithDebug for Mesh {}

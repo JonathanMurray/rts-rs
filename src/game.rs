@@ -1,9 +1,7 @@
 use ggez;
-use ggez::conf::{FullscreenType, NumSamples, WindowMode, WindowSetup};
+use ggez::conf::{NumSamples, WindowMode, WindowSetup};
 use ggez::event::EventHandler;
-use ggez::graphics::{
-    BlendMode, Color, DrawMode, DrawParam, Drawable, FilterMode, Font, MeshBuilder, Rect,
-};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, FilterMode, Font, MeshBuilder, Rect};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
@@ -25,6 +23,7 @@ use crate::entities::{
 };
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 use crate::map::{MapConfig, WorldInitData};
+use crate::text::SharpFont;
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -47,7 +46,7 @@ pub const MAX_NUM_SELECTED_ENTITIES: usize = 8;
 const TITLE: &str = "RTS";
 
 pub fn run(map_config: MapConfig) -> GameResult {
-    const GAME_SCALE: f32 = 1.0;
+    const GAME_SCALE: f32 = 3.0;
     let window_setup = WindowSetup::default().title(TITLE).samples(NumSamples::One);
     let window_mode =
         WindowMode::default().dimensions(GAME_SIZE[0] * GAME_SCALE, GAME_SIZE[1] * GAME_SCALE);
@@ -204,8 +203,9 @@ impl Game {
 
         let enemy_player_ai = EnemyPlayerAi::new(world_dimensions);
 
-        //let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
-        let font = Font::new(ctx, "/fonts/Retro Gaming.ttf")?;
+        let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
+        // let font = Font::new(ctx, "/fonts/Retro Gaming.ttf")?;
+        let font = SharpFont::new(font);
 
         let max_camera_position = [
             world_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - WORLD_VIEWPORT.w,

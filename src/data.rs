@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 
 use ggez::graphics::spritebatch::SpriteBatch;
-use ggez::graphics::{Color, DrawMode, Font, Mesh, MeshBuilder, Rect, Text};
+use ggez::graphics::{Color, DrawMode, Drawable, Image, Mesh, MeshBuilder, Rect};
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
@@ -12,8 +12,8 @@ use crate::entities::{
 };
 use crate::game::CELL_PIXEL_SIZE;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
-use crate::hud_graphics::DrawableWithDebug;
 use crate::images;
+use crate::text::SharpFont;
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
@@ -132,24 +132,48 @@ pub struct EntityHudConfig {
 
 pub struct ActionHudConfig {
     pub text: String,
-    pub icon: Box<dyn DrawableWithDebug>,
+    pub icon: Box<dyn Drawable>,
     pub keycode: KeyCode,
 }
 
 pub struct HudAssets {
-    font: Font,
     fighter: EntityHudConfig,
     worker: EntityHudConfig,
     barracks: EntityHudConfig,
     townhall: EntityHudConfig,
     resource: EntityHudConfig,
+    move_icon: Image,
+    attack_icon: Image,
+    gather_icon: Image,
+    return_icon: Image,
 }
 
 impl HudAssets {
-    pub fn new(ctx: &mut Context, font: Font) -> GameResult<Self> {
+    pub fn new(ctx: &mut Context, font: SharpFont) -> GameResult<Self> {
         let color = Color::new(0.6, 0.6, 0.6, 1.0);
+        let font_size = 15.0;
+        let move_text = font.text(font_size, "M");
+        let attack_text = font.text(font_size, "A");
+        let gather_text = font.text(font_size, "G");
+        let return_text = font.text(font_size, "R");
+
+        let move_dimensions = move_text.dimensions(ctx);
+        let move_icon = images::drawable_into_image(ctx, move_dimensions, |ctx| {
+            move_text.draw(ctx, [0.0, 0.0])
+        })?;
+        let attack_dimensions = attack_text.dimensions(ctx);
+        let attack_icon = images::drawable_into_image(ctx, attack_dimensions, |ctx| {
+            attack_text.draw(ctx, [0.0, 0.0])
+        })?;
+        let gather_dimensions = gather_text.dimensions(ctx);
+        let gather_icon = images::drawable_into_image(ctx, gather_dimensions, |ctx| {
+            gather_text.draw(ctx, [0.0, 0.0])
+        })?;
+        let return_dimensions = return_text.dimensions(ctx);
+        let return_icon = images::drawable_into_image(ctx, return_dimensions, |ctx| {
+            return_text.draw(ctx, [0.0, 0.0])
+        })?;
         Ok(Self {
-            font,
             fighter: EntityHudConfig {
                 name: "Fighter".to_string(),
                 portrait: Mesh::new_rectangle(
@@ -220,6 +244,10 @@ impl HudAssets {
                     color,
                 )?,
             },
+            move_icon,
+            attack_icon,
+            gather_icon,
+            return_icon,
         })
     }
 
@@ -234,8 +262,6 @@ impl HudAssets {
     }
 
     pub fn action(&self, action: Action) -> ActionHudConfig {
-        let font_size = 15.0;
-
         // TODO: mind the allocations
 
         match action {
@@ -272,22 +298,22 @@ impl HudAssets {
             }
             Action::Move => ActionHudConfig {
                 text: "Move".to_owned(),
-                icon: Box::new(Text::new(("M", self.font, font_size))),
+                icon: Box::new(self.move_icon.clone()),
                 keycode: KeyCode::M,
             },
             Action::Attack => ActionHudConfig {
                 text: "Attack".to_owned(),
-                icon: Box::new(Text::new(("A", self.font, font_size))),
+                icon: Box::new(self.attack_icon.clone()),
                 keycode: KeyCode::A,
             },
             Action::GatherResource => ActionHudConfig {
                 text: "Gather".to_owned(),
-                icon: Box::new(Text::new(("G", self.font, font_size))),
+                icon: Box::new(self.gather_icon.clone()),
                 keycode: KeyCode::G,
             },
             Action::ReturnResource => ActionHudConfig {
                 text: "Return".to_owned(),
-                icon: Box::new(Text::new(("R", self.font, font_size))),
+                icon: Box::new(self.return_icon.clone()),
                 keycode: KeyCode::R,
             },
         }

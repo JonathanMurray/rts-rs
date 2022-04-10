@@ -1,13 +1,14 @@
-use ggez::graphics::{DrawParam, Drawable, Font, Text};
 use ggez::{Context, GameResult};
+
+use crate::text::SharpFont;
 
 pub struct ProgressBar {
     position_on_screen: [f32; 2],
-    font: Font,
+    font: SharpFont,
 }
 
 impl ProgressBar {
-    pub fn new(position_on_screen: [f32; 2], font: Font) -> Self {
+    pub fn new(position_on_screen: [f32; 2], font: SharpFont) -> Self {
         Self {
             position_on_screen,
             font,
@@ -21,12 +22,12 @@ impl ProgressBar {
             "=".repeat((progress * w) as usize),
             " ".repeat(((1.0 - progress) * w) as usize)
         );
-        Text::new((bar, self.font, 14.0)).draw(
+        self.font.text(14.0, bar).draw(
             ctx,
-            DrawParam::new().dest([
+            [
                 self.position_on_screen[0],
                 self.position_on_screen[1] + 15.0,
-            ]),
+            ],
         )?;
 
         Ok(())

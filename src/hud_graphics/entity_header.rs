@@ -1,4 +1,4 @@
-use ggez::graphics::{DrawMode, DrawParam, Drawable, Font, Mesh, Rect, Text};
+use ggez::graphics::{DrawMode, DrawParam, Drawable, Mesh, Rect};
 use ggez::{Context, GameResult};
 
 use super::entity_portrait::{EntityPortrait, PORTRAIT_DIMENSIONS};
@@ -6,11 +6,12 @@ use super::healthbar::Healthbar;
 use super::progress_bar::ProgressBar;
 use super::HUD_BORDER_COLOR;
 use crate::entities::Team;
+use crate::text::SharpFont;
 
 pub struct EntityHeader {
     border: Mesh,
     portrait: EntityPortrait,
-    font: Font,
+    font: SharpFont,
     healthbar: Healthbar,
     progress_bar: ProgressBar,
     status_position_on_screen: [f32; 2],
@@ -18,7 +19,11 @@ pub struct EntityHeader {
 }
 
 impl EntityHeader {
-    pub fn new(ctx: &mut Context, position_on_screen: [f32; 2], font: Font) -> GameResult<Self> {
+    pub fn new(
+        ctx: &mut Context,
+        position_on_screen: [f32; 2],
+        font: SharpFont,
+    ) -> GameResult<Self> {
         let border = Mesh::new_rectangle(
             ctx,
             DrawMode::stroke(2.0),
@@ -68,14 +73,16 @@ impl EntityHeader {
         )?;
         self.portrait.draw(ctx, content.portrait, false)?;
         if let Some(status) = content.status {
-            Text::new((status, self.font, 12.0))
-                .draw(ctx, DrawParam::new().dest(self.status_position_on_screen))?;
+            self.font
+                .text(12.0, status)
+                .draw(ctx, self.status_position_on_screen)?;
         }
         if let Some(progress) = content.progress {
             self.progress_bar.draw(ctx, progress)?;
         }
-        Text::new((content.name, self.font, 17.5))
-            .draw(ctx, DrawParam::new().dest(self.name_position_on_screen))?;
+        self.font
+            .text(17.5, content.name)
+            .draw(ctx, self.name_position_on_screen)?;
         Ok(())
     }
 }
