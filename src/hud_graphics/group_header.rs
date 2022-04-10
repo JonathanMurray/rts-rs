@@ -17,13 +17,13 @@ impl GroupHeader {
     pub fn new(ctx: &mut Context, position_on_screen: [f32; 2]) -> GameResult<Self> {
         let border = Mesh::new_rectangle(
             ctx,
-            DrawMode::stroke(3.0),
-            Rect::new(position_on_screen[0], position_on_screen[1], 390.0, 200.0),
+            DrawMode::stroke(2.0),
+            Rect::new(position_on_screen[0], position_on_screen[1], 195.0, 100.0),
             HUD_BORDER_COLOR,
         )?;
-        let x = position_on_screen[0] + 10.0;
-        let y = position_on_screen[1] + 10.0;
-        let margin = [16.0, 16.0];
+        let x = position_on_screen[0] + 5.0;
+        let y = position_on_screen[1] + 5.0;
+        let margin = [8.0, 8.0];
         let [w, h] = PORTRAIT_DIMENSIONS;
         let portraits = [
             EntityPortrait::new(ctx, [x, y])?,

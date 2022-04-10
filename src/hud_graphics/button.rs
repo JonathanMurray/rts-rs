@@ -24,11 +24,11 @@ impl Button {
     pub fn new(ctx: &mut Context, rect: Rect) -> GameResult<Button> {
         let local_rect = Rect::new(0.0, 0.0, rect.w, rect.h);
         let border = MeshBuilder::new()
-            .rectangle(DrawMode::stroke(3.0), local_rect, HUD_BORDER_COLOR)?
+            .rectangle(DrawMode::stroke(2.0), local_rect, HUD_BORDER_COLOR)?
             .build(ctx)?;
         let outline_active = MeshBuilder::new()
             .rectangle(
-                DrawMode::stroke(3.0),
+                DrawMode::stroke(2.0),
                 Rect::new(2.0, 2.0, rect.w - 4.0, rect.h - 4.0),
                 Color::new(0.4, 0.95, 0.4, 1.0),
             )?

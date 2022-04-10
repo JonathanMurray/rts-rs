@@ -3,7 +3,7 @@ use ggez::{Context, GameResult};
 
 use crate::game::COLOR_BG;
 
-pub const PORTRAIT_DIMENSIONS: [f32; 2] = [80.0, 80.0];
+pub const PORTRAIT_DIMENSIONS: [f32; 2] = [40.0, 40.0];
 
 pub struct EntityPortrait {
     rect: Rect,
@@ -22,7 +22,7 @@ impl EntityPortrait {
         );
         let border = MeshBuilder::new()
             .rectangle(DrawMode::fill(), rect, COLOR_BG)?
-            .rectangle(DrawMode::stroke(2.0), rect, Color::new(0.1, 0.1, 0.1, 1.0))?
+            .rectangle(DrawMode::stroke(1.0), rect, Color::new(0.1, 0.1, 0.1, 1.0))?
             .build(ctx)?;
         let highlight = MeshBuilder::new()
             .rectangle(DrawMode::stroke(1.0), rect, Color::new(0.6, 0.6, 0.6, 1.0))?

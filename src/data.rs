@@ -234,7 +234,7 @@ impl HudAssets {
     }
 
     pub fn action(&self, action: Action) -> ActionHudConfig {
-        let font_size = 30.0;
+        let font_size = 15.0;
 
         // TODO: mind the allocations
 

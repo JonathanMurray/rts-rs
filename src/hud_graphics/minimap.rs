@@ -40,7 +40,7 @@ impl Minimap {
         );
 
         let container_border = MeshBuilder::new()
-            .rectangle(DrawMode::stroke(2.0), container_rect, HUD_BORDER_COLOR)?
+            .rectangle(DrawMode::stroke(1.0), container_rect, HUD_BORDER_COLOR)?
             .build(ctx)?;
         let bg = MeshBuilder::new()
             .rectangle(DrawMode::fill(), rect, COLOR_BG)?
@@ -53,7 +53,7 @@ impl Minimap {
         let padding = 2.0;
         let camera = MeshBuilder::new()
             .rectangle(
-                DrawMode::stroke(2.0),
+                DrawMode::stroke(1.0),
                 Rect::new(
                     rect.x,
                     rect.y,

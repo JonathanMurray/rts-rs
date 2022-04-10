@@ -27,7 +27,7 @@ impl Healthbar {
             Team::Enemy => Color::new(0.8, 0.5, 0.5, 1.0),
             Team::Neutral => Color::new(0.6, 0.6, 0.6, 1.0),
         };
-        Text::new((text, self.font, 30.0)).draw(
+        Text::new((text, self.font, 15.0)).draw(
             ctx,
             DrawParam::new().color(color).dest(self.position_on_screen),
         )?;

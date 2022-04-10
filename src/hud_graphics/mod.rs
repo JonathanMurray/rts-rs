@@ -39,6 +39,7 @@ pub struct HudGraphics {
     group_header: GroupHeader,
     assets: HudAssets,
     num_selected_entities: usize,
+    resources_position: [f32; 2],
 }
 
 impl HudGraphics {
@@ -50,22 +51,22 @@ impl HudGraphics {
         tooltip_position: [f32; 2],
     ) -> GameResult<Self> {
         let minimap_pos = position;
-        let minimap_w = 390.0;
+        let minimap_w = 195.0;
         let minimap = Minimap::new(ctx, minimap_pos, minimap_w, world_dimensions)?;
 
         let assets = HudAssets::new(ctx, font)?;
 
-        let header_pos = [position[0], position[1] + 400.0];
+        let header_pos = [position[0], position[1] + 200.0];
         let entity_header = EntityHeader::new(ctx, header_pos, font)?;
         let group_header = GroupHeader::new(ctx, header_pos)?;
         let tooltip = Tooltip::new(font, tooltip_position, &assets);
 
         let buttons_x = header_pos[0];
-        let buttons_y = header_pos[1] + 240.0;
+        let buttons_y = header_pos[1] + 120.0;
         let mut buttons = vec![];
-        let button_size = [110.0, 90.0];
-        let button_hor_margin = 30.0;
-        let button_vert_margin = 30.0;
+        let button_size = [55.0, 45.0];
+        let button_hor_margin = 15.0;
+        let button_vert_margin = 15.0;
         let buttons_per_row = 3;
         for i in 0..NUM_BUTTONS {
             let x = buttons_x + (i % buttons_per_row) as f32 * (button_size[0] + button_hor_margin);
@@ -86,6 +87,7 @@ impl HudGraphics {
             group_header,
             assets,
             num_selected_entities: 0,
+            resources_position: [600.0, 7.0],
         })
     }
 
@@ -104,9 +106,9 @@ impl HudGraphics {
         let resources_text = Text::new((
             format!("RESOURCES: {}", player_team_state.resources),
             self.font,
-            30.0,
+            15.0,
         ));
-        resources_text.draw(ctx, DrawParam::new().dest([1200.0, 15.0]))?;
+        resources_text.draw(ctx, DrawParam::new().dest(self.resources_position))?;
 
         if selected_entities.len() > 1 {
             let mut portraits = [None; MAX_NUM_SELECTED_ENTITIES];
@@ -300,7 +302,7 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
     }
 }
 
-const TOOLTIP_FONT_SIZE: f32 = 35.0;
+const TOOLTIP_FONT_SIZE: f32 = 17.5;
 
 struct Tooltip {
     position: [f32; 2],

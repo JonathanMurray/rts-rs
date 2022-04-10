@@ -45,7 +45,7 @@ impl Assets {
             .circle(
                 DrawMode::stroke(2.0),
                 [0.0, 0.0],
-                25.0,
+                15.0,
                 0.01,
                 Color::new(0.6, 1.0, 0.6, 1.0),
             )?
@@ -157,10 +157,6 @@ impl Assets {
                     // (where [0.0, 0.0] is the top-left corner and [1.0, 1.0] is the bottom-right)
                     let fraction = 1.0 / 8.0;
 
-                    // Our tile-map consists of 16x16 pixel tiles
-                    // Each tile should take up 32x32 logical game pixels
-                    let tile_scale = [2.0, 2.0];
-
                     let position_of_tile_in_tilemap = match tile {
                         TileId::Ground => [0, 0],
                         TileId::WaterCenter => [1, 2],
@@ -187,8 +183,7 @@ impl Assets {
                                 fraction,
                                 fraction,
                             ))
-                            .dest([x as f32 * TILE_PIXEL_SIZE[0], y as f32 * TILE_PIXEL_SIZE[1]])
-                            .scale(tile_scale),
+                            .dest([x as f32 * TILE_PIXEL_SIZE[0], y as f32 * TILE_PIXEL_SIZE[1]]),
                     )?;
                 }
             }
@@ -265,7 +260,7 @@ fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameR
     };
     MeshBuilder::new()
         .rectangle(
-            DrawMode::stroke(2.0),
+            DrawMode::stroke(1.0),
             Rect::new(
                 -1.0,
                 -1.0,

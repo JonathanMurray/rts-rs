@@ -1,7 +1,9 @@
 use ggez;
-use ggez::conf::{WindowMode, WindowSetup};
+use ggez::conf::{FullscreenType, NumSamples, WindowMode, WindowSetup};
 use ggez::event::EventHandler;
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Font, MeshBuilder, Rect};
+use ggez::graphics::{
+    BlendMode, Color, DrawMode, DrawParam, Drawable, FilterMode, Font, MeshBuilder, Rect,
+};
 use ggez::input::keyboard::{KeyCode, KeyMods};
 use ggez::input::mouse::{self, CursorIcon, MouseButton};
 use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
@@ -27,16 +29,16 @@ use crate::map::{MapConfig, WorldInitData};
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
 
-const SCREEN_SIZE: [f32; 2] = [1600.0, 900.0];
-const WORLD_X: f32 = 450.0;
-const WORLD_Y: f32 = 70.0;
+const GAME_SIZE: [f32; 2] = [800.0, 450.0];
+const WORLD_X: f32 = 225.0;
+const WORLD_Y: f32 = 35.0;
 pub const WORLD_VIEWPORT: Rect = Rect {
     x: WORLD_X,
     y: WORLD_Y,
-    w: SCREEN_SIZE[0] - WORLD_X - 25.0,
-    h: SCREEN_SIZE[1] - WORLD_Y - 70.0,
+    w: GAME_SIZE[0] - WORLD_X - 12.5,
+    h: GAME_SIZE[1] - WORLD_Y - 35.0,
 };
-pub const CELL_PIXEL_SIZE: [f32; 2] = [64.0, 64.0];
+pub const CELL_PIXEL_SIZE: [f32; 2] = [32.0, 32.0];
 
 const SHOW_GRID: bool = false;
 
@@ -45,18 +47,20 @@ pub const MAX_NUM_SELECTED_ENTITIES: usize = 8;
 const TITLE: &str = "RTS";
 
 pub fn run(map_config: MapConfig) -> GameResult {
+    const GAME_SCALE: f32 = 1.0;
+    let window_setup = WindowSetup::default().title(TITLE).samples(NumSamples::One);
+    let window_mode =
+        WindowMode::default().dimensions(GAME_SIZE[0] * GAME_SCALE, GAME_SIZE[1] * GAME_SCALE);
     let (mut ctx, event_loop) = ContextBuilder::new("rts", "jm")
-        .window_setup(WindowSetup::default().title(TITLE))
-        .window_mode(WindowMode::default().dimensions(SCREEN_SIZE[0] * 1.5, SCREEN_SIZE[1] * 1.5))
+        .window_setup(window_setup)
+        .window_mode(window_mode)
         .add_resource_path("resources")
         .build()
         .expect("Creating ggez context");
 
-    graphics::set_screen_coordinates(
-        &mut ctx,
-        Rect::new(0.0, 0.0, SCREEN_SIZE[0], SCREEN_SIZE[1]),
-    )
-    .unwrap();
+    graphics::set_default_filter(&mut ctx, FilterMode::Nearest);
+    graphics::set_screen_coordinates(&mut ctx, Rect::new(0.0, 0.0, GAME_SIZE[0], GAME_SIZE[1]))
+        .unwrap();
 
     let game = Game::new(&mut ctx, map_config)?;
     ggez::event::run(ctx, event_loop, game)
@@ -200,7 +204,8 @@ impl Game {
 
         let enemy_player_ai = EnemyPlayerAi::new(world_dimensions);
 
-        let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
+        //let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
+        let font = Font::new(ctx, "/fonts/Retro Gaming.ttf")?;
 
         let max_camera_position = [
             world_dimensions[0] as f32 * CELL_PIXEL_SIZE[0] - WORLD_VIEWPORT.w,
@@ -209,8 +214,8 @@ impl Game {
         let camera = Camera::new([0.0, 0.0], max_camera_position);
         let player_state = PlayerState::new(camera);
 
-        let hud_pos = [25.0, 25.0];
-        let tooltip_pos = [WORLD_VIEWPORT.x, SCREEN_SIZE[1] - 50.0];
+        let hud_pos = [12.5, 12.5];
+        let tooltip_pos = [WORLD_VIEWPORT.x, GAME_SIZE[1] - 25.0];
         let hud = HudGraphics::new(ctx, hud_pos, font, world_dimensions, tooltip_pos)?;
         let hud = RefCell::new(hud);
 
