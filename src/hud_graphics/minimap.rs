@@ -5,6 +5,7 @@ use ggez::{Context, GameResult};
 
 use super::HUD_BORDER_COLOR;
 use crate::core::ObstacleType;
+use crate::entities::Team;
 use crate::game::{CELL_PIXEL_SIZE, COLOR_BG, WORLD_VIEWPORT};
 use crate::grid::Grid;
 use crate::images;
@@ -13,7 +14,10 @@ pub struct Minimap {
     container_border: Mesh,
     bg: Mesh,
     camera: Mesh,
-    entity_sprite_batch: SpriteBatch,
+    player_entity_sprite_batch: SpriteBatch,
+    enemy_entity_sprite_batch: SpriteBatch,
+    neutral_entity_sprite_batch: SpriteBatch,
+    water_sprite_batch: SpriteBatch,
     camera_scale: [f32; 2],
     rect: Rect,
     is_mouse_dragging: bool,
@@ -64,24 +68,28 @@ impl Minimap {
             )?
             .build(ctx)?;
 
-        let entity_size = [
+        let cell_size = [
             width / world_dimensions[0] as f32 + 1.0,
             height / world_dimensions[1] as f32 + 1.0,
         ];
 
-        let entity_mesh = Mesh::new_rectangle(
-            ctx,
-            DrawMode::fill(),
-            Rect::new(0.0, 0.0, entity_size[0], entity_size[1]),
-            Color::new(0.5, 0.5, 0.5, 1.0),
-        )?;
-        let entity_sprite_batch = SpriteBatch::new(images::mesh_into_image(ctx, entity_mesh)?);
+        let cell_rect = Rect::new(0.0, 0.0, cell_size[0], cell_size[1]);
+        let player_entity_sprite_batch =
+            sprite_batch(ctx, cell_rect, Color::new(0.5, 1.0, 0.5, 1.0))?;
+        let enemy_entity_sprite_batch =
+            sprite_batch(ctx, cell_rect, Color::new(1.0, 0.5, 0.5, 1.0))?;
+        let neutral_entity_sprite_batch =
+            sprite_batch(ctx, cell_rect, Color::new(0.5, 0.5, 0.5, 1.0))?;
+        let water_sprite_batch = sprite_batch(ctx, cell_rect, Color::new(0.5, 0.5, 1.0, 1.0))?;
 
         Ok(Self {
             container_border,
             bg,
             camera,
-            entity_sprite_batch,
+            player_entity_sprite_batch,
+            enemy_entity_sprite_batch,
+            neutral_entity_sprite_batch,
+            water_sprite_batch,
             camera_scale,
             rect,
             is_mouse_dragging: false,
@@ -114,17 +122,32 @@ impl Minimap {
         let [w, h] = grid.dimensions;
         for x in 0..w {
             for y in 0..h {
-                if let Some(ObstacleType::Entity) = grid.get(&[x, y]) {
-                    self.entity_sprite_batch.add(DrawParam::default().dest([
+                if let Some(obstacle) = grid.get(&[x, y]) {
+                    let pos = [
                         (x as f32 / w as f32) * self.rect.w,
                         (y as f32 / h as f32) * self.rect.h,
-                    ]));
+                    ];
+                    let sprite_batch = match obstacle {
+                        ObstacleType::Entity(Team::Player) => &mut self.player_entity_sprite_batch,
+                        ObstacleType::Entity(Team::Enemy) => &mut self.enemy_entity_sprite_batch,
+                        ObstacleType::Entity(Team::Neutral) => {
+                            &mut self.neutral_entity_sprite_batch
+                        }
+                        ObstacleType::Water => &mut self.water_sprite_batch,
+                    };
+                    sprite_batch.add(DrawParam::default().dest(pos));
                 }
             }
         }
-        self.entity_sprite_batch
-            .draw(ctx, DrawParam::default().dest(self.rect.point()))?;
-        self.entity_sprite_batch.clear();
+        let param = DrawParam::default().dest(self.rect.point());
+        self.player_entity_sprite_batch.draw(ctx, param)?;
+        self.enemy_entity_sprite_batch.draw(ctx, param)?;
+        self.neutral_entity_sprite_batch.draw(ctx, param)?;
+        self.water_sprite_batch.draw(ctx, param)?;
+        self.player_entity_sprite_batch.clear();
+        self.enemy_entity_sprite_batch.clear();
+        self.neutral_entity_sprite_batch.clear();
+        self.water_sprite_batch.clear();
         Ok(())
     }
 
@@ -173,4 +196,10 @@ fn clamped_ratio(x: f32, y: f32, rect: &Rect) -> [f32; 2] {
         (y - rect.y) / rect.h
     };
     [x_ratio, y_ratio]
+}
+
+fn sprite_batch(ctx: &mut Context, rect: Rect, color: Color) -> GameResult<SpriteBatch> {
+    let mesh = Mesh::new_rectangle(ctx, DrawMode::fill(), rect, color)?;
+    let image = images::mesh_into_image(ctx, mesh)?;
+    Ok(SpriteBatch::new(image))
 }

@@ -37,7 +37,7 @@ impl Core {
             if entity.is_solid {
                 // TODO Store EntityId's instead, to get constant position->entity_id lookup?
                 //      (although entity_id->entity is still not constant currently)
-                obstacle_grid.set_area(entity.cell_rect(), Some(ObstacleType::Entity));
+                obstacle_grid.set_area(entity.cell_rect(), Some(ObstacleType::Entity(entity.team)));
             }
         }
         let entities = entities
@@ -73,7 +73,8 @@ impl Core {
                             unit.move_to_adjacent_cell(old_pos, new_pos);
                             entity.position = new_pos;
                             self.obstacle_grid.set(old_pos, None);
-                            self.obstacle_grid.set(new_pos, Some(ObstacleType::Entity));
+                            self.obstacle_grid
+                                .set(new_pos, Some(ObstacleType::Entity(entity.team)));
                         }
                     } else if entity.state == EntityState::Moving {
                         entity.state = EntityState::Idle;
@@ -545,10 +546,11 @@ impl Core {
 
     fn add_entity(&mut self, new_entity: Entity) {
         let rect = new_entity.cell_rect();
+        let team = new_entity.team;
         self.entities
             .push((new_entity.id, RefCell::new(new_entity)));
         self.obstacle_grid
-            .set_area(rect, Some(ObstacleType::Entity));
+            .set_area(rect, Some(ObstacleType::Entity(team)));
     }
 
     fn entity(&self, id: EntityId) -> &RefCell<Entity> {
@@ -651,6 +653,6 @@ pub struct UpdateOutcome {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ObstacleType {
-    Entity,
+    Entity(Team),
     Water,
 }
