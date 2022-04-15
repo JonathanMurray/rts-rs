@@ -14,7 +14,7 @@ use crate::assets::Assets;
 use crate::camera::Camera;
 use crate::core::{
     AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, MoveCommand,
-    ReturnResourceCommand, TrainCommand, UpdateOutcome,
+    ReturnResourceCommand, StopCommand, TrainCommand, UpdateOutcome,
 };
 use crate::data::EntityType;
 use crate::enemy_ai::EnemyPlayerAi;
@@ -390,6 +390,10 @@ impl Game {
             }
             Action::Construct(structure_type) => {
                 self.set_player_cursor_state(ctx, CursorState::PlacingStructure(structure_type));
+            }
+            Action::Stop => {
+                self.core
+                    .issue_command(Command::Stop(StopCommand { entity: actor }), Team::Player);
             }
             Action::Move => {
                 self.set_player_cursor_state(ctx, CursorState::SelectingMovementDestination);

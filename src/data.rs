@@ -52,8 +52,8 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
             actions: [
                 Some(Action::Move),
+                Some(Action::Stop),
                 Some(Action::Attack),
-                None,
                 None,
                 None,
                 None,
@@ -65,11 +65,11 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
             actions: [
                 Some(Action::Move),
+                Some(Action::Stop),
                 Some(Action::GatherResource),
                 Some(Action::ReturnResource),
                 Some(Action::Construct(EntityType::Barracks)),
                 Some(Action::Construct(EntityType::Townhall)),
-                None,
             ],
         },
         EntityType::Barracks => EntityConfig {
@@ -136,6 +136,7 @@ pub struct HudAssets {
     barracks: EntityHudConfig,
     townhall: EntityHudConfig,
     resource: EntityHudConfig,
+    stop_icon: Image,
     move_icon: Image,
     attack_icon: Image,
     gather_icon: Image,
@@ -146,11 +147,16 @@ impl HudAssets {
     pub fn new(ctx: &mut Context, font: SharpFont) -> GameResult<Self> {
         let color = Color::new(0.6, 0.6, 0.6, 1.0);
         let font_size = 15.0;
+        let stop_text = font.text(font_size, "S");
         let move_text = font.text(font_size, "M");
         let attack_text = font.text(font_size, "A");
         let gather_text = font.text(font_size, "G");
         let return_text = font.text(font_size, "R");
 
+        let stop_dimensions = stop_text.dimensions(ctx);
+        let stop_icon = images::drawable_into_image(ctx, stop_dimensions, |ctx| {
+            stop_text.draw(ctx, [0.0, 0.0])
+        })?;
         let move_dimensions = move_text.dimensions(ctx);
         let move_icon = images::drawable_into_image(ctx, move_dimensions, |ctx| {
             move_text.draw(ctx, [0.0, 0.0])
@@ -238,6 +244,7 @@ impl HudAssets {
                     color,
                 )?,
             },
+            stop_icon,
             move_icon,
             attack_icon,
             gather_icon,
@@ -290,6 +297,11 @@ impl HudAssets {
                     keycode,
                 }
             }
+            Action::Stop => ActionHudConfig {
+                text: "Stop".to_owned(),
+                icon: Box::new(self.stop_icon.clone()),
+                keycode: KeyCode::S,
+            },
             Action::Move => ActionHudConfig {
                 text: "Move".to_owned(),
                 icon: Box::new(self.move_icon.clone()),
@@ -354,8 +366,8 @@ fn create_fighter(
 
 // Sprites must be designed with these reserved colors in mind.
 // Pixels that use these exact color are changed to an appropriate team color.
-const TEMPLATE_COLOR_LIGHT: [u8; 4] =[122, 171, 255, 255];
-const TEMPLATE_COLOR_DARK: [u8; 4] =[99, 155, 255, 255];
+const TEMPLATE_COLOR_LIGHT: [u8; 4] = [122, 171, 255, 255];
+const TEMPLATE_COLOR_DARK: [u8; 4] = [99, 155, 255, 255];
 
 const TEAM_COLOR_FAMILIES: [(Team, EntityColorFamily); 2] = [
     (

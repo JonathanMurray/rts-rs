@@ -287,6 +287,7 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
                 false
             }
         }
+        Action::Stop => state == EntityState::Idle,
         Action::Move => state == EntityState::Moving,
         Action::Attack => {
             matches!(state, EntityState::Attacking(_))
@@ -306,6 +307,7 @@ struct Tooltip {
     position: [f32; 2],
     font: SharpFont,
     text_attack: SharpText,
+    text_stop: SharpText,
     text_move: SharpText,
     text_gather: SharpText,
     text_return: SharpText,
@@ -323,6 +325,7 @@ impl Tooltip {
             position,
             font,
             text_attack: text(assets.action(Action::Attack).text.as_ref()),
+            text_stop: text(assets.action(Action::Stop).text.as_ref()),
             text_move: text(assets.action(Action::Move).text.as_ref()),
             text_gather: text(assets.action(Action::GatherResource).text.as_ref()),
             text_return: text(assets.action(Action::ReturnResource).text.as_ref()),
@@ -337,6 +340,7 @@ impl Tooltip {
         if let Some(text) = text {
             match text {
                 TooltipText::Action(Action::Attack) => self.text_attack.draw(ctx, self.position)?,
+                TooltipText::Action(Action::Stop) => self.text_stop.draw(ctx, self.position)?,
                 TooltipText::Action(Action::Move) => self.text_move.draw(ctx, self.position)?,
                 TooltipText::Action(Action::GatherResource) => {
                     self.text_gather.draw(ctx, self.position)?

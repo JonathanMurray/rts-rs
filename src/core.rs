@@ -10,6 +10,7 @@ use crate::entities::{
 };
 use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
+use std::borrow::BorrowMut;
 
 pub struct Core {
     teams: HashMap<Team, RefCell<TeamState>>,
@@ -363,6 +364,16 @@ impl Core {
                 }
             }
 
+            Command::Stop(StopCommand {
+                entity: mut stopper,
+            }) => {
+                assert_eq!(stopper.team, issuing_team);
+                stopper.state = EntityState::Idle;
+                if let PhysicalType::Unit(unit) = stopper.physical_type.borrow_mut() {
+                    unit.movement_plan.clear();
+                }
+            }
+
             Command::Move(MoveCommand {
                 unit: mut mover,
                 destination,
@@ -579,6 +590,7 @@ fn square_distance(a: [u32; 2], b: [u32; 2]) -> u32 {
 pub enum Command<'a> {
     Train(TrainCommand<'a>),
     Construct(ConstructCommand<'a>),
+    Stop(StopCommand<'a>),
     Move(MoveCommand<'a>),
     Attack(AttackCommand<'a>),
     GatherResource(GatherResourceCommand<'a>),
@@ -597,6 +609,11 @@ pub struct ConstructCommand<'a> {
     pub builder: RefMut<'a, Entity>,
     pub structure_position: [u32; 2],
     pub structure_type: EntityType,
+}
+
+#[derive(Debug)]
+pub struct StopCommand<'a> {
+    pub entity: RefMut<'a, Entity>,
 }
 
 #[derive(Debug)]

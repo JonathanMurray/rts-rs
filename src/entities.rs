@@ -112,9 +112,7 @@ impl Entity {
             }
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
-        let animation = AnimationState {
-            ms_counter: 0,
-        };
+        let animation = AnimationState { ms_counter: 0 };
 
         Self {
             entity_type,
@@ -493,6 +491,7 @@ impl Gathering {
 pub enum Action {
     Train(EntityType, TrainingConfig),
     Construct(EntityType),
+    Stop,
     Move,
     Attack,
     GatherResource,

@@ -9,7 +9,7 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::data::{self, Animation, EntityType};
-use crate::entities::{ AnimationState, Direction, Team};
+use crate::entities::{AnimationState, Direction, Team};
 use crate::game::{CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
 use crate::grid::Grid;
 use crate::map::TileId;
