@@ -1,4 +1,4 @@
-use ggez::graphics::{ DrawParam, Drawable, Font, Rect, Text};
+use ggez::graphics::{DrawParam, Drawable, Font, Rect, Text};
 use ggez::{Context, GameResult};
 
 /// This module exists to avoid getting blurry text when scaling up game window. Images and meshes

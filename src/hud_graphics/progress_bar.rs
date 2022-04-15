@@ -1,6 +1,6 @@
 use ggez::{Context, GameResult};
 
-use crate::text::{SharpFont};
+use crate::text::SharpFont;
 use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Mesh, MeshBuilder, Rect};
 
 pub struct ProgressBar {
@@ -20,11 +20,7 @@ impl ProgressBar {
             .rectangle(DrawMode::stroke(1.0), rect, Color::new(0.2, 0.2, 0.2, 1.0))?
             .build(ctx)?;
 
-
-        Ok(Self {
-            bg,
-            font,
-        })
+        Ok(Self { bg, font })
     }
 
     pub fn draw(&self, ctx: &mut Context, progress: f32, text: impl Into<String>) -> GameResult {

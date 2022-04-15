@@ -68,11 +68,8 @@ impl EntityHeader {
 
     pub fn draw(&self, ctx: &mut Context, content: EntityHeaderContent) -> GameResult {
         self.border.draw(ctx, DrawParam::new())?;
-        self.healthbar.draw(
-            ctx,
-            content.current_health,
-            content.max_health,
-        )?;
+        self.healthbar
+            .draw(ctx, content.current_health, content.max_health)?;
         self.portrait.draw(ctx, content.portrait, false)?;
         if let Some(status) = content.status {
             self.font

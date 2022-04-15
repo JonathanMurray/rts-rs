@@ -41,22 +41,29 @@ impl Healthbar {
         self.bg.draw(ctx, DrawParam::default())?;
 
         let rect = self.bg.dimensions(ctx).unwrap();
+        let health_ratio = current as f32 / max as f32;
+        let health_color = if health_ratio > 0.65 {
+            Color::new(0.2, 0.8, 0.2, 1.0)
+        } else if health_ratio > 0.35 {
+            Color::new(0.9, 0.9, 0.2, 1.0)
+        } else {
+            Color::new(0.9, 0.2, 0.2, 1.0)
+        };
         let health = Mesh::new_rectangle(
             ctx,
             DrawMode::fill(),
             Rect::new(
                 rect.x + 1.0,
                 rect.y + 1.0,
-                (rect.w - 2.0) * current as f32 / max as f32,
+                (rect.w - 2.0) * health_ratio,
                 rect.h - 2.0,
             ),
-            Color::new(0.2, 0.8, 0.2, 1.0),
+            health_color,
         )?;
 
         health.draw(ctx, DrawParam::default())?;
 
-        self.label
-            .draw(ctx, self.position_on_screen)?;
+        self.label.draw(ctx, self.position_on_screen)?;
         let health_text = self.font.text(9.0, format!("{} / {}", current, max));
         health_text.draw(
             ctx,
