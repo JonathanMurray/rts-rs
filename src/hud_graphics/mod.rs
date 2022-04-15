@@ -105,7 +105,7 @@ impl HudGraphics {
         let cursor_state = player_state.cursor_state();
 
         self.font
-            .text(15.0, format!("RESOURCES: {}", player_team_state.resources))
+            .text(15.0, format!("Fuel: {}", player_team_state.resources))
             .draw(ctx, self.resources_position)?;
 
         if selected_entities.len() > 1 {
@@ -125,7 +125,7 @@ impl HudGraphics {
                 if let PhysicalType::Unit(unit) = &entity.physical_type {
                     if let Some(gathering) = unit.gathering.as_ref() {
                         if gathering.is_carrying() {
-                            entity_status_text = Some("[carrying resource]".to_owned());
+                            entity_status_text = Some("[carrying fuel]".to_owned());
                         }
                     }
                 }
@@ -136,8 +136,8 @@ impl HudGraphics {
                     progress = Some((training_progress, "% Training".to_owned()));
                 }
             }
-            if entity.entity_type == EntityType::Resource {
-                entity_status_text = Some("[plenty of resources]".to_owned());
+            if entity.entity_type == EntityType::FuelRift {
+                entity_status_text = Some("[plenty of fuel]".to_owned());
             }
             if let EntityState::UnderConstruction(remaining, total) = entity.state {
                 let construction_progress = (total - remaining).as_secs_f32() / total.as_secs_f32();

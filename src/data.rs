@@ -15,7 +15,7 @@ use crate::images;
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
-    Resource,
+    FuelRift,
     Fighter,
     Worker,
     Barracks,
@@ -109,7 +109,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 None,
             ],
         },
-        EntityType::Resource => EntityConfig {
+        EntityType::FuelRift => EntityConfig {
             is_solid: true,
             max_health: None,
             physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
@@ -149,7 +149,7 @@ pub struct HudAssets {
     worker: EntityHudConfig,
     barracks: EntityHudConfig,
     tech_lab: EntityHudConfig,
-    resource: EntityHudConfig,
+    fuel_rift: EntityHudConfig,
     stop_icon: Image,
     move_icon: Image,
     attack_icon: Image,
@@ -207,8 +207,8 @@ impl HudAssets {
                 name: "Tech Lab".to_string(),
                 portrait: Picture::Image(tech_lab_icon),
             },
-            resource: EntityHudConfig {
-                name: "Resource location".to_string(),
+            fuel_rift: EntityHudConfig {
+                name: "Fuel rift".to_string(),
                 portrait: Picture::Mesh(Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
@@ -235,7 +235,7 @@ impl HudAssets {
             EntityType::Worker => &self.worker,
             EntityType::Barracks => &self.barracks,
             EntityType::TechLab => &self.tech_lab,
-            EntityType::Resource => &self.resource,
+            EntityType::FuelRift => &self.fuel_rift,
         }
     }
 
@@ -252,7 +252,7 @@ impl HudAssets {
                 };
                 ActionHudConfig {
                     text: format!(
-                        "Train {} [cost {}, {}s]",
+                        "Train {} ({} fuel, {}s)",
                         &unit_config.name,
                         training_config.cost,
                         training_config.duration.as_secs()
@@ -311,7 +311,7 @@ pub fn create_entity_sprites(
     create_worker(ctx, &mut sprite_batches)?;
     create_barracks(ctx, &mut sprite_batches)?;
     create_tech_lab(ctx, &mut sprite_batches)?;
-    create_resource(ctx, &mut sprite_batches)?;
+    create_fuel_rift(ctx, &mut sprite_batches)?;
 
     Ok(sprite_batches)
 }
@@ -336,7 +336,13 @@ fn create_fighter(
             .rounded_rectangle(DrawMode::fill(), rect, 5.0, color)?
             .build(ctx)?;
         let image = images::mesh_into_image(ctx, mesh)?;
-        sprite_batches.insert((EntityType::Fighter, team), Animation::Static(image));
+        sprite_batches.insert(
+            (EntityType::Fighter, team),
+            Animation::Static(StaticImage {
+                image,
+                origin: [0.0, 0.0],
+            }),
+        );
     }
     Ok(())
 }
@@ -416,7 +422,7 @@ fn create_worker(
 
 pub enum Animation {
     Tilesheet(Tilesheet),
-    Static(Image),
+    Static(StaticImage),
 }
 
 impl Animation {
@@ -431,8 +437,25 @@ impl Animation {
             Animation::Tilesheet(tilesheet) => {
                 tilesheet.draw(ctx, animation, direction, position_on_screen)
             }
-            Animation::Static(image) => image.draw(ctx, DrawParam::new().dest(position_on_screen)),
+            Animation::Static(image) => image.draw(ctx, position_on_screen),
         }
+    }
+}
+
+pub struct StaticImage {
+    image: Image,
+    // origin y == 20, means that the top part of the sprite
+    // will protrude 20 pixels above the cell that it occupies.
+    origin: [f32; 2],
+}
+
+impl StaticImage {
+    pub fn draw(&self, ctx: &mut Context, position_on_screen: [f32; 2]) -> GameResult {
+        let pos = [
+            position_on_screen[0] - self.origin[0],
+            position_on_screen[1] - self.origin[1],
+        ];
+        self.image.draw(ctx, DrawParam::new().dest(pos))
     }
 }
 
@@ -517,7 +540,13 @@ fn create_barracks(
             .build(ctx)?;
 
         let image = images::mesh_into_image(ctx, mesh)?;
-        sprite_batches.insert((EntityType::Barracks, team), Animation::Static(image));
+        sprite_batches.insert(
+            (EntityType::Barracks, team),
+            Animation::Static(StaticImage {
+                image,
+                origin: [0.0, 0.0],
+            }),
+        );
     }
     Ok(())
 }
@@ -530,33 +559,29 @@ fn create_tech_lab(
     let rgba = image.to_rgba8(ctx)?;
     for (team, color_family) in TEAM_COLOR_FAMILIES {
         let team_image = recolor(ctx, [image.width(), image.height()], &rgba, &color_family)?;
-        sprite_batches.insert((EntityType::TechLab, team), Animation::Static(team_image));
+        sprite_batches.insert(
+            (EntityType::TechLab, team),
+            Animation::Static(StaticImage {
+                image: team_image,
+                origin: [0.0, 0.0],
+            }),
+        );
     }
     Ok(())
 }
 
-fn create_resource(
+fn create_fuel_rift(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
-    let mesh = MeshBuilder::new()
-        .rectangle(
-            DrawMode::fill(),
-            Rect::new(
-                (CELL_PIXEL_SIZE[0] - size[0]) / 2.0,
-                (CELL_PIXEL_SIZE[1] - size[1]) / 2.0,
-                size[0],
-                size[1],
-            ),
-            Color::new(0.8, 0.6, 0.2, 1.0),
-        )?
-        .build(ctx)?;
+    let image = Image::new(ctx, "/images/fuel_rift.png")?;
 
-    let image = images::mesh_into_image(ctx, mesh)?;
     sprite_batches.insert(
-        (EntityType::Resource, Team::Neutral),
-        Animation::Static(image),
+        (EntityType::FuelRift, Team::Neutral),
+        Animation::Static(StaticImage {
+            image,
+            origin: [8.0, 8.0],
+        }),
     );
     Ok(())
 }

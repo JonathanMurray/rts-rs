@@ -262,10 +262,9 @@ impl Game {
     }
 
     fn resource_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<&RefCell<Entity>> {
-        // TODO we assume that all neutral entities are resources for now
         self.core.entities().iter().find_map(|(_id, entity)| {
             if entity.borrow().cell_rect().contains(clicked_world_pos)
-                && entity.borrow().team == Team::Neutral
+                && entity.borrow().entity_type == EntityType::FuelRift
             {
                 Some(entity)
             } else {

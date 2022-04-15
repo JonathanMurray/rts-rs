@@ -62,7 +62,7 @@ impl WorldInitData {
         ];
 
         entities.push(data::create_entity(
-            EntityType::Resource,
+            EntityType::FuelRift,
             [6, 4],
             Team::Neutral,
         ));
@@ -164,7 +164,7 @@ impl WorldInitData {
                         entities.push(create_entity(EntityType::TechLab, [x, y], Team::Enemy));
                     }
                     'R' => {
-                        entities.push(create_entity(EntityType::Resource, [x, y], Team::Neutral));
+                        entities.push(create_entity(EntityType::FuelRift, [x, y], Team::Neutral));
                     }
                     _ => {}
                 }
