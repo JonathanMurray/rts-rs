@@ -19,7 +19,7 @@ pub enum EntityType {
     Fighter,
     Worker,
     Barracks,
-    Townhall,
+    TechLab,
 }
 
 pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) -> Entity {
@@ -29,7 +29,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
 
 pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
     let mut map: HashMap<EntityType, [u32; 2]> = Default::default();
-    let structure_types = [EntityType::Barracks, EntityType::Townhall];
+    let structure_types = [EntityType::Barracks, EntityType::TechLab];
     for structure_type in structure_types {
         let config = entity_config(structure_type);
         let size = match config.physical_type {
@@ -68,7 +68,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 Some(Action::GatherResource),
                 Some(Action::ReturnResource),
                 Some(Action::Construct(EntityType::Barracks)),
-                Some(Action::Construct(EntityType::Townhall)),
+                Some(Action::Construct(EntityType::TechLab)),
             ],
         },
         EntityType::Barracks => EntityConfig {
@@ -90,10 +90,10 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 None,
             ],
         },
-        EntityType::Townhall => EntityConfig {
+        EntityType::TechLab => EntityConfig {
             is_solid: true,
             max_health: Some(5),
-            physical_type: PhysicalTypeConfig::StructureSize([3, 2]),
+            physical_type: PhysicalTypeConfig::StructureSize([3, 3]),
             actions: [
                 Some(Action::Train(
                     EntityType::Worker,
@@ -148,7 +148,7 @@ pub struct HudAssets {
     fighter: EntityHudConfig,
     worker: EntityHudConfig,
     barracks: EntityHudConfig,
-    townhall: EntityHudConfig,
+    tech_lab: EntityHudConfig,
     resource: EntityHudConfig,
     stop_icon: Image,
     move_icon: Image,
@@ -202,8 +202,8 @@ impl HudAssets {
                     color,
                 )?),
             },
-            townhall: EntityHudConfig {
-                name: "Townhall".to_string(),
+            tech_lab: EntityHudConfig {
+                name: "Tech Lab".to_string(),
                 portrait: Picture::Mesh(Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
@@ -243,7 +243,7 @@ impl HudAssets {
             EntityType::Fighter => &self.fighter,
             EntityType::Worker => &self.worker,
             EntityType::Barracks => &self.barracks,
-            EntityType::Townhall => &self.townhall,
+            EntityType::TechLab => &self.tech_lab,
             EntityType::Resource => &self.resource,
         }
     }
@@ -273,7 +273,7 @@ impl HudAssets {
             Action::Construct(structure_type) => {
                 let keycode = match structure_type {
                     EntityType::Barracks => KeyCode::B,
-                    EntityType::Townhall => KeyCode::T,
+                    EntityType::TechLab => KeyCode::T,
                     _ => panic!("No keycode for constructing: {:?}", structure_type),
                 };
                 let structure_config = self.entity(structure_type);
@@ -319,7 +319,7 @@ pub fn create_entity_sprites(
     create_fighter(ctx, &mut sprite_batches)?;
     create_worker(ctx, &mut sprite_batches)?;
     create_barracks(ctx, &mut sprite_batches)?;
-    create_townhall(ctx, &mut sprite_batches)?;
+    create_tech_lab(ctx, &mut sprite_batches)?;
     create_resource(ctx, &mut sprite_batches)?;
 
     Ok(sprite_batches)
@@ -384,20 +384,7 @@ fn create_worker(
     let image = Image::new(ctx, "/images/worker_sheet.png")?;
     let rgba = image.to_rgba8(ctx)?;
     for (team, color_family) in TEAM_COLOR_FAMILIES {
-        let mut recolored = Vec::with_capacity(rgba.len());
-
-        let mut i = 0;
-        while i <= rgba.len() - 4 {
-            let mut color = &rgba[i..i + 4];
-            if color == &TEMPLATE_COLOR_LIGHT[..] {
-                color = &color_family.light[..];
-            } else if color == &TEMPLATE_COLOR_DARK[..] {
-                color = &color_family.dark[..];
-            }
-            recolored.extend_from_slice(color);
-            i += 4;
-        }
-        let team_image = Image::from_rgba8(ctx, image.width(), image.height(), &recolored[..])?;
+        let team_image = recolor(ctx, [image.width(), image.height()], &rgba, &color_family)?;
 
         let mut frames = HashMap::new();
 
@@ -544,38 +531,15 @@ fn create_barracks(
     Ok(())
 }
 
-fn create_townhall(
+fn create_tech_lab(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let colors = HashMap::from([
-        (Team::Player, Color::new(0.5, 0.7, 0.5, 1.0)),
-        (Team::Enemy, Color::new(0.7, 0.3, 0.3, 1.0)),
-    ]);
-    for (team, color) in colors {
-        let size = [CELL_PIXEL_SIZE[0] * 2.9, CELL_PIXEL_SIZE[1] * 1.9];
-        let mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    (CELL_PIXEL_SIZE[0] * 3.0 - size[0]) / 2.0,
-                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
-                    size[0],
-                    size[1],
-                ),
-                color,
-            )?
-            .circle(
-                DrawMode::stroke(4.0),
-                [CELL_PIXEL_SIZE[0] * 1.5, CELL_PIXEL_SIZE[1] * 0.7],
-                CELL_PIXEL_SIZE[0] * 0.4,
-                0.05,
-                Color::new(0.0, 0.0, 0.0, 1.0),
-            )?
-            .build(ctx)?;
-
-        let image = images::mesh_into_image(ctx, mesh)?;
-        sprite_batches.insert((EntityType::Townhall, team), Animation::Static(image));
+    let image = Image::new(ctx, "/images/tech_lab.png")?;
+    let rgba = image.to_rgba8(ctx)?;
+    for (team, color_family) in TEAM_COLOR_FAMILIES {
+        let team_image = recolor(ctx, [image.width(), image.height()], &rgba, &color_family)?;
+        sprite_batches.insert((EntityType::TechLab, team), Animation::Static(team_image));
     }
     Ok(())
 }
@@ -604,4 +568,26 @@ fn create_resource(
         Animation::Static(image),
     );
     Ok(())
+}
+
+fn recolor(
+    ctx: &mut Context,
+    size: [u16; 2],
+    rgba: &[u8],
+    color_family: &EntityColorFamily,
+) -> GameResult<Image> {
+    let mut recolored = Vec::with_capacity(rgba.len());
+
+    let mut i = 0;
+    while i <= rgba.len() - 4 {
+        let mut color = &rgba[i..i + 4];
+        if color == &TEMPLATE_COLOR_LIGHT[..] {
+            color = &color_family.light[..];
+        } else if color == &TEMPLATE_COLOR_DARK[..] {
+            color = &color_family.dark[..];
+        }
+        recolored.extend_from_slice(color);
+        i += 4;
+    }
+    Image::from_rgba8(ctx, size[0], size[1], &recolored[..])
 }

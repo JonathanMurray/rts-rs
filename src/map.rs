@@ -58,7 +58,7 @@ impl WorldInitData {
         let mut entities = vec![
             data::create_entity(EntityType::Worker, [6, 2], Team::Player),
             data::create_entity(EntityType::Fighter, [8, 2], Team::Player),
-            data::create_entity(EntityType::Townhall, [1, 7], Team::Player),
+            data::create_entity(EntityType::TechLab, [1, 6], Team::Player),
         ];
 
         entities.push(data::create_entity(
@@ -72,8 +72,8 @@ impl WorldInitData {
             MapType::Small => {
                 entities.push(data::create_entity(EntityType::Worker, [7, 7], Team::Enemy));
                 entities.push(data::create_entity(
-                    EntityType::Townhall,
-                    [6, 8],
+                    EntityType::TechLab,
+                    [1, 2],
                     Team::Enemy,
                 ));
             }
@@ -83,7 +83,7 @@ impl WorldInitData {
                 entities.push(data::create_entity(EntityType::Worker, [0, 4], Team::Enemy));
                 entities.push(data::create_entity(EntityType::Worker, [3, 4], Team::Enemy));
                 entities.push(data::create_entity(
-                    EntityType::Townhall,
+                    EntityType::TechLab,
                     [8, 4],
                     Team::Enemy,
                 ));
@@ -158,10 +158,10 @@ impl WorldInitData {
                         water_grid.set([x as u32, y as u32], Some(()));
                     }
                     '1' => {
-                        entities.push(create_entity(EntityType::Townhall, [x, y], Team::Player));
+                        entities.push(create_entity(EntityType::TechLab, [x, y], Team::Player));
                     }
                     '2' => {
-                        entities.push(create_entity(EntityType::Townhall, [x, y], Team::Enemy));
+                        entities.push(create_entity(EntityType::TechLab, [x, y], Team::Enemy));
                     }
                     'R' => {
                         entities.push(create_entity(EntityType::Resource, [x, y], Team::Neutral));
