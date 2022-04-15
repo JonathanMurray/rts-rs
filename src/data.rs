@@ -168,6 +168,7 @@ impl HudAssets {
         let return_icon = Image::new(ctx, "/images/icons/return.png")?;
 
         let worker_icon = Image::new(ctx, "/images/icons/worker.png")?;
+        let tech_lab_icon = Image::new(ctx, "/images/icons/tech_lab.png")?;
 
         Ok(Self {
             fighter: EntityHudConfig {
@@ -204,17 +205,7 @@ impl HudAssets {
             },
             tech_lab: EntityHudConfig {
                 name: "Tech Lab".to_string(),
-                portrait: Picture::Mesh(Mesh::new_rectangle(
-                    ctx,
-                    DrawMode::fill(),
-                    Rect::new(
-                        5.0,
-                        5.0,
-                        PORTRAIT_DIMENSIONS[0] - 10.0,
-                        (PORTRAIT_DIMENSIONS[1] - 10.0) * 0.85,
-                    ),
-                    color,
-                )?),
+                portrait: Picture::Image(tech_lab_icon),
             },
             resource: EntityHudConfig {
                 name: "Resource location".to_string(),
