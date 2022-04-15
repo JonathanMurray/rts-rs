@@ -55,7 +55,7 @@ impl HudGraphics {
         let minimap_w = 195.0;
         let minimap = Minimap::new(ctx, minimap_pos, minimap_w, world_dimensions)?;
 
-        let assets = HudAssets::new(ctx, font)?;
+        let assets = HudAssets::new(ctx)?;
 
         let header_pos = [position[0], position[1] + 200.0];
         let entity_header = EntityHeader::new(ctx, header_pos, font)?;
@@ -63,11 +63,11 @@ impl HudGraphics {
         let tooltip = Tooltip::new(font, tooltip_position, &assets);
 
         let buttons_x = header_pos[0];
-        let buttons_y = header_pos[1] + 120.0;
+        let buttons_y = header_pos[1] + 110.0;
         let mut buttons = vec![];
-        let button_size = [55.0, 45.0];
+        let button_size = [55.0, 50.0];
         let button_hor_margin = 15.0;
-        let button_vert_margin = 15.0;
+        let button_vert_margin = 12.0;
         let buttons_per_row = 3;
         for i in 0..NUM_BUTTONS {
             let x = buttons_x + (i % buttons_per_row) as f32 * (button_size[0] + button_hor_margin);

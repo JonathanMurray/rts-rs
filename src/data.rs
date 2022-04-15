@@ -12,7 +12,6 @@ use crate::entities::{
 use crate::game::CELL_PIXEL_SIZE;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 use crate::images;
-use crate::text::SharpFont;
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
@@ -144,35 +143,15 @@ pub struct HudAssets {
 }
 
 impl HudAssets {
-    pub fn new(ctx: &mut Context, font: SharpFont) -> GameResult<Self> {
+    pub fn new(ctx: &mut Context) -> GameResult<Self> {
         let color = Color::new(0.6, 0.6, 0.6, 1.0);
-        let font_size = 15.0;
-        let stop_text = font.text(font_size, "S");
-        let move_text = font.text(font_size, "M");
-        let attack_text = font.text(font_size, "A");
-        let gather_text = font.text(font_size, "G");
-        let return_text = font.text(font_size, "R");
 
-        let stop_dimensions = stop_text.dimensions(ctx);
-        let stop_icon = images::drawable_into_image(ctx, stop_dimensions, |ctx| {
-            stop_text.draw(ctx, [0.0, 0.0])
-        })?;
-        let move_dimensions = move_text.dimensions(ctx);
-        let move_icon = images::drawable_into_image(ctx, move_dimensions, |ctx| {
-            move_text.draw(ctx, [0.0, 0.0])
-        })?;
-        let attack_dimensions = attack_text.dimensions(ctx);
-        let attack_icon = images::drawable_into_image(ctx, attack_dimensions, |ctx| {
-            attack_text.draw(ctx, [0.0, 0.0])
-        })?;
-        let gather_dimensions = gather_text.dimensions(ctx);
-        let gather_icon = images::drawable_into_image(ctx, gather_dimensions, |ctx| {
-            gather_text.draw(ctx, [0.0, 0.0])
-        })?;
-        let return_dimensions = return_text.dimensions(ctx);
-        let return_icon = images::drawable_into_image(ctx, return_dimensions, |ctx| {
-            return_text.draw(ctx, [0.0, 0.0])
-        })?;
+        let stop_icon = Image::new(ctx, "/images/icons/stop.png")?;
+        let move_icon = Image::new(ctx, "/images/icons/move.png")?;
+        let attack_icon = Image::new(ctx, "/images/icons/attack.png")?;
+        let gather_icon = Image::new(ctx, "/images/icons/gather.png")?;
+        let return_icon = Image::new(ctx, "/images/icons/return.png")?;
+
         Ok(Self {
             fighter: EntityHudConfig {
                 name: "Fighter".to_string(),

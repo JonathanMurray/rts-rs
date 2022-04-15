@@ -1,4 +1,4 @@
-use ggez::graphics::{Color, DrawParam, Drawable, Font, Rect, Text};
+use ggez::graphics::{Color, DrawParam, Drawable, Font, Text};
 use ggez::{Context, GameResult};
 
 /// This module exists to avoid getting blurry text when scaling up game window. Images and meshes
@@ -44,9 +44,5 @@ impl SharpText {
             fragment.color = Some(color);
         }
         self
-    }
-
-    pub fn dimensions(&self, ctx: &mut Context) -> Rect {
-        self.text.dimensions(ctx)
     }
 }
