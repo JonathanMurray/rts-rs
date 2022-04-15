@@ -5,6 +5,7 @@ use super::entity_portrait::{EntityPortrait, PORTRAIT_DIMENSIONS};
 use super::healthbar::Healthbar;
 use super::progress_bar::ProgressBar;
 use super::HUD_BORDER_COLOR;
+use crate::data::Picture;
 use crate::entities::Team;
 use crate::text::SharpFont;
 
@@ -90,7 +91,7 @@ impl EntityHeader {
 pub struct EntityHeaderContent<'a> {
     pub current_health: usize,
     pub max_health: usize,
-    pub portrait: &'a Mesh,
+    pub portrait: &'a Picture,
     pub name: String,
     pub status: Option<String>,
     pub progress: Option<f32>,

@@ -3,6 +3,7 @@ use ggez::{Context, GameResult};
 
 use std::time::Duration;
 
+use crate::data::Picture;
 use crate::entities::Action;
 use crate::game::CursorState;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
@@ -16,7 +17,7 @@ pub struct Button {
     highlight: Mesh,
     is_down: bool,
     down_cooldown: Duration,
-    graphics: Option<Box<dyn Drawable>>,
+    graphics: Option<Picture>,
 }
 
 impl Button {
@@ -121,10 +122,10 @@ impl Button {
         })
     }
 
-    pub fn set_action(&mut self, action_and_text: Option<(Action, Box<dyn Drawable>)>) {
-        if let Some((action, text)) = action_and_text {
+    pub fn set_action(&mut self, action_and_picture: Option<(Action, Picture)>) {
+        if let Some((action, picture)) = action_and_picture {
             self.action = Some(action);
-            self.graphics = Some(text);
+            self.graphics = Some(picture);
         } else {
             self.action = None;
             self.graphics = None;

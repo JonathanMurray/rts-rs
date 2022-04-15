@@ -3,6 +3,7 @@ use ggez::{Context, GameResult};
 
 use super::entity_portrait::{EntityPortrait, PORTRAIT_DIMENSIONS};
 use super::{PlayerInput, HUD_BORDER_COLOR};
+use crate::data::Picture;
 use crate::game::MAX_NUM_SELECTED_ENTITIES;
 
 const NUM_PORTRAITS: usize = MAX_NUM_SELECTED_ENTITIES;
@@ -42,7 +43,11 @@ impl GroupHeader {
         })
     }
 
-    pub fn draw(&self, ctx: &mut Context, portraits: [Option<&Mesh>; NUM_PORTRAITS]) -> GameResult {
+    pub fn draw(
+        &self,
+        ctx: &mut Context,
+        portraits: [Option<&Picture>; NUM_PORTRAITS],
+    ) -> GameResult {
         self.border.draw(ctx, DrawParam::new())?;
         for (i, portrait) in portraits.iter().enumerate() {
             if let Some(portrait) = portrait {

@@ -120,12 +120,27 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
 
 pub struct EntityHudConfig {
     pub name: String,
-    pub portrait: Mesh,
+    pub portrait: Picture,
+}
+
+#[derive(Clone, Debug)]
+pub enum Picture {
+    Mesh(Mesh),
+    Image(Image),
+}
+
+impl Picture {
+    pub fn draw(&self, ctx: &mut Context, param: DrawParam) -> GameResult {
+        match self {
+            Picture::Mesh(mesh) => mesh.draw(ctx, param),
+            Picture::Image(image) => image.draw(ctx, param),
+        }
+    }
 }
 
 pub struct ActionHudConfig {
     pub text: String,
-    pub icon: Box<dyn Drawable>,
+    pub icon: Picture,
     pub keycode: KeyCode,
 }
 
@@ -152,10 +167,12 @@ impl HudAssets {
         let gather_icon = Image::new(ctx, "/images/icons/gather.png")?;
         let return_icon = Image::new(ctx, "/images/icons/return.png")?;
 
+        let worker_icon = Image::new(ctx, "/images/icons/worker.png")?;
+
         Ok(Self {
             fighter: EntityHudConfig {
                 name: "Fighter".to_string(),
-                portrait: Mesh::new_rectangle(
+                portrait: Picture::Mesh(Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(
@@ -165,25 +182,15 @@ impl HudAssets {
                         PORTRAIT_DIMENSIONS[1] - 10.0,
                     ),
                     color,
-                )?,
+                )?),
             },
             worker: EntityHudConfig {
                 name: "Worker".to_string(),
-                portrait: Mesh::new_circle(
-                    ctx,
-                    DrawMode::fill(),
-                    [
-                        (PORTRAIT_DIMENSIONS[0]) / 2.0,
-                        (PORTRAIT_DIMENSIONS[1]) / 2.0,
-                    ],
-                    (PORTRAIT_DIMENSIONS[0] - 10.0) / 2.0,
-                    0.001,
-                    color,
-                )?,
+                portrait: Picture::Image(worker_icon),
             },
             barracks: EntityHudConfig {
                 name: "Barracks".to_string(),
-                portrait: Mesh::new_rectangle(
+                portrait: Picture::Mesh(Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(
@@ -193,11 +200,11 @@ impl HudAssets {
                         PORTRAIT_DIMENSIONS[1] - 10.0,
                     ),
                     color,
-                )?,
+                )?),
             },
             townhall: EntityHudConfig {
                 name: "Townhall".to_string(),
-                portrait: Mesh::new_rectangle(
+                portrait: Picture::Mesh(Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(
@@ -207,11 +214,11 @@ impl HudAssets {
                         (PORTRAIT_DIMENSIONS[1] - 10.0) * 0.85,
                     ),
                     color,
-                )?,
+                )?),
             },
             resource: EntityHudConfig {
                 name: "Resource location".to_string(),
-                portrait: Mesh::new_rectangle(
+                portrait: Picture::Mesh(Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
                     Rect::new(
@@ -221,7 +228,7 @@ impl HudAssets {
                         PORTRAIT_DIMENSIONS[1] - 10.0,
                     ),
                     color,
-                )?,
+                )?),
             },
             stop_icon,
             move_icon,
@@ -259,7 +266,7 @@ impl HudAssets {
                         training_config.cost,
                         training_config.duration.as_secs()
                     ),
-                    icon: Box::new(unit_config.portrait.clone()),
+                    icon: unit_config.portrait.clone(),
                     keycode,
                 }
             }
@@ -272,33 +279,33 @@ impl HudAssets {
                 let structure_config = self.entity(structure_type);
                 ActionHudConfig {
                     text: format!("Construct {}", &structure_config.name),
-                    icon: Box::new(structure_config.portrait.clone()),
+                    icon: structure_config.portrait.clone(),
                     keycode,
                 }
             }
             Action::Stop => ActionHudConfig {
                 text: "Stop".to_owned(),
-                icon: Box::new(self.stop_icon.clone()),
+                icon: Picture::Image(self.stop_icon.clone()),
                 keycode: KeyCode::S,
             },
             Action::Move => ActionHudConfig {
                 text: "Move".to_owned(),
-                icon: Box::new(self.move_icon.clone()),
+                icon: Picture::Image(self.move_icon.clone()),
                 keycode: KeyCode::M,
             },
             Action::Attack => ActionHudConfig {
                 text: "Attack".to_owned(),
-                icon: Box::new(self.attack_icon.clone()),
+                icon: Picture::Image(self.attack_icon.clone()),
                 keycode: KeyCode::A,
             },
             Action::GatherResource => ActionHudConfig {
                 text: "Gather".to_owned(),
-                icon: Box::new(self.gather_icon.clone()),
+                icon: Picture::Image(self.gather_icon.clone()),
                 keycode: KeyCode::G,
             },
             Action::ReturnResource => ActionHudConfig {
                 text: "Return".to_owned(),
-                icon: Box::new(self.return_icon.clone()),
+                icon: Picture::Image(self.return_icon.clone()),
                 keycode: KeyCode::R,
             },
         }
