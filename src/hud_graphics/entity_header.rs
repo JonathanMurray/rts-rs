@@ -35,22 +35,24 @@ impl EntityHeader {
         let portrait_pos = [position_on_screen[0] + 5.0, position_on_screen[1] + 5.0];
         let portrait = EntityPortrait::new(ctx, portrait_pos)?;
         let healthbar = Healthbar::new(
+            ctx,
             font,
             [
                 portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 5.0,
-                position_on_screen[1] + 5.0,
+                portrait_pos[1] + 5.0,
             ],
-        );
+        )?;
         let progress_bar = ProgressBar::new(
+            ctx,
             [
-                portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 5.0,
-                position_on_screen[1] + 35.0,
+                portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 30.0,
+                position_on_screen[1] + 50.0,
             ],
             font,
-        );
+        )?;
         let status_position_on_screen = [
             portrait_pos[0] + PORTRAIT_DIMENSIONS[0] + 5.0,
-            position_on_screen[1] + 30.0,
+            portrait_pos[1] + 50.0,
         ];
         let name_position_on_screen = [position_on_screen[0] + 10.0, position_on_screen[1] + 75.0];
         Ok(Self {
@@ -70,7 +72,6 @@ impl EntityHeader {
             ctx,
             content.current_health,
             content.max_health,
-            content.team,
         )?;
         self.portrait.draw(ctx, content.portrait, false)?;
         if let Some(status) = content.status {
@@ -78,8 +79,8 @@ impl EntityHeader {
                 .text(12.0, status)
                 .draw(ctx, self.status_position_on_screen)?;
         }
-        if let Some(progress) = content.progress {
-            self.progress_bar.draw(ctx, progress)?;
+        if let Some((progress, text)) = content.progress {
+            self.progress_bar.draw(ctx, progress, text)?;
         }
         self.font
             .text(17.5, content.name)
@@ -94,6 +95,6 @@ pub struct EntityHeaderContent<'a> {
     pub portrait: &'a Picture,
     pub name: String,
     pub status: Option<String>,
-    pub progress: Option<f32>,
+    pub progress: Option<(f32, String)>,
     pub team: Team,
 }

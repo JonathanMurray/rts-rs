@@ -130,17 +130,18 @@ impl HudGraphics {
                     }
                 }
                 if let EntityState::TrainingUnit(trained_entity_type) = entity.state {
-                    entity_status_text = Some(format!("[training {:?}]", trained_entity_type));
+                    //entity_status_text = Some(format!("[training {:?}]", trained_entity_type));
                     let training = entity.training.as_ref().unwrap();
-                    progress = Some(training.progress(trained_entity_type).unwrap());
+                    let training_progress = training.progress(trained_entity_type).unwrap();
+                    progress = Some((training_progress, "% Training".to_owned()));
                 }
             }
             if entity.entity_type == EntityType::Resource {
                 entity_status_text = Some("[plenty of resources]".to_owned());
             }
             if let EntityState::UnderConstruction(remaining, total) = entity.state {
-                entity_status_text = Some("[under construction]".to_owned());
-                progress = Some((total - remaining).as_secs_f32() / total.as_secs_f32());
+                let construction_progress = (total - remaining).as_secs_f32() / total.as_secs_f32();
+                progress = Some((construction_progress, "% Construction".to_owned()));
             }
 
             let (current_health, max_health) = entity

@@ -1,4 +1,4 @@
-use ggez::graphics::{Color, DrawParam, Drawable, Font, Text};
+use ggez::graphics::{ DrawParam, Drawable, Font, Rect, Text};
 use ggez::{Context, GameResult};
 
 /// This module exists to avoid getting blurry text when scaling up game window. Images and meshes
@@ -9,29 +9,25 @@ use ggez::{Context, GameResult};
 const SCALING: f32 = 3.0;
 
 #[derive(Copy, Clone)]
-pub struct SharpFont {
-    font: Font,
-}
+pub struct SharpFont(Font);
 
 impl SharpFont {
     pub fn new(font: Font) -> Self {
-        Self { font }
+        Self(font)
     }
 
     pub fn text(&self, size: f32, text: impl Into<String>) -> SharpText {
-        let text = Text::new((text.into(), self.font, size * SCALING));
-        SharpText { text }
+        let text = Text::new((text.into(), self.0, size * SCALING));
+        SharpText(text)
     }
 }
 
 #[derive(Debug)]
-pub struct SharpText {
-    text: Text,
-}
+pub struct SharpText(Text);
 
 impl SharpText {
     pub fn draw(&self, ctx: &mut Context, position: [f32; 2]) -> GameResult {
-        self.text.draw(
+        self.0.draw(
             ctx,
             DrawParam::default()
                 .scale([1.0 / SCALING, 1.0 / SCALING])
@@ -39,10 +35,9 @@ impl SharpText {
         )
     }
 
-    pub fn with_color(mut self, color: Color) -> Self {
-        for fragment in self.text.fragments_mut() {
-            fragment.color = Some(color);
-        }
-        self
+    pub fn dimensions(&self, ctx: &Context) -> Rect {
+        let mut rect = self.0.dimensions(ctx);
+        rect.scale(1.0 / SCALING, 1.0 / SCALING);
+        rect
     }
 }
