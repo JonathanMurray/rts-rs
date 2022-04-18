@@ -112,11 +112,43 @@ impl MovementCommandIndicator {
     }
 }
 
+#[derive(Copy, Clone)]
+pub enum HighlightType {
+    Hostile,
+    Friendly,
+}
+
+pub struct EntityHighlight {
+    entity_id: EntityId,
+    remaining: Duration,
+    pub highlight_type: HighlightType,
+}
+
+impl EntityHighlight {
+    pub fn new(entity_id: EntityId, highlight_type: HighlightType) -> Self {
+        Self {
+            entity_id,
+            remaining: Duration::from_millis(800),
+            highlight_type,
+        }
+    }
+
+    pub fn update(&mut self, dt: Duration) {
+        self.remaining = self.remaining.saturating_sub(dt);
+    }
+
+    pub fn is_visible(&self) -> bool {
+        let blink_ms = 200;
+        (self.remaining.as_millis() / blink_ms) % 2 == 0
+    }
+}
+
 pub struct PlayerState {
     selected_entity_ids: Vec<EntityId>,
     cursor_state: Cell<CursorState>,
     camera: RefCell<Camera>,
     movement_command_indicator: RefCell<MovementCommandIndicator>,
+    entity_highlights: RefCell<Vec<EntityHighlight>>,
 }
 
 impl PlayerState {
@@ -126,6 +158,7 @@ impl PlayerState {
             cursor_state: Cell::new(CursorState::Default),
             camera: RefCell::new(camera),
             movement_command_indicator: RefCell::new(MovementCommandIndicator::new()),
+            entity_highlights: RefCell::new(vec![]),
         }
     }
 
@@ -176,6 +209,11 @@ impl PlayerState {
     fn update(&mut self, ctx: &mut Context, dt: Duration) {
         self.camera.borrow_mut().update(ctx, dt);
         self.movement_command_indicator.borrow_mut().update(dt);
+        let mut highlights = self.entity_highlights.borrow_mut();
+        for highlight in highlights.iter_mut() {
+            highlight.update(dt);
+        }
+        highlights.retain(|highlight| !highlight.remaining.is_zero());
     }
 
     pub fn camera_position_in_world(&self) -> [f32; 2] {
@@ -455,6 +493,12 @@ impl Game {
         gatherer: RefMut<Entity>,
         structure: Option<Ref<Entity>>,
     ) {
+        if let Some(structure) = structure.as_ref() {
+            self.player_state
+                .entity_highlights
+                .borrow_mut()
+                .push(EntityHighlight::new(structure.id, HighlightType::Friendly));
+        }
         self.core.issue_command(
             Command::ReturnResource(ReturnResourceCommand {
                 gatherer,
@@ -485,7 +529,7 @@ impl Game {
         );
     }
 
-    fn player_issue_all_selected_attack(&self, world_pos: [u32; 2]) {
+    fn player_issue_all_selected_attack(&mut self, world_pos: [u32; 2]) {
         if let Some(victim) = self.enemy_at_position(world_pos) {
             for attacker in self.selected_player_entities() {
                 self._player_issue_attack(attacker.borrow_mut(), victim.borrow());
@@ -496,7 +540,10 @@ impl Game {
     }
 
     fn _player_issue_attack(&self, attacker: RefMut<Entity>, victim: Ref<Entity>) {
-        // TODO: highlight attacked entity temporarily
+        self.player_state
+            .entity_highlights
+            .borrow_mut()
+            .push(EntityHighlight::new(victim.id, HighlightType::Hostile));
         self.core.issue_command(
             Command::Attack(AttackCommand { attacker, victim }),
             Team::Player,
@@ -535,6 +582,10 @@ impl Game {
     }
 
     fn _player_issue_gather_resource(&self, gatherer: RefMut<Entity>, resource: Ref<Entity>) {
+        self.player_state
+            .entity_highlights
+            .borrow_mut()
+            .push(EntityHighlight::new(resource.id, HighlightType::Friendly));
         self.core.issue_command(
             Command::GatherResource(GatherResourceCommand { gatherer, resource }),
             Team::Player,
@@ -667,7 +718,6 @@ impl EventHandler for Game {
                 .world_to_screen(entity.world_pixel_position());
 
             if self.player_state.selected_entity_ids.contains(entity_id) {
-
                 if let EntityState::Constructing(structure_type, grid_pos) = entity.state {
                     let screen_coords = self.player_state.world_to_screen(grid_to_world(grid_pos));
                     let size = *self.core.structure_size(&structure_type);
@@ -695,6 +745,20 @@ impl EventHandler for Game {
             if self.player_state.selected_entity_ids.contains(&entity.id) {
                 self.assets
                     .draw_selection(ctx, entity.size(), entity.team, *screen_coords)?;
+            }
+            if let Some(highlight) = self
+                .player_state
+                .entity_highlights
+                .borrow()
+                .iter()
+                .find(|highlight| highlight.entity_id == entity.id && highlight.is_visible())
+            {
+                Assets::draw_highlight(
+                    ctx,
+                    entity.size(),
+                    *screen_coords,
+                    highlight.highlight_type,
+                )?;
             }
         }
 

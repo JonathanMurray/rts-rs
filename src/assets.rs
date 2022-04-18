@@ -11,7 +11,7 @@ use std::collections::HashMap;
 
 use crate::data::{self, Animation, EntityType};
 use crate::entities::{Entity, Team};
-use crate::game::{CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
+use crate::game::{HighlightType, CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
 use crate::grid::Grid;
 use crate::map::TileId;
 
@@ -87,6 +87,30 @@ impl Assets {
             Entry::Vacant(v) => v.insert(create_selection_mesh(ctx, size, team)?),
         };
         mesh.draw(ctx, DrawParam::new().dest(screen_coords))
+    }
+
+    pub fn draw_highlight(
+        ctx: &mut Context,
+        size: [u32; 2],
+        screen_coords: [f32; 2],
+        highlight_type: HighlightType,
+    ) -> GameResult {
+        let color = match highlight_type {
+            HighlightType::Hostile => Color::new(1.0, 0.2, 0.2, 1.0),
+            HighlightType::Friendly => Color::new(0.2, 0.7, 0.2, 1.0),
+        };
+        Mesh::new_rectangle(
+            ctx,
+            DrawMode::stroke(1.0),
+            Rect::new(
+                screen_coords[0],
+                screen_coords[1],
+                size[0] as f32 * CELL_PIXEL_SIZE[0],
+                size[1] as f32 * CELL_PIXEL_SIZE[1],
+            ),
+            color,
+        )?
+        .draw(ctx, DrawParam::default())
     }
 
     pub fn draw_construction_outline(
