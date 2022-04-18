@@ -295,7 +295,10 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
             matches!(state, EntityState::Attacking(_))
         }
         Action::GatherResource => {
-            matches!(state, EntityState::GatheringResource(_))
+            matches!(
+                state,
+                EntityState::GatheringResource(_) | EntityState::MovingToResource(_)
+            )
         }
         Action::ReturnResource => {
             matches!(state, EntityState::ReturningResource(..))

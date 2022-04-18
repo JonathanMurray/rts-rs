@@ -23,6 +23,7 @@ pub enum EntityState {
     Constructing(EntityType, [u32; 2]),
     Moving,
     Attacking(EntityId),
+    MovingToResource(EntityId),
     GatheringResource(EntityId),
     ReturningResource(EntityId),
     UnderConstruction(Duration, Duration),
@@ -481,12 +482,36 @@ impl Combat {
 #[derive(Debug)]
 pub struct Gathering {
     held_resource: Option<EntityId>,
+    countdown: Duration,
 }
 
 impl Gathering {
     fn new() -> Self {
         Self {
             held_resource: None,
+            countdown: Duration::ZERO,
+        }
+    }
+
+    pub fn start_gathering(&mut self) {
+        self.countdown = Duration::from_secs_f32(1.5);
+    }
+
+    pub fn make_progress_on_gathering(
+        &mut self,
+        dt: Duration,
+        resource_id: EntityId,
+    ) -> GatheringProgress {
+        self.countdown = self.countdown.saturating_sub(dt);
+        if self.countdown.is_zero() {
+            assert!(
+                self.held_resource.is_none(),
+                "Can only hold one resource at a time"
+            );
+            self.held_resource = Some(resource_id);
+            GatheringProgress::Done
+        } else {
+            GatheringProgress::InProgress
         }
     }
 
@@ -494,19 +519,17 @@ impl Gathering {
         self.held_resource.is_some()
     }
 
-    pub fn pick_up_resource(&mut self, resource_id: EntityId) {
-        assert!(
-            self.held_resource.is_none(),
-            "Can only hold one resource at a time"
-        );
-        self.held_resource = Some(resource_id);
-    }
-
     pub fn drop_resource(&mut self) -> EntityId {
         self.held_resource
             .take()
             .expect("Can't drop a resource that's not being held")
     }
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum GatheringProgress {
+    Done,
+    InProgress,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]

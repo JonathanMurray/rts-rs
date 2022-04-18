@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use crate::data::{self, EntityType};
 use crate::entities::{
-    Entity, EntityId, EntityState, PhysicalType, Team, TrainingConfig, TrainingPerformStatus,
-    TrainingUpdateStatus,
+    Entity, EntityId, EntityState, GatheringProgress, PhysicalType, Team, TrainingConfig,
+    TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
@@ -140,11 +140,11 @@ impl Core {
         }
 
         //-------------------------------
-        //     GATHERING RESOURCES
+        //     MOVING TO RESOURCE
         //-------------------------------
         for (_entity_id, entity) in &self.entities {
             let entity = entity.borrow_mut();
-            if let EntityState::GatheringResource(resource_id) = entity.state {
+            if let EntityState::MovingToResource(resource_id) = entity.state {
                 let mut gatherer = entity;
                 if gatherer.unit_mut().sub_cell_movement.is_ready() {
                     let resource = self
@@ -152,16 +152,32 @@ impl Core {
                         .unwrap_or_else(|| panic!("Resource not found: {:?}", resource_id));
                     let resource = resource.borrow();
                     if is_unit_within_melee_range_of(gatherer.position, resource.cell_rect()) {
+                        gatherer.state = EntityState::GatheringResource(resource_id);
                         let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
-                        gathering.pick_up_resource(resource_id);
-                        self.unit_return_resource(gatherer, None);
+                        gathering.start_gathering();
                     }
                 }
             }
         }
 
         //-------------------------------
-        //     RETURNING RESOURCES
+        //     GATHERING RESOURCE
+        //-------------------------------
+        for (_entity_id, entity) in &self.entities {
+            let entity = entity.borrow_mut();
+            if let EntityState::GatheringResource(resource_id) = entity.state {
+                let mut gatherer = entity;
+                let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
+                if let GatheringProgress::Done =
+                    gathering.make_progress_on_gathering(dt, resource_id)
+                {
+                    self.unit_return_resource(gatherer, None);
+                }
+            }
+        }
+
+        //-------------------------------
+        //     RETURNING RESOURCE
         //-------------------------------
         for (_entity_id, entity) in &self.entities {
             let entity = entity.borrow_mut();
@@ -182,7 +198,7 @@ impl Core {
                                 &self.obstacle_grid,
                             ) {
                                 returner.unit_mut().movement_plan.set(plan);
-                                returner.state = EntityState::GatheringResource(resource_id);
+                                returner.state = EntityState::MovingToResource(resource_id);
                             } else {
                                 returner.state = EntityState::Idle;
                             }
@@ -469,7 +485,7 @@ impl Core {
                     );
                     return;
                 }
-                gatherer.state = EntityState::GatheringResource(resource.id);
+                gatherer.state = EntityState::MovingToResource(resource.id);
                 if let Some(plan) = pathfind::find_path(
                     gatherer.position,
                     Destination::AdjacentToEntity(resource.cell_rect()),
