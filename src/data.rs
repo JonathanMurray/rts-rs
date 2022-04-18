@@ -175,22 +175,13 @@ impl HudAssets {
         let return_icon = Image::new(ctx, "/images/icons/return.png")?;
 
         let worker_icon = Image::new(ctx, "/images/icons/worker.png")?;
+        let fighter_icon = Image::new(ctx, "/images/icons/fighter.png")?;
         let tech_lab_icon = Image::new(ctx, "/images/icons/tech_lab.png")?;
 
         Ok(Self {
             fighter: EntityHudConfig {
                 name: "Fighter".to_string(),
-                portrait: Picture::Mesh(Mesh::new_rectangle(
-                    ctx,
-                    DrawMode::fill(),
-                    Rect::new(
-                        5.0,
-                        5.0,
-                        PORTRAIT_DIMENSIONS[0] - 10.0,
-                        PORTRAIT_DIMENSIONS[1] - 10.0,
-                    ),
-                    color,
-                )?),
+                portrait: Picture::Image(fighter_icon),
             },
             worker: EntityHudConfig {
                 name: "Worker".to_string(),
@@ -332,31 +323,8 @@ fn create_fighter(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let size = [CELL_PIXEL_SIZE[0] * 0.7, CELL_PIXEL_SIZE[1] * 0.8];
-    let rect = Rect::new(
-        (CELL_PIXEL_SIZE[0] - size[0]) / 2.0,
-        (CELL_PIXEL_SIZE[1] - size[1]) / 2.0,
-        size[0],
-        size[1],
-    );
-    let colors = HashMap::from([
-        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
-        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
-    ]);
-    for (team, color) in colors {
-        let mesh = MeshBuilder::new()
-            .rounded_rectangle(DrawMode::fill(), rect, 5.0, color)?
-            .build(ctx)?;
-        let image = images::mesh_into_image(ctx, mesh)?;
-        sprite_batches.insert(
-            (EntityType::Fighter, team),
-            Animation::Static(StaticImage {
-                image,
-                origin: [0.0, 0.0],
-            }),
-        );
-    }
-    Ok(())
+    let image = Image::new(ctx, "/images/fighter_sheet.png")?;
+    unit_sheet(ctx, sprite_batches, EntityType::Fighter, image)
 }
 
 // Sprites must be designed with these reserved colors in mind.
@@ -391,6 +359,15 @@ fn create_worker(
     sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
     let image = Image::new(ctx, "/images/worker_sheet.png")?;
+    unit_sheet(ctx, sprite_batches, EntityType::Worker, image)
+}
+
+fn unit_sheet(
+    ctx: &mut Context,
+    sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
+    entity_type: EntityType,
+    image: Image,
+) -> GameResult {
     let rgba = image.to_rgba8(ctx)?;
     for (team, color_family) in TEAM_COLOR_FAMILIES {
         let team_image = recolor(ctx, [image.width(), image.height()], &rgba, &color_family)?;
@@ -421,7 +398,7 @@ fn create_worker(
 
         // TODO specify idle-pose
         sprite_batches.insert(
-            (EntityType::Worker, team),
+            (entity_type, team),
             Animation::Tilesheet(Tilesheet {
                 sheet: team_image,
                 origin: [0.0, 16.0],
