@@ -14,4 +14,5 @@ mod grid;
 mod hud_graphics;
 mod images;
 mod pathfind;
+mod player;
 mod text;

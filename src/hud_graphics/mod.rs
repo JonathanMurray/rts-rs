@@ -22,8 +22,9 @@ use self::minimap::Minimap;
 use crate::core::{ObstacleType, TeamState};
 use crate::data::{EntityType, HudAssets};
 use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
-use crate::game::{CursorState, PlayerState, MAX_NUM_SELECTED_ENTITIES};
+use crate::game::MAX_NUM_SELECTED_ENTITIES;
 use crate::grid::Grid;
+use crate::player::{CursorState, PlayerState};
 use crate::text::{SharpFont, SharpText};
 
 const NUM_BUTTONS: usize = NUM_ENTITY_ACTIONS;

@@ -5,9 +5,9 @@ use std::time::Duration;
 
 use crate::data::Picture;
 use crate::entities::Action;
-use crate::game::CursorState;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 use crate::hud_graphics::HUD_BORDER_COLOR;
+use crate::player::CursorState;
 
 pub struct Button {
     action: Option<Action>,

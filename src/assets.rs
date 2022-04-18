@@ -11,9 +11,10 @@ use std::collections::HashMap;
 
 use crate::data::{self, Animation, EntityType};
 use crate::entities::{Entity, Team};
-use crate::game::{HighlightType, CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
+use crate::game::{CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
 use crate::grid::Grid;
 use crate::map::TileId;
+use crate::player::HighlightType;
 
 const COLOR_GRID: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 
