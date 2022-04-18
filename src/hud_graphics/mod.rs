@@ -282,7 +282,7 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
         Action::Train(trained_entity_type, _) => {
             state == EntityState::TrainingUnit(trained_entity_type)
         }
-        Action::Construct(structure_type) => {
+        Action::Construct(structure_type, _) => {
             if let EntityState::Constructing(constructing_type, _) = state {
                 structure_type == constructing_type
             } else {
@@ -356,8 +356,9 @@ impl Tooltip {
                         .text(TOOLTIP_FONT_SIZE, &config.text)
                         .draw(ctx, self.position)?;
                 }
-                TooltipText::Action(Action::Construct(structure_type)) => {
-                    let config = assets.action(Action::Construct(structure_type));
+                TooltipText::Action(Action::Construct(structure_type, construction_config)) => {
+                    let config =
+                        assets.action(Action::Construct(structure_type, construction_config));
                     self.font
                         .text(TOOLTIP_FONT_SIZE, &config.text)
                         .draw(ctx, self.position)?;

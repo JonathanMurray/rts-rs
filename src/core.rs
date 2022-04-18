@@ -11,6 +11,7 @@ use crate::entities::{
 use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
 use std::borrow::BorrowMut;
+use std::ops::Deref;
 
 pub struct Core {
     teams: HashMap<Team, RefCell<TeamState>>,
@@ -226,10 +227,25 @@ impl Core {
                         }
                     }
                     if sufficient_space {
+                        let constructions_options =
+                            entity.unit().construction_options.as_ref().unwrap();
+                        let construction_time = constructions_options
+                            .get(&structure_type)
+                            .unwrap()
+                            .construction_time;
                         builders_to_remove.push(*entity_id);
-                        structures_to_add.push((entity.team, structure_position, structure_type));
+                        structures_to_add.push((
+                            entity.team,
+                            structure_position,
+                            structure_type,
+                            construction_time,
+                        ));
                     } else {
                         println!("There's not enough space for the structure, so builder goes back to idling");
+                        let construction_options =
+                            entity.unit_mut().construction_options.as_ref().unwrap();
+                        let config = construction_options.get(&structure_type).unwrap();
+                        self.team_state(&entity.team).borrow_mut().resources += config.cost;
                         entity.state = EntityState::Idle;
                     }
                 }
@@ -249,8 +265,10 @@ impl Core {
                 .unwrap_or(false);
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
             if is_dead || is_transforming_into_structure {
+                Core::on_entity_end_state(&entity, &self.teams);
                 if entity.is_solid {
-                    self.obstacle_grid.set_area(entity.cell_rect(), None);
+                    let cell_rect = entity.cell_rect();
+                    self.obstacle_grid.set_area(cell_rect, None);
                 }
                 removed_entities.push(*entity_id);
                 false
@@ -264,9 +282,8 @@ impl Core {
         //-------------------------------
         // Now that the builder has been removed, and no longer occupies a cell, the structure can
         // be placed.
-        for (team, position, structure_type) in structures_to_add {
+        for (team, position, structure_type, construction_time) in structures_to_add {
             let mut new_structure = data::create_entity(structure_type, position, team);
-            let construction_time = Duration::from_secs(4); //TODO should come from entity config
             new_structure.state =
                 EntityState::UnderConstruction(construction_time, construction_time);
             self.add_entity(new_structure);
@@ -322,7 +339,22 @@ impl Core {
         }
     }
 
+    fn on_entity_end_state(entity: &Entity, teams: &HashMap<Team, RefCell<TeamState>>) {
+        if let EntityState::Constructing(structure_type, ..) = entity.state {
+            let construction_options = entity.unit().construction_options.as_ref().unwrap();
+            let config = construction_options.get(&structure_type).unwrap();
+            let mut team_state = teams.get(&entity.team).unwrap().borrow_mut();
+            team_state.resources += config.cost;
+            println!(
+                "Repaying {} to {:?} due to cancelled construction",
+                config.cost, entity.team
+            );
+        }
+    }
+
     pub fn issue_command(&self, command: Command, issuing_team: Team) {
+        Core::on_entity_end_state(command.actor().deref(), &self.teams);
+
         match command {
             Command::Train(TrainCommand {
                 mut trainer,
@@ -351,17 +383,28 @@ impl Core {
                 structure_type,
             }) => {
                 assert_eq!(builder.team, issuing_team);
-                builder.state = EntityState::Constructing(structure_type, structure_position);
-                let structure_rect = CellRect {
-                    position: structure_position,
-                    size: *self.structure_sizes.get(&structure_type).unwrap(),
-                };
-                if let Some(plan) = pathfind::find_path(
-                    builder.position,
-                    Destination::AdjacentToEntity(structure_rect),
-                    &self.obstacle_grid,
-                ) {
-                    builder.unit_mut().movement_plan.set(plan);
+                let unit = builder.unit_mut();
+                let config = unit
+                    .construction_options
+                    .as_mut()
+                    .unwrap()
+                    .get_mut(&structure_type)
+                    .unwrap();
+                let mut team_state = self.teams.get(&issuing_team).unwrap().borrow_mut();
+                if team_state.resources >= config.cost {
+                    team_state.resources -= config.cost;
+                    builder.state = EntityState::Constructing(structure_type, structure_position);
+                    let structure_rect = CellRect {
+                        position: structure_position,
+                        size: *self.structure_sizes.get(&structure_type).unwrap(),
+                    };
+                    if let Some(plan) = pathfind::find_path(
+                        builder.position,
+                        Destination::AdjacentToEntity(structure_rect),
+                        &self.obstacle_grid,
+                    ) {
+                        builder.unit_mut().movement_plan.set(plan);
+                    }
                 }
             }
 
@@ -597,6 +640,20 @@ pub enum Command<'a> {
     Attack(AttackCommand<'a>),
     GatherResource(GatherResourceCommand<'a>),
     ReturnResource(ReturnResourceCommand<'a>),
+}
+
+impl<'a> Command<'a> {
+    fn actor(&self) -> &RefMut<'a, Entity> {
+        match self {
+            Command::Train(TrainCommand { trainer, .. }) => trainer,
+            Command::Construct(ConstructCommand { builder, .. }) => builder,
+            Command::Stop(StopCommand { entity }) => entity,
+            Command::Move(MoveCommand { unit, .. }) => unit,
+            Command::Attack(AttackCommand { attacker, .. }) => attacker,
+            Command::GatherResource(GatherResourceCommand { gatherer, .. }) => gatherer,
+            Command::ReturnResource(ReturnResourceCommand { gatherer, .. }) => gatherer,
+        }
+    }
 }
 
 #[derive(Debug)]

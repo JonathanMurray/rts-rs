@@ -275,7 +275,7 @@ impl Game {
                     Team::Player,
                 );
             }
-            Action::Construct(structure_type) => {
+            Action::Construct(structure_type, _) => {
                 self.set_player_cursor_state(ctx, CursorState::PlacingStructure(structure_type));
             }
             Action::Stop => {

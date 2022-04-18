@@ -70,7 +70,11 @@ impl WorldInitData {
         match map_type {
             MapType::Empty => {}
             MapType::Small => {
-                entities.push(data::create_entity(EntityType::Worker, [7, 7], Team::Enemy));
+                entities.push(data::create_entity(
+                    EntityType::Fighter,
+                    [7, 7],
+                    Team::Enemy,
+                ));
                 entities.push(data::create_entity(
                     EntityType::TechLab,
                     [1, 2],

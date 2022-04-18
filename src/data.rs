@@ -6,8 +6,8 @@ use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
 use crate::entities::{
-    Action, AnimationState, Direction, Entity, EntityConfig, PhysicalTypeConfig, Team,
-    TrainingConfig, NUM_ENTITY_ACTIONS,
+    Action, AnimationState, ConstructionConfig, Direction, Entity, EntityConfig,
+    PhysicalTypeConfig, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
 use crate::game::CELL_PIXEL_SIZE;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
@@ -67,8 +67,20 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 Some(Action::Stop),
                 Some(Action::GatherResource),
                 Some(Action::ReturnResource),
-                Some(Action::Construct(EntityType::Barracks)),
-                Some(Action::Construct(EntityType::TechLab)),
+                Some(Action::Construct(
+                    EntityType::Barracks,
+                    ConstructionConfig {
+                        construction_time: Duration::from_secs_f32(10.0),
+                        cost: 2,
+                    },
+                )),
+                Some(Action::Construct(
+                    EntityType::TechLab,
+                    ConstructionConfig {
+                        construction_time: Duration::from_secs_f32(5.0),
+                        cost: 1,
+                    },
+                )),
             ],
         },
         EntityType::Barracks => EntityConfig {
@@ -261,7 +273,7 @@ impl HudAssets {
                     keycode,
                 }
             }
-            Action::Construct(structure_type) => {
+            Action::Construct(structure_type, construction_config) => {
                 let keycode = match structure_type {
                     EntityType::Barracks => KeyCode::B,
                     EntityType::TechLab => KeyCode::T,
@@ -269,7 +281,12 @@ impl HudAssets {
                 };
                 let structure_config = self.entity(structure_type);
                 ActionHudConfig {
-                    text: format!("Construct {}", &structure_config.name),
+                    text: format!(
+                        "Construct {} ({} fuel, {}s)",
+                        &structure_config.name,
+                        construction_config.cost,
+                        construction_config.construction_time.as_secs()
+                    ),
                     icon: structure_config.portrait.clone(),
                     keycode,
                 }

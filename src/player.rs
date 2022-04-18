@@ -1,4 +1,3 @@
-use ggez;
 use ggez::input::mouse::{self, CursorIcon};
 use ggez::Context;
 

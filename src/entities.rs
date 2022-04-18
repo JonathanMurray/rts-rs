@@ -90,25 +90,37 @@ impl Entity {
 
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
+        let mut construction_options: HashMap<EntityType, ConstructionConfig> = Default::default();
         let mut can_fight = false;
         let mut can_gather = false;
         for action in config.actions.into_iter().flatten() {
             match action {
-                Action::Train(entity_type, config) => {
-                    training_options.insert(entity_type, config);
+                Action::Train(unit_type, config) => {
+                    training_options.insert(unit_type, config);
+                }
+                Action::Construct(structure_type, config) => {
+                    construction_options.insert(structure_type, config);
                 }
                 Action::Attack => can_fight = true,
                 Action::GatherResource => can_gather = true,
+
                 _ => {}
             }
         }
         let training =
             (!training_options.is_empty()).then(|| TrainingComponent::new(training_options));
+        let construction_options = (!construction_options.is_empty()).then(|| construction_options);
         let physical_type = match config.physical_type {
             PhysicalTypeConfig::MovementCooldown(cooldown) => {
                 let combat = can_fight.then(Combat::new);
                 let gathering = can_gather.then(Gathering::new);
-                PhysicalType::Unit(UnitComponent::new(position, cooldown, combat, gathering))
+                PhysicalType::Unit(UnitComponent::new(
+                    position,
+                    cooldown,
+                    combat,
+                    gathering,
+                    construction_options,
+                ))
             }
             PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
         };
@@ -158,6 +170,13 @@ impl Entity {
             y: pixel_y,
             w: (grid_w as f32) * CELL_PIXEL_SIZE[0],
             h: (grid_h as f32) * CELL_PIXEL_SIZE[1],
+        }
+    }
+
+    pub fn unit(&self) -> &UnitComponent {
+        match &self.physical_type {
+            PhysicalType::Unit(unit) => unit,
+            PhysicalType::Structure { .. } => panic!("Not a unit"),
         }
     }
 
@@ -215,6 +234,7 @@ pub struct UnitComponent {
     pub direction: Direction,
     pub combat: Option<Combat>,
     pub gathering: Option<Gathering>,
+    pub construction_options: Option<HashMap<EntityType, ConstructionConfig>>,
 }
 
 impl UnitComponent {
@@ -223,6 +243,7 @@ impl UnitComponent {
         movement_cooldown: Duration,
         combat: Option<Combat>,
         gathering: Option<Gathering>,
+        construction_options: Option<HashMap<EntityType, ConstructionConfig>>,
     ) -> Self {
         Self {
             sub_cell_movement: SubCellMovement::new(position, movement_cooldown),
@@ -230,6 +251,7 @@ impl UnitComponent {
             direction: Direction::South,
             combat,
             gathering,
+            construction_options,
         }
     }
 
@@ -488,9 +510,15 @@ impl Gathering {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+pub struct ConstructionConfig {
+    pub construction_time: Duration,
+    pub cost: u32,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Action {
     Train(EntityType, TrainingConfig),
-    Construct(EntityType),
+    Construct(EntityType, ConstructionConfig),
     Stop,
     Move,
     Attack,

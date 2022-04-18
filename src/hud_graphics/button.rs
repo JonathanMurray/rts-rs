@@ -73,7 +73,7 @@ impl Button {
                 CursorState::SelectingAttackTarget => action == Action::Attack,
                 CursorState::SelectingMovementDestination => action == Action::Move,
                 CursorState::PlacingStructure(structure_type) => {
-                    action == Action::Construct(structure_type)
+                    matches!(action, Action::Construct(s_type, _) if s_type == structure_type)
                 }
                 CursorState::SelectingResourceTarget => action == Action::GatherResource,
                 CursorState::DraggingSelectionArea(_) => false,
