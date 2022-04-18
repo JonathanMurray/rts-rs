@@ -17,9 +17,7 @@ use crate::core::{
 };
 use crate::data::EntityType;
 use crate::enemy_ai::EnemyPlayerAi;
-use crate::entities::{
-    Action, Entity, EntityId, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS,
-};
+use crate::entities::{Action, Category, Entity, EntityId, EntityState, Team, NUM_ENTITY_ACTIONS};
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 use crate::map::{MapConfig, WorldInitData};
 use crate::player::{CursorState, EntityHighlight, HighlightType, PlayerState};
@@ -182,7 +180,7 @@ impl Game {
     ) -> Option<&RefCell<Entity>> {
         self.core.entities().iter().find_map(|(_id, entity)| {
             let entity_ref = entity.borrow();
-            if let PhysicalType::Structure { .. } = &entity_ref.physical_type {
+            if let Category::Structure { .. } = &entity_ref.category {
                 if entity_ref.cell_rect().contains(clicked_world_pos)
                     && entity_ref.team == Team::Player
                 {
@@ -301,8 +299,8 @@ impl Game {
         let world_pos = world_to_grid(world_pixel_coords);
         for entity in self.selected_player_entities() {
             let entity_ref = entity.borrow();
-            match &entity_ref.physical_type {
-                PhysicalType::Unit(unit) => {
+            match &entity_ref.category {
+                Category::Unit(unit) => {
                     if unit.combat.is_some() {
                         if let Some(victim) = self.enemy_at_position(world_pos) {
                             drop(entity_ref);
@@ -331,9 +329,10 @@ impl Game {
                     drop(entity_ref);
                     self._player_issue_movement(entity.borrow_mut(), world_pixel_coords);
                 }
-                PhysicalType::Structure { .. } => {
+                Category::Structure { .. } => {
                     println!("Structures have no right-click functionality yet")
                 }
+                Category::Resource { .. } => {}
             }
         }
     }
@@ -582,12 +581,17 @@ impl EventHandler for Game {
         }
 
         for (screen_coords, entity) in &entities_to_draw {
-            if matches!(entity.physical_type, PhysicalType::Structure { .. }) {
+            if matches!(entity.category, Category::Structure { .. }) {
                 self.assets.draw_entity(ctx, entity, *screen_coords)?;
             }
         }
         for (screen_coords, entity) in &entities_to_draw {
-            if matches!(entity.physical_type, PhysicalType::Unit { .. }) {
+            if matches!(entity.category, Category::Resource { .. }) {
+                self.assets.draw_entity(ctx, entity, *screen_coords)?;
+            }
+        }
+        for (screen_coords, entity) in &entities_to_draw {
+            if matches!(entity.category, Category::Unit { .. }) {
                 self.assets.draw_entity(ctx, entity, *screen_coords)?;
             }
         }

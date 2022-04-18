@@ -21,7 +21,7 @@ use self::group_header::GroupHeader;
 use self::minimap::Minimap;
 use crate::core::{ObstacleType, TeamState};
 use crate::data::{EntityType, HudAssets};
-use crate::entities::{Action, Entity, EntityState, PhysicalType, Team, NUM_ENTITY_ACTIONS};
+use crate::entities::{Action, Category, Entity, EntityState, Team, NUM_ENTITY_ACTIONS};
 use crate::game::MAX_NUM_SELECTED_ENTITIES;
 use crate::grid::Grid;
 use crate::player::{CursorState, PlayerState};
@@ -123,7 +123,7 @@ impl HudGraphics {
             let mut entity_status_text = None;
             let mut progress = None;
             if entity.team == Team::Player {
-                if let PhysicalType::Unit(unit) = &entity.physical_type {
+                if let Category::Unit(unit) = &entity.category {
                     if let Some(gathering) = unit.gathering.as_ref() {
                         if gathering.is_carrying() {
                             entity_status_text = Some("[carrying fuel]".to_owned());
@@ -138,7 +138,8 @@ impl HudGraphics {
                 }
             }
             if entity.entity_type == EntityType::FuelRift {
-                entity_status_text = Some("[plenty of fuel]".to_owned());
+                let remaining = *entity.resource_remaining();
+                entity_status_text = Some(format!("[remaining fuel: {}]", remaining));
             }
             if let EntityState::UnderConstruction(remaining, total) = entity.state {
                 let construction_progress = (total - remaining).as_secs_f32() / total.as_secs_f32();

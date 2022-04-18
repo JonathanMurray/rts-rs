@@ -6,8 +6,8 @@ use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
 use crate::entities::{
-    Action, AnimationState, ConstructionConfig, Direction, Entity, EntityConfig,
-    PhysicalTypeConfig, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
+    Action, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity, EntityConfig,
+    Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
 use crate::game::CELL_PIXEL_SIZE;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
@@ -32,11 +32,11 @@ pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
     let structure_types = [EntityType::Barracks, EntityType::TechLab];
     for structure_type in structure_types {
         let config = entity_config(structure_type);
-        let size = match config.physical_type {
-            PhysicalTypeConfig::MovementCooldown(_) => {
+        let size = match config.category {
+            CategoryConfig::StructureSize(size) => size,
+            _ => {
                 panic!("{:?} is not a structure", structure_type)
             }
-            PhysicalTypeConfig::StructureSize(size) => size,
         };
         map.insert(structure_type, size);
     }
@@ -47,7 +47,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
     match entity_type {
         EntityType::Fighter => EntityConfig {
             max_health: Some(3),
-            physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
+            category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(600)),
             actions: [
                 Some(Action::Move),
                 Some(Action::Stop),
@@ -59,7 +59,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
         },
         EntityType::Worker => EntityConfig {
             max_health: Some(5),
-            physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
+            category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(900)),
             actions: [
                 Some(Action::Move),
                 Some(Action::Stop),
@@ -83,7 +83,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
         },
         EntityType::Barracks => EntityConfig {
             max_health: Some(3),
-            physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
+            category: CategoryConfig::StructureSize([2, 2]),
             actions: [
                 Some(Action::Train(
                     EntityType::Fighter,
@@ -101,7 +101,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
         },
         EntityType::TechLab => EntityConfig {
             max_health: Some(5),
-            physical_type: PhysicalTypeConfig::StructureSize([3, 3]),
+            category: CategoryConfig::StructureSize([3, 3]),
             actions: [
                 Some(Action::Train(
                     EntityType::Worker,
@@ -119,7 +119,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
         },
         EntityType::FuelRift => EntityConfig {
             max_health: None,
-            physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
+            category: CategoryConfig::ResourceCapacity(10),
             actions: [None; NUM_ENTITY_ACTIONS],
         },
     }

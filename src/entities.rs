@@ -46,7 +46,7 @@ pub struct Entity {
     pub entity_type: EntityType,
     pub id: EntityId,
     pub position: [u32; 2],
-    pub physical_type: PhysicalType,
+    pub category: Category,
     pub team: Team,
     pub animation: AnimationState,
     pub health: Option<HealthComponent>,
@@ -61,20 +61,22 @@ pub struct AnimationState {
 }
 
 #[derive(Debug)]
-pub enum PhysicalType {
+pub enum Category {
     Unit(UnitComponent),
     Structure { size: [u32; 2] },
+    Resource { remaining: u32 },
 }
 
 pub struct EntityConfig {
     pub max_health: Option<u32>,
-    pub physical_type: PhysicalTypeConfig,
+    pub category: CategoryConfig,
     pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
 }
 
-pub enum PhysicalTypeConfig {
-    MovementCooldown(Duration),
+pub enum CategoryConfig {
+    UnitMovementCooldown(Duration),
     StructureSize([u32; 2]),
+    ResourceCapacity(u32),
 }
 
 impl Entity {
@@ -109,11 +111,11 @@ impl Entity {
         let training =
             (!training_options.is_empty()).then(|| TrainingComponent::new(training_options));
         let construction_options = (!construction_options.is_empty()).then(|| construction_options);
-        let physical_type = match config.physical_type {
-            PhysicalTypeConfig::MovementCooldown(cooldown) => {
+        let category = match config.category {
+            CategoryConfig::UnitMovementCooldown(cooldown) => {
                 let combat = can_fight.then(Combat::new);
                 let gathering = can_gather.then(Gathering::new);
-                PhysicalType::Unit(UnitComponent::new(
+                Category::Unit(UnitComponent::new(
                     position,
                     cooldown,
                     combat,
@@ -121,7 +123,10 @@ impl Entity {
                     construction_options,
                 ))
             }
-            PhysicalTypeConfig::StructureSize(size) => PhysicalType::Structure { size },
+            CategoryConfig::StructureSize(size) => Category::Structure { size },
+            CategoryConfig::ResourceCapacity(capacity) => Category::Resource {
+                remaining: capacity,
+            },
         };
         let animation = AnimationState { ms_counter: 0 };
 
@@ -129,7 +134,7 @@ impl Entity {
             entity_type,
             id,
             position,
-            physical_type,
+            category,
             team,
             animation,
             health,
@@ -140,16 +145,18 @@ impl Entity {
     }
 
     pub fn size(&self) -> [u32; 2] {
-        match self.physical_type {
-            PhysicalType::Unit(_) => [1, 1],
-            PhysicalType::Structure { size } => size,
+        match self.category {
+            Category::Structure { size } => size,
+            Category::Unit(..) | Category::Resource { .. } => [1, 1],
         }
     }
 
     pub fn world_pixel_position(&self) -> [f32; 2] {
-        match &self.physical_type {
-            PhysicalType::Unit(unit) => unit.sub_cell_movement.pixel_position(self.position),
-            PhysicalType::Structure { .. } => game::grid_to_world(self.position),
+        match &self.category {
+            Category::Unit(unit) => unit.sub_cell_movement.pixel_position(self.position),
+            Category::Structure { .. } | Category::Resource { .. } => {
+                game::grid_to_world(self.position)
+            }
         }
     }
 
@@ -171,24 +178,38 @@ impl Entity {
         }
     }
 
+    pub fn resource_remaining(&self) -> &u32 {
+        match &self.category {
+            Category::Resource { remaining } => remaining,
+            _ => panic!("Not a resource"),
+        }
+    }
+
+    pub fn resource_remaining_mut(&mut self) -> &mut u32 {
+        match &mut self.category {
+            Category::Resource { remaining } => remaining,
+            _ => panic!("Not a resource"),
+        }
+    }
+
     pub fn unit(&self) -> &UnitComponent {
-        match &self.physical_type {
-            PhysicalType::Unit(unit) => unit,
-            PhysicalType::Structure { .. } => panic!("Not a unit"),
+        match &self.category {
+            Category::Unit(unit) => unit,
+            _ => panic!("Not a unit"),
         }
     }
 
     pub fn unit_mut(&mut self) -> &mut UnitComponent {
-        match &mut self.physical_type {
-            PhysicalType::Unit(unit) => unit,
-            PhysicalType::Structure { .. } => panic!("Not a unit"),
+        match &mut self.category {
+            Category::Unit(unit) => unit,
+            _ => panic!("Not a unit"),
         }
     }
 
     pub fn direction(&self) -> Direction {
-        match &self.physical_type {
-            PhysicalType::Unit(unit) => unit.direction,
-            PhysicalType::Structure { .. } => Direction::South,
+        match &self.category {
+            Category::Unit(unit) => unit.direction,
+            Category::Structure { .. } | Category::Resource { .. } => Direction::South,
         }
     }
 }

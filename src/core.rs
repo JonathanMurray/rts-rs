@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::data::{self, EntityType};
 use crate::entities::{
-    Entity, EntityId, EntityState, GatheringProgress, PhysicalType, Team, TrainingConfig,
+    Category, Entity, EntityId, EntityState, GatheringProgress, Team, TrainingConfig,
     TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::grid::{CellRect, Grid};
@@ -59,7 +59,7 @@ impl Core {
         for (_id, entity) in &self.entities {
             let mut entity = entity.borrow_mut();
             let pos = entity.position;
-            if let PhysicalType::Unit(unit) = &mut entity.physical_type {
+            if let Category::Unit(unit) = &mut entity.category {
                 unit.sub_cell_movement.update(dt, pos);
                 let mut is_moving = false;
                 if unit.sub_cell_movement.is_ready() {
@@ -145,14 +145,16 @@ impl Core {
             if let EntityState::MovingToResource(resource_id) = entity.state {
                 let mut gatherer = entity;
                 if gatherer.unit_mut().sub_cell_movement.is_ready() {
-                    let resource = self
-                        .find_entity(resource_id)
-                        .unwrap_or_else(|| panic!("Resource not found: {:?}", resource_id));
-                    let resource = resource.borrow();
-                    if is_unit_within_melee_range_of(gatherer.position, resource.cell_rect()) {
-                        gatherer.state = EntityState::GatheringResource(resource_id);
-                        let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
-                        gathering.start_gathering();
+                    if let Some(resource) = self.find_entity(resource_id) {
+                        let resource = resource.borrow();
+                        if is_unit_within_melee_range_of(gatherer.position, resource.cell_rect()) {
+                            gatherer.state = EntityState::GatheringResource(resource_id);
+                            let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
+                            gathering.start_gathering();
+                        }
+                    } else {
+                        println!("Arrived at resource, but it's gone");
+                        gatherer.state = EntityState::Idle;
                     }
                 }
             }
@@ -161,15 +163,29 @@ impl Core {
         //-------------------------------
         //     GATHERING RESOURCE
         //-------------------------------
+        let mut used_up_resources = vec![];
         for (_entity_id, entity) in &self.entities {
             let entity = entity.borrow_mut();
             if let EntityState::GatheringResource(resource_id) = entity.state {
                 let mut gatherer = entity;
-                let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
-                if let GatheringProgress::Done =
-                    gathering.make_progress_on_gathering(dt, resource_id)
-                {
-                    self.unit_return_resource(gatherer, None);
+                if let Some(resource) = self.find_entity(resource_id) {
+                    let mut resource = resource.borrow_mut();
+                    let remaining = resource.resource_remaining_mut();
+                    if *remaining > 0 {
+                        let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
+                        if let GatheringProgress::Done =
+                            gathering.make_progress_on_gathering(dt, resource_id)
+                        {
+                            *remaining = remaining.saturating_sub(1);
+                            if *remaining == 0 {
+                                used_up_resources.push(resource_id);
+                            }
+                            self.unit_return_resource(gatherer, None);
+                        }
+                    }
+                } else {
+                    println!("Resource disappeared while it was being gathered");
+                    gatherer.state = EntityState::Idle;
                 }
             }
         }
@@ -189,15 +205,19 @@ impl Core {
                             // Unit goes back out to gather more
                             let gathering = returner.unit_mut().gathering.as_mut().unwrap();
                             let resource_id = gathering.drop_resource();
-                            let resource = self.entity(resource_id).borrow();
-                            if let Some(plan) = pathfind::find_path(
-                                returner.position,
-                                Destination::AdjacentToEntity(resource.cell_rect()),
-                                &self.obstacle_grid,
-                            ) {
-                                returner.unit_mut().movement_plan.set(plan);
-                                returner.state = EntityState::MovingToResource(resource_id);
+                            if let Some(resource) = self.find_entity(resource_id) {
+                                if let Some(plan) = pathfind::find_path(
+                                    returner.position,
+                                    Destination::AdjacentToEntity(resource.borrow().cell_rect()),
+                                    &self.obstacle_grid,
+                                ) {
+                                    returner.unit_mut().movement_plan.set(plan);
+                                    returner.state = EntityState::MovingToResource(resource_id);
+                                } else {
+                                    returner.state = EntityState::Idle;
+                                }
                             } else {
+                                println!("Can't go back to resource since it's gone");
                                 returner.state = EntityState::Idle;
                             }
                         }
@@ -278,7 +298,8 @@ impl Core {
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
-            if is_dead || is_transforming_into_structure {
+            let is_used_up_resource = used_up_resources.contains(entity_id);
+            if is_dead || is_transforming_into_structure || is_used_up_resource {
                 Core::on_entity_end_state(&entity, &self.teams);
                 let cell_rect = entity.cell_rect();
                 self.obstacle_grid.set_area(cell_rect, None);
@@ -425,7 +446,7 @@ impl Core {
             }) => {
                 assert_eq!(stopper.team, issuing_team);
                 stopper.state = EntityState::Idle;
-                if let PhysicalType::Unit(unit) = stopper.physical_type.borrow_mut() {
+                if let Category::Unit(unit) = stopper.category.borrow_mut() {
                     unit.movement_plan.clear();
                 }
             }
@@ -522,7 +543,7 @@ impl Core {
                 match entity.try_borrow() {
                     Ok(entity) if entity.team == gatherer.team => {
                         // For now, resources can be returned to any friendly structure
-                        if let PhysicalType::Structure { .. } = entity.physical_type {
+                        if let Category::Structure { .. } = entity.category {
                             //TODO find the closest structure
                             return Some(entity);
                         }
@@ -606,11 +627,6 @@ impl Core {
             .push((new_entity.id, RefCell::new(new_entity)));
         self.obstacle_grid
             .set_area(rect, Some(ObstacleType::Entity(team)));
-    }
-
-    fn entity(&self, id: EntityId) -> &RefCell<Entity> {
-        self.find_entity(id)
-            .unwrap_or_else(|| panic!("Entity not found: {:?}", id))
     }
 
     fn find_entity(&self, id: EntityId) -> Option<&RefCell<Entity>> {
