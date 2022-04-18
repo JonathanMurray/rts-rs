@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use crate::data::{self, EntityType};
 use crate::entities::{
-    Category, Entity, EntityId, EntityState, GatheringProgress, Team, TrainingConfig,
+    Entity, EntityCategory, EntityId, EntityState, GatheringProgress, Team, TrainingConfig,
     TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::grid::{CellRect, Grid};
@@ -59,7 +59,7 @@ impl Core {
         for (_id, entity) in &self.entities {
             let mut entity = entity.borrow_mut();
             let pos = entity.position;
-            if let Category::Unit(unit) = &mut entity.category {
+            if let EntityCategory::Unit(unit) = &mut entity.category {
                 unit.sub_cell_movement.update(dt, pos);
                 let mut is_moving = false;
                 if unit.sub_cell_movement.is_ready() {
@@ -446,7 +446,7 @@ impl Core {
             }) => {
                 assert_eq!(stopper.team, issuing_team);
                 stopper.state = EntityState::Idle;
-                if let Category::Unit(unit) = stopper.category.borrow_mut() {
+                if let EntityCategory::Unit(unit) = stopper.category.borrow_mut() {
                     unit.movement_plan.clear();
                 }
             }
@@ -543,7 +543,7 @@ impl Core {
                 match entity.try_borrow() {
                     Ok(entity) if entity.team == gatherer.team => {
                         // For now, resources can be returned to any friendly structure
-                        if let Category::Structure { .. } = entity.category {
+                        if let EntityCategory::Structure { .. } = entity.category {
                             //TODO find the closest structure
                             return Some(entity);
                         }

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Image, Mesh, MeshBuilder, Rect};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Image, Mesh, Rect};
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
@@ -9,16 +9,14 @@ use crate::entities::{
     Action, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity, EntityConfig,
     Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
-use crate::game::CELL_PIXEL_SIZE;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
-use crate::images;
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
     FuelRift,
     Enforcer,
     Engineer,
-    Barracks,
+    BattleAcademy,
     TechLab,
 }
 
@@ -29,7 +27,7 @@ pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) ->
 
 pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
     let mut map: HashMap<EntityType, [u32; 2]> = Default::default();
-    let structure_types = [EntityType::Barracks, EntityType::TechLab];
+    let structure_types = [EntityType::BattleAcademy, EntityType::TechLab];
     for structure_type in structure_types {
         let config = entity_config(structure_type);
         let size = match config.category {
@@ -66,7 +64,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 Some(Action::GatherResource),
                 Some(Action::ReturnResource),
                 Some(Action::Construct(
-                    EntityType::Barracks,
+                    EntityType::BattleAcademy,
                     ConstructionConfig {
                         construction_time: Duration::from_secs_f32(10.0),
                         cost: 2,
@@ -81,9 +79,9 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 )),
             ],
         },
-        EntityType::Barracks => EntityConfig {
+        EntityType::BattleAcademy => EntityConfig {
             max_health: Some(3),
-            category: CategoryConfig::StructureSize([2, 2]),
+            category: CategoryConfig::StructureSize([3, 3]),
             actions: [
                 Some(Action::Train(
                     EntityType::Enforcer,
@@ -154,7 +152,7 @@ pub struct ActionHudConfig {
 pub struct HudAssets {
     enforcer: EntityHudConfig,
     engineer: EntityHudConfig,
-    barracks: EntityHudConfig,
+    battle_academy: EntityHudConfig,
     tech_lab: EntityHudConfig,
     fuel_rift: EntityHudConfig,
     stop_icon: Image,
@@ -187,8 +185,8 @@ impl HudAssets {
                 name: "Engineer".to_string(),
                 portrait: Picture::Image(engineer_icon),
             },
-            barracks: EntityHudConfig {
-                name: "Barracks".to_string(),
+            battle_academy: EntityHudConfig {
+                name: "Battle Academy".to_string(),
                 portrait: Picture::Mesh(Mesh::new_rectangle(
                     ctx,
                     DrawMode::fill(),
@@ -231,7 +229,7 @@ impl HudAssets {
         match entity_type {
             EntityType::Enforcer => &self.enforcer,
             EntityType::Engineer => &self.engineer,
-            EntityType::Barracks => &self.barracks,
+            EntityType::BattleAcademy => &self.battle_academy,
             EntityType::TechLab => &self.tech_lab,
             EntityType::FuelRift => &self.fuel_rift,
         }
@@ -259,7 +257,7 @@ impl HudAssets {
             }
             Action::Construct(structure_type, construction_config) => {
                 let keycode = match structure_type {
-                    EntityType::Barracks => KeyCode::B,
+                    EntityType::BattleAcademy => KeyCode::B,
                     EntityType::TechLab => KeyCode::T,
                     _ => panic!("No keycode for constructing: {:?}", structure_type),
                 };
@@ -307,22 +305,22 @@ impl HudAssets {
 pub fn create_entity_sprites(
     ctx: &mut Context,
 ) -> GameResult<HashMap<(EntityType, Team), Animation>> {
-    let mut sprite_batches = Default::default();
-    create_enforcer(ctx, &mut sprite_batches)?;
-    create_engineer(ctx, &mut sprite_batches)?;
-    create_barracks(ctx, &mut sprite_batches)?;
-    create_tech_lab(ctx, &mut sprite_batches)?;
-    create_fuel_rift(ctx, &mut sprite_batches)?;
+    let mut animations = Default::default();
+    create_enforcer(ctx, &mut animations)?;
+    create_engineer(ctx, &mut animations)?;
+    create_battle_academy(ctx, &mut animations)?;
+    create_tech_lab(ctx, &mut animations)?;
+    create_fuel_rift(ctx, &mut animations)?;
 
-    Ok(sprite_batches)
+    Ok(animations)
 }
 
 fn create_enforcer(
     ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
+    animations: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
     let image = Image::new(ctx, "/images/enforcer_sheet.png")?;
-    unit_sheet(ctx, sprite_batches, EntityType::Enforcer, image)
+    unit_sheet(ctx, animations, EntityType::Enforcer, image)
 }
 
 // Sprites must be designed with these reserved colors in mind.
@@ -354,15 +352,15 @@ struct EntityColorFamily {
 
 fn create_engineer(
     ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
+    animations: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
     let image = Image::new(ctx, "/images/engineer_sheet.png")?;
-    unit_sheet(ctx, sprite_batches, EntityType::Engineer, image)
+    unit_sheet(ctx, animations, EntityType::Engineer, image)
 }
 
 fn unit_sheet(
     ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
+    animations: &mut HashMap<(EntityType, Team), Animation>,
     entity_type: EntityType,
     image: Image,
 ) -> GameResult {
@@ -395,7 +393,7 @@ fn unit_sheet(
         }
 
         // TODO specify idle-pose
-        sprite_batches.insert(
+        animations.insert(
             (entity_type, team),
             Animation::Tilesheet(Tilesheet {
                 sheet: team_image,
@@ -493,61 +491,25 @@ impl Frame {
     }
 }
 
-fn create_barracks(
+fn create_battle_academy(
     ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
+    animations: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let colors = HashMap::from([
-        (Team::Player, Color::new(0.6, 0.8, 0.5, 1.0)),
-        (Team::Enemy, Color::new(0.8, 0.4, 0.4, 1.0)),
-    ]);
-    for (team, color) in colors {
-        let size = [CELL_PIXEL_SIZE[0] * 1.9, CELL_PIXEL_SIZE[1] * 1.9];
-        let mesh = MeshBuilder::new()
-            .rectangle(
-                DrawMode::fill(),
-                Rect::new(
-                    (CELL_PIXEL_SIZE[0] * 2.0 - size[0]) / 2.0,
-                    (CELL_PIXEL_SIZE[1] * 2.0 - size[1]) / 2.0,
-                    size[0],
-                    size[1],
-                ),
-                color,
-            )?
-            .rectangle(
-                DrawMode::stroke(2.0),
-                Rect::new(
-                    CELL_PIXEL_SIZE[0] * 0.75,
-                    CELL_PIXEL_SIZE[1] * 0.5,
-                    CELL_PIXEL_SIZE[0] * 0.5,
-                    CELL_PIXEL_SIZE[1] * 0.5,
-                ),
-                Color::new(0.0, 0.0, 0.0, 1.0),
-            )?
-            .build(ctx)?;
-
-        let image = images::mesh_into_image(ctx, mesh)?;
-        sprite_batches.insert(
-            (EntityType::Barracks, team),
-            Animation::Static(StaticImage {
-                image,
-                origin: [0.0, 0.0],
-            }),
-        );
-    }
-    Ok(())
+    let image = Image::new(ctx, "/images/battle_academy.png")?;
+    structure_sprite(ctx, EntityType::BattleAcademy, animations, image)
 }
 
-fn create_tech_lab(
+fn structure_sprite(
     ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
+    entity_type: EntityType,
+    animations: &mut HashMap<(EntityType, Team), Animation>,
+    image: Image,
 ) -> GameResult {
-    let image = Image::new(ctx, "/images/tech_lab.png")?;
     let rgba = image.to_rgba8(ctx)?;
     for (team, color_family) in TEAM_COLOR_FAMILIES {
         let team_image = recolor(ctx, [image.width(), image.height()], &rgba, &color_family)?;
-        sprite_batches.insert(
-            (EntityType::TechLab, team),
+        animations.insert(
+            (entity_type, team),
             Animation::Static(StaticImage {
                 image: team_image,
                 origin: [0.0, 0.0],
@@ -557,13 +519,21 @@ fn create_tech_lab(
     Ok(())
 }
 
+fn create_tech_lab(
+    ctx: &mut Context,
+    animations: &mut HashMap<(EntityType, Team), Animation>,
+) -> GameResult {
+    let image = Image::new(ctx, "/images/tech_lab.png")?;
+    structure_sprite(ctx, EntityType::TechLab, animations, image)
+}
+
 fn create_fuel_rift(
     ctx: &mut Context,
-    sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
+    animations: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
     let image = Image::new(ctx, "/images/fuel_rift.png")?;
 
-    sprite_batches.insert(
+    animations.insert(
         (EntityType::FuelRift, Team::Neutral),
         Animation::Static(StaticImage {
             image,

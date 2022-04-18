@@ -46,7 +46,7 @@ pub struct Entity {
     pub entity_type: EntityType,
     pub id: EntityId,
     pub position: [u32; 2],
-    pub category: Category,
+    pub category: EntityCategory,
     pub team: Team,
     pub animation: AnimationState,
     pub health: Option<HealthComponent>,
@@ -61,7 +61,7 @@ pub struct AnimationState {
 }
 
 #[derive(Debug)]
-pub enum Category {
+pub enum EntityCategory {
     Unit(UnitComponent),
     Structure { size: [u32; 2] },
     Resource { remaining: u32 },
@@ -115,7 +115,7 @@ impl Entity {
             CategoryConfig::UnitMovementCooldown(cooldown) => {
                 let combat = can_fight.then(Combat::new);
                 let gathering = can_gather.then(Gathering::new);
-                Category::Unit(UnitComponent::new(
+                EntityCategory::Unit(UnitComponent::new(
                     position,
                     cooldown,
                     combat,
@@ -123,8 +123,8 @@ impl Entity {
                     construction_options,
                 ))
             }
-            CategoryConfig::StructureSize(size) => Category::Structure { size },
-            CategoryConfig::ResourceCapacity(capacity) => Category::Resource {
+            CategoryConfig::StructureSize(size) => EntityCategory::Structure { size },
+            CategoryConfig::ResourceCapacity(capacity) => EntityCategory::Resource {
                 remaining: capacity,
             },
         };
@@ -146,15 +146,15 @@ impl Entity {
 
     pub fn size(&self) -> [u32; 2] {
         match self.category {
-            Category::Structure { size } => size,
-            Category::Unit(..) | Category::Resource { .. } => [1, 1],
+            EntityCategory::Structure { size } => size,
+            EntityCategory::Unit(..) | EntityCategory::Resource { .. } => [1, 1],
         }
     }
 
     pub fn world_pixel_position(&self) -> [f32; 2] {
         match &self.category {
-            Category::Unit(unit) => unit.sub_cell_movement.pixel_position(self.position),
-            Category::Structure { .. } | Category::Resource { .. } => {
+            EntityCategory::Unit(unit) => unit.sub_cell_movement.pixel_position(self.position),
+            EntityCategory::Structure { .. } | EntityCategory::Resource { .. } => {
                 game::grid_to_world(self.position)
             }
         }
@@ -180,36 +180,36 @@ impl Entity {
 
     pub fn resource_remaining(&self) -> &u32 {
         match &self.category {
-            Category::Resource { remaining } => remaining,
+            EntityCategory::Resource { remaining } => remaining,
             _ => panic!("Not a resource"),
         }
     }
 
     pub fn resource_remaining_mut(&mut self) -> &mut u32 {
         match &mut self.category {
-            Category::Resource { remaining } => remaining,
+            EntityCategory::Resource { remaining } => remaining,
             _ => panic!("Not a resource"),
         }
     }
 
     pub fn unit(&self) -> &UnitComponent {
         match &self.category {
-            Category::Unit(unit) => unit,
+            EntityCategory::Unit(unit) => unit,
             _ => panic!("Not a unit"),
         }
     }
 
     pub fn unit_mut(&mut self) -> &mut UnitComponent {
         match &mut self.category {
-            Category::Unit(unit) => unit,
+            EntityCategory::Unit(unit) => unit,
             _ => panic!("Not a unit"),
         }
     }
 
     pub fn direction(&self) -> Direction {
         match &self.category {
-            Category::Unit(unit) => unit.direction,
-            Category::Structure { .. } | Category::Resource { .. } => Direction::South,
+            EntityCategory::Unit(unit) => unit.direction,
+            EntityCategory::Structure { .. } | EntityCategory::Resource { .. } => Direction::South,
         }
     }
 }
