@@ -107,7 +107,7 @@ impl Button {
 
     pub fn update(&mut self, dt: Duration) {
         if self.is_down {
-            self.down_cooldown = self.down_cooldown.checked_sub(dt).unwrap_or(Duration::ZERO);
+            self.down_cooldown = self.down_cooldown.saturating_sub(dt);
             if self.down_cooldown.is_zero() {
                 self.is_down = false;
             }

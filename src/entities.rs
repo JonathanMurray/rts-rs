@@ -323,7 +323,7 @@ impl SubCellMovement {
     }
 
     pub fn update(&mut self, dt: Duration, position: [u32; 2]) {
-        self.remaining = self.remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
+        self.remaining = self.remaining.saturating_sub(dt);
         if self.remaining.is_zero() {
             self.previous_position = position;
         }
@@ -418,7 +418,7 @@ impl TrainingComponent {
     pub fn update(&mut self, dt: Duration) -> TrainingUpdateStatus {
         match self.ongoing.take() {
             Some(mut ongoing) => {
-                ongoing.remaining = ongoing.remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
+                ongoing.remaining = ongoing.remaining.saturating_sub(dt);
                 if ongoing.remaining.is_zero() {
                     println!("Training done!");
                     TrainingUpdateStatus::Done
@@ -469,7 +469,7 @@ impl Combat {
     }
 
     pub fn count_down_cooldown(&mut self, dt: Duration) -> bool {
-        self.cooldown = self.cooldown.checked_sub(dt).unwrap_or(Duration::ZERO);
+        self.cooldown = self.cooldown.saturating_sub(dt);
         self.cooldown.is_zero()
     }
 

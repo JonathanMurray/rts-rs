@@ -33,7 +33,7 @@ impl MovementCommandIndicator {
     }
 
     fn update(&mut self, dt: Duration) {
-        self.remaining = self.remaining.checked_sub(dt).unwrap_or(Duration::ZERO);
+        self.remaining = self.remaining.saturating_sub(dt);
     }
 
     pub fn set(&mut self, world_pixel_position: [f32; 2]) {
