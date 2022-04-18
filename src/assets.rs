@@ -5,11 +5,12 @@ use ggez::graphics::{
 };
 use ggez::{graphics, Context, GameError, GameResult};
 
+use std::cell::Ref;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 use crate::data::{self, Animation, EntityType};
-use crate::entities::{AnimationState, Direction, Team};
+use crate::entities::{Entity, Team};
 use crate::game::{CELL_PIXEL_SIZE, COLOR_FG, WORLD_VIEWPORT};
 use crate::grid::Grid;
 use crate::map::TileId;
@@ -23,7 +24,7 @@ pub struct Assets {
     foreground_around_world: Mesh,
     selections: HashMap<([u32; 2], Team), Mesh>,
     construction_outlines: HashMap<[u32; 2], Mesh>,
-    entity_sprite_batches: HashMap<(EntityType, Team), Animation>,
+    entity_animations: HashMap<(EntityType, Team), Animation>,
     movement_command_indicator: Mesh,
     world_background: Image,
     world_size: [f32; 2],
@@ -39,7 +40,7 @@ impl Assets {
 
         let foreground_around_world = create_foreground_around_world(ctx, camera_size)?;
 
-        let entity_sprite_batches = data::create_entity_sprites(ctx)?;
+        let entity_animations = data::create_entity_sprites(ctx)?;
 
         let movement_command_indicator = MeshBuilder::new()
             .circle(
@@ -66,7 +67,7 @@ impl Assets {
             foreground_around_world,
             selections: Default::default(),
             construction_outlines: Default::default(),
-            entity_sprite_batches,
+            entity_animations,
             movement_command_indicator,
             world_background,
             world_size,
@@ -221,17 +222,19 @@ impl Assets {
     pub fn draw_entity(
         &mut self,
         ctx: &mut Context,
-        entity_type: EntityType,
-        animation_state: &AnimationState,
-        direction: Direction,
-        team: Team,
+        entity: &Ref<Entity>,
         screen_coords: [f32; 2],
     ) -> GameResult {
         let animation = self
-            .entity_sprite_batches
-            .get_mut(&(entity_type, team))
-            .unwrap_or_else(|| panic!("Unhandled sprite/team: {:?}", (entity_type, team)));
-        animation.draw(ctx, animation_state, direction, screen_coords)?;
+            .entity_animations
+            .get_mut(&(entity.entity_type, entity.team))
+            .unwrap_or_else(|| {
+                panic!(
+                    "Unhandled sprite/team: {:?}",
+                    (entity.entity_type, entity.team)
+                )
+            });
+        animation.draw(ctx, &entity.animation, entity.direction(), screen_coords)?;
         Ok(())
     }
 

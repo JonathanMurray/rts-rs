@@ -659,6 +659,7 @@ impl EventHandler for Game {
                 .draw_movement_command_indicator(ctx, screen_coords, scale)?;
         }
 
+        let mut entities_to_draw = vec![];
         for (entity_id, entity) in self.core.entities() {
             let entity = entity.borrow();
             let screen_coords = self
@@ -666,8 +667,6 @@ impl EventHandler for Game {
                 .world_to_screen(entity.world_pixel_position());
 
             if self.player_state.selected_entity_ids.contains(entity_id) {
-                self.assets
-                    .draw_selection(ctx, entity.size(), entity.team, screen_coords)?;
 
                 if let EntityState::Constructing(structure_type, grid_pos) = entity.state {
                     let screen_coords = self.player_state.world_to_screen(grid_to_world(grid_pos));
@@ -678,14 +677,24 @@ impl EventHandler for Game {
             }
 
             if ENTITY_VISIBILITY_RECT.contains(screen_coords) {
-                self.assets.draw_entity(
-                    ctx,
-                    entity.entity_type,
-                    &entity.animation,
-                    entity.direction(),
-                    entity.team,
-                    screen_coords,
-                )?;
+                entities_to_draw.push((screen_coords, entity));
+            }
+        }
+
+        for (screen_coords, entity) in &entities_to_draw {
+            if matches!(entity.physical_type, PhysicalType::Structure { .. }) {
+                self.assets.draw_entity(ctx, entity, *screen_coords)?;
+            }
+        }
+        for (screen_coords, entity) in &entities_to_draw {
+            if matches!(entity.physical_type, PhysicalType::Unit { .. }) {
+                self.assets.draw_entity(ctx, entity, *screen_coords)?;
+            }
+        }
+        for (screen_coords, entity) in &entities_to_draw {
+            if self.player_state.selected_entity_ids.contains(&entity.id) {
+                self.assets
+                    .draw_selection(ctx, entity.size(), entity.team, *screen_coords)?;
             }
         }
 
