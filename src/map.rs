@@ -56,8 +56,8 @@ impl WorldInitData {
         let tile_grid = create_tile_grid(&water_grid);
 
         let mut entities = vec![
-            data::create_entity(EntityType::Worker, [6, 2], Team::Player),
-            data::create_entity(EntityType::Fighter, [8, 2], Team::Player),
+            data::create_entity(EntityType::Engineer, [6, 2], Team::Player),
+            data::create_entity(EntityType::Enforcer, [8, 2], Team::Player),
             data::create_entity(EntityType::TechLab, [1, 6], Team::Player),
         ];
 
@@ -71,7 +71,7 @@ impl WorldInitData {
             MapType::Empty => {}
             MapType::Small => {
                 entities.push(data::create_entity(
-                    EntityType::Fighter,
+                    EntityType::Enforcer,
                     [7, 7],
                     Team::Enemy,
                 ));
@@ -82,10 +82,26 @@ impl WorldInitData {
                 ));
             }
             MapType::Medium => {
-                entities.push(data::create_entity(EntityType::Worker, [5, 2], Team::Enemy));
-                entities.push(data::create_entity(EntityType::Worker, [3, 0], Team::Enemy));
-                entities.push(data::create_entity(EntityType::Worker, [0, 4], Team::Enemy));
-                entities.push(data::create_entity(EntityType::Worker, [3, 4], Team::Enemy));
+                entities.push(data::create_entity(
+                    EntityType::Engineer,
+                    [5, 2],
+                    Team::Enemy,
+                ));
+                entities.push(data::create_entity(
+                    EntityType::Engineer,
+                    [3, 0],
+                    Team::Enemy,
+                ));
+                entities.push(data::create_entity(
+                    EntityType::Engineer,
+                    [0, 4],
+                    Team::Enemy,
+                ));
+                entities.push(data::create_entity(
+                    EntityType::Engineer,
+                    [3, 4],
+                    Team::Enemy,
+                ));
                 entities.push(data::create_entity(
                     EntityType::TechLab,
                     [8, 4],
@@ -104,9 +120,9 @@ impl WorldInitData {
                                 Team::Enemy
                             };
                             let entity_type = if rng.gen_bool(0.5) {
-                                EntityType::Worker
+                                EntityType::Engineer
                             } else {
-                                EntityType::Fighter
+                                EntityType::Enforcer
                             };
                             entities.push(data::create_entity(entity_type, [x, y], team));
                         }

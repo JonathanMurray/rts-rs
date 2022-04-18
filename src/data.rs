@@ -16,8 +16,8 @@ use crate::images;
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
     FuelRift,
-    Fighter,
-    Worker,
+    Enforcer,
+    Engineer,
     Barracks,
     TechLab,
 }
@@ -45,7 +45,7 @@ pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
 
 fn entity_config(entity_type: EntityType) -> EntityConfig {
     match entity_type {
-        EntityType::Fighter => EntityConfig {
+        EntityType::Enforcer => EntityConfig {
             max_health: Some(3),
             category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(600)),
             actions: [
@@ -57,7 +57,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 None,
             ],
         },
-        EntityType::Worker => EntityConfig {
+        EntityType::Engineer => EntityConfig {
             max_health: Some(5),
             category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(900)),
             actions: [
@@ -86,7 +86,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             category: CategoryConfig::StructureSize([2, 2]),
             actions: [
                 Some(Action::Train(
-                    EntityType::Fighter,
+                    EntityType::Enforcer,
                     TrainingConfig {
                         duration: Duration::from_secs(7),
                         cost: 1,
@@ -104,7 +104,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             category: CategoryConfig::StructureSize([3, 3]),
             actions: [
                 Some(Action::Train(
-                    EntityType::Worker,
+                    EntityType::Engineer,
                     TrainingConfig {
                         duration: Duration::from_secs(4),
                         cost: 1,
@@ -152,8 +152,8 @@ pub struct ActionHudConfig {
 }
 
 pub struct HudAssets {
-    fighter: EntityHudConfig,
-    worker: EntityHudConfig,
+    enforcer: EntityHudConfig,
+    engineer: EntityHudConfig,
     barracks: EntityHudConfig,
     tech_lab: EntityHudConfig,
     fuel_rift: EntityHudConfig,
@@ -174,18 +174,18 @@ impl HudAssets {
         let gather_icon = Image::new(ctx, "/images/icons/gather.png")?;
         let return_icon = Image::new(ctx, "/images/icons/return.png")?;
 
-        let worker_icon = Image::new(ctx, "/images/icons/worker.png")?;
-        let fighter_icon = Image::new(ctx, "/images/icons/fighter.png")?;
+        let engineer_icon = Image::new(ctx, "/images/icons/engineer.png")?;
+        let enforcer_icon = Image::new(ctx, "/images/icons/enforcer.png")?;
         let tech_lab_icon = Image::new(ctx, "/images/icons/tech_lab.png")?;
 
         Ok(Self {
-            fighter: EntityHudConfig {
-                name: "Fighter".to_string(),
-                portrait: Picture::Image(fighter_icon),
+            enforcer: EntityHudConfig {
+                name: "Enforcer".to_string(),
+                portrait: Picture::Image(enforcer_icon),
             },
-            worker: EntityHudConfig {
-                name: "Worker".to_string(),
-                portrait: Picture::Image(worker_icon),
+            engineer: EntityHudConfig {
+                name: "Engineer".to_string(),
+                portrait: Picture::Image(engineer_icon),
             },
             barracks: EntityHudConfig {
                 name: "Barracks".to_string(),
@@ -229,8 +229,8 @@ impl HudAssets {
 
     pub fn entity(&self, entity_type: EntityType) -> &EntityHudConfig {
         match entity_type {
-            EntityType::Fighter => &self.fighter,
-            EntityType::Worker => &self.worker,
+            EntityType::Enforcer => &self.enforcer,
+            EntityType::Engineer => &self.engineer,
             EntityType::Barracks => &self.barracks,
             EntityType::TechLab => &self.tech_lab,
             EntityType::FuelRift => &self.fuel_rift,
@@ -238,14 +238,12 @@ impl HudAssets {
     }
 
     pub fn action(&self, action: Action) -> ActionHudConfig {
-        // TODO: mind the allocations
-
         match action {
             Action::Train(entity_type, training_config) => {
                 let unit_config = self.entity(entity_type);
                 let keycode = match entity_type {
-                    EntityType::Worker => KeyCode::W,
-                    EntityType::Fighter => KeyCode::F,
+                    EntityType::Engineer => KeyCode::E,
+                    EntityType::Enforcer => KeyCode::F,
                     _ => panic!("No keycode for training: {:?}", entity_type),
                 };
                 ActionHudConfig {
@@ -310,8 +308,8 @@ pub fn create_entity_sprites(
     ctx: &mut Context,
 ) -> GameResult<HashMap<(EntityType, Team), Animation>> {
     let mut sprite_batches = Default::default();
-    create_fighter(ctx, &mut sprite_batches)?;
-    create_worker(ctx, &mut sprite_batches)?;
+    create_enforcer(ctx, &mut sprite_batches)?;
+    create_engineer(ctx, &mut sprite_batches)?;
     create_barracks(ctx, &mut sprite_batches)?;
     create_tech_lab(ctx, &mut sprite_batches)?;
     create_fuel_rift(ctx, &mut sprite_batches)?;
@@ -319,12 +317,12 @@ pub fn create_entity_sprites(
     Ok(sprite_batches)
 }
 
-fn create_fighter(
+fn create_enforcer(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let image = Image::new(ctx, "/images/fighter_sheet.png")?;
-    unit_sheet(ctx, sprite_batches, EntityType::Fighter, image)
+    let image = Image::new(ctx, "/images/enforcer_sheet.png")?;
+    unit_sheet(ctx, sprite_batches, EntityType::Enforcer, image)
 }
 
 // Sprites must be designed with these reserved colors in mind.
@@ -354,12 +352,12 @@ struct EntityColorFamily {
     dark: [u8; 4],
 }
 
-fn create_worker(
+fn create_engineer(
     ctx: &mut Context,
     sprite_batches: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let image = Image::new(ctx, "/images/worker_sheet.png")?;
-    unit_sheet(ctx, sprite_batches, EntityType::Worker, image)
+    let image = Image::new(ctx, "/images/engineer_sheet.png")?;
+    unit_sheet(ctx, sprite_batches, EntityType::Engineer, image)
 }
 
 fn unit_sheet(
