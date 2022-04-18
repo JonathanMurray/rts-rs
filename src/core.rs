@@ -35,11 +35,9 @@ impl Core {
             obstacle_grid.set(water_cell, Some(ObstacleType::Water));
         }
         for entity in &entities {
-            if entity.is_solid {
-                // TODO Store EntityId's instead, to get constant position->entity_id lookup?
-                //      (although entity_id->entity is still not constant currently)
-                obstacle_grid.set_area(entity.cell_rect(), Some(ObstacleType::Entity(entity.team)));
-            }
+            // TODO Store EntityId's instead, to get constant position->entity_id lookup?
+            //      (although entity_id->entity is still not constant currently)
+            obstacle_grid.set_area(entity.cell_rect(), Some(ObstacleType::Entity(entity.team)));
         }
         let entities = entities
             .into_iter()
@@ -282,10 +280,8 @@ impl Core {
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
             if is_dead || is_transforming_into_structure {
                 Core::on_entity_end_state(&entity, &self.teams);
-                if entity.is_solid {
-                    let cell_rect = entity.cell_rect();
-                    self.obstacle_grid.set_area(cell_rect, None);
-                }
+                let cell_rect = entity.cell_rect();
+                self.obstacle_grid.set_area(cell_rect, None);
                 removed_entities.push(*entity_id);
                 false
             } else {

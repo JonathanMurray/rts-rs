@@ -46,7 +46,6 @@ pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
 fn entity_config(entity_type: EntityType) -> EntityConfig {
     match entity_type {
         EntityType::Fighter => EntityConfig {
-            is_solid: true,
             max_health: Some(3),
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(600)),
             actions: [
@@ -59,7 +58,6 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::Worker => EntityConfig {
-            is_solid: true,
             max_health: Some(5),
             physical_type: PhysicalTypeConfig::MovementCooldown(Duration::from_millis(900)),
             actions: [
@@ -84,7 +82,6 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::Barracks => EntityConfig {
-            is_solid: true,
             max_health: Some(3),
             physical_type: PhysicalTypeConfig::StructureSize([2, 2]),
             actions: [
@@ -103,7 +100,6 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::TechLab => EntityConfig {
-            is_solid: true,
             max_health: Some(5),
             physical_type: PhysicalTypeConfig::StructureSize([3, 3]),
             actions: [
@@ -122,7 +118,6 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::FuelRift => EntityConfig {
-            is_solid: true,
             max_health: None,
             physical_type: PhysicalTypeConfig::StructureSize([1, 1]),
             actions: [None; NUM_ENTITY_ACTIONS],

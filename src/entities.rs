@@ -46,7 +46,6 @@ pub struct Entity {
     pub entity_type: EntityType,
     pub id: EntityId,
     pub position: [u32; 2],
-    pub is_solid: bool, // TODO: not needed?
     pub physical_type: PhysicalType,
     pub team: Team,
     pub animation: AnimationState,
@@ -68,7 +67,6 @@ pub enum PhysicalType {
 }
 
 pub struct EntityConfig {
-    pub is_solid: bool,
     pub max_health: Option<u32>,
     pub physical_type: PhysicalTypeConfig,
     pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
@@ -131,7 +129,6 @@ impl Entity {
             entity_type,
             id,
             position,
-            is_solid: config.is_solid,
             physical_type,
             team,
             animation,
