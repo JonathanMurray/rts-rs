@@ -304,6 +304,9 @@ impl Game {
                     CommandError::NotCarryingResource => {
                         "Not carrying any fuel to return".to_owned()
                     }
+                    CommandError::NotEnoughSpaceForStructure => {
+                        "Not enough space for structure".to_owned()
+                    }
                 });
         if let Some(message) = error_message {
             self.hud.borrow_mut().set_error_message(message);

@@ -242,25 +242,7 @@ impl Core {
                 let has_arrived = entity.unit_mut().movement_plan.peek().is_none()
                     && entity.unit_mut().sub_cell_movement.is_ready();
                 if has_arrived {
-                    let size = self.structure_sizes.get(&structure_type).unwrap();
-                    let mut sufficient_space = true;
-                    println!(
-                        "Check if structure can fit. Worker pos: {:?}, Structure pos: {:?}, Structure size: {:?}",
-                        entity.position, structure_position, size
-                    );
-                    for x in structure_position[0]..structure_position[0] + size[0] {
-                        for y in structure_position[1]..structure_position[1] + size[1] {
-                            if [x, y] != entity.position {
-                                // Don't check for collision on the cell that the builder stands on,
-                                // since it will be removed when structure is added.
-                                if self.obstacle_grid.get(&[x, y]).is_some() {
-                                    sufficient_space = false;
-                                    println!("Not enough space. Occupied cell: {:?}", [x, y]);
-                                }
-                            }
-                        }
-                    }
-                    if sufficient_space {
+                    if self.can_structure_fit(&entity, structure_position, structure_type) {
                         let constructions_options =
                             entity.unit().construction_options.as_ref().unwrap();
                         let construction_time = constructions_options
@@ -374,6 +356,33 @@ impl Core {
         }
     }
 
+    fn can_structure_fit(
+        &self,
+        worker: &Entity,
+        structure_position: [u32; 2],
+        structure_type: EntityType,
+    ) -> bool {
+        let size = self.structure_sizes.get(&structure_type).unwrap();
+        let mut can_fit = true;
+        println!(
+            "Check if structure can fit. Worker pos: {:?}, Structure pos: {:?}, Structure size: {:?}",
+            worker.position, structure_position, size
+        );
+        for x in structure_position[0]..structure_position[0] + size[0] {
+            for y in structure_position[1]..structure_position[1] + size[1] {
+                if [x, y] != worker.position {
+                    // Don't check for collision on the cell that the builder stands on,
+                    // since it will be removed when structure is added.
+                    if self.obstacle_grid.get(&[x, y]).is_some() {
+                        can_fit = false;
+                        println!("Not enough space. Occupied cell: {:?}", [x, y]);
+                    }
+                }
+            }
+        }
+        can_fit
+    }
+
     fn maybe_repay_construction_cost(entity: &Entity, teams: &HashMap<Team, RefCell<TeamState>>) {
         if let EntityState::Constructing(structure_type, ..) = entity.state {
             let construction_options = entity.unit().construction_options.as_ref().unwrap();
@@ -421,29 +430,35 @@ impl Core {
             }) => {
                 assert_eq!(builder.team, issuing_team);
                 let unit = builder.unit_mut();
-                let config = unit
+                let cost = unit
                     .construction_options
                     .as_mut()
                     .unwrap()
                     .get_mut(&structure_type)
-                    .unwrap();
+                    .unwrap()
+                    .cost;
                 let mut team_state = self.teams.get(&issuing_team).unwrap().borrow_mut();
-                if team_state.resources >= config.cost {
-                    team_state.resources -= config.cost;
-                    builder.state = EntityState::Constructing(structure_type, structure_position);
-                    let structure_rect = CellRect {
-                        position: structure_position,
-                        size: *self.structure_sizes.get(&structure_type).unwrap(),
-                    };
-                    if let Some(plan) = pathfind::find_path(
-                        builder.position,
-                        Destination::AdjacentToEntity(structure_rect),
-                        &self.obstacle_grid,
-                    ) {
-                        builder.unit_mut().movement_plan.set(plan);
-                    }
-                } else {
+
+                if team_state.resources < cost {
                     return Some(CommandError::NotEnoughResources);
+                }
+
+                if !self.can_structure_fit(&builder, structure_position, structure_type) {
+                    return Some(CommandError::NotEnoughSpaceForStructure);
+                }
+
+                team_state.resources -= cost;
+                builder.state = EntityState::Constructing(structure_type, structure_position);
+                let structure_rect = CellRect {
+                    position: structure_position,
+                    size: *self.structure_sizes.get(&structure_type).unwrap(),
+                };
+                if let Some(plan) = pathfind::find_path(
+                    builder.position,
+                    Destination::AdjacentToEntity(structure_rect),
+                    &self.obstacle_grid,
+                ) {
+                    builder.unit_mut().movement_plan.set(plan);
                 }
             }
 
@@ -754,4 +769,5 @@ pub enum CommandError {
     NoPathFound,
     AlreadyCarryingResource,
     NotCarryingResource,
+    NotEnoughSpaceForStructure,
 }
