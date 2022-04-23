@@ -272,7 +272,19 @@ impl Game {
                 }));
             }
             Action::Construct(structure_type, _) => {
-                self.set_player_cursor_state(ctx, CursorState::PlacingStructure(structure_type));
+                let resources = self.core.team_state(&Team::Player).borrow().resources;
+                let construction_options = actor.unit().construction_options.as_ref().unwrap();
+                let cost = construction_options.get(&structure_type).unwrap().cost;
+                if resources >= cost {
+                    self.set_player_cursor_state(
+                        ctx,
+                        CursorState::PlacingStructure(structure_type),
+                    );
+                } else {
+                    self.hud
+                        .borrow_mut()
+                        .set_error_message("Not enough resources".to_owned());
+                }
             }
             Action::Stop => {
                 self.player_issue_command(Command::Stop(StopCommand { entity: actor }));
