@@ -300,7 +300,9 @@ impl Core {
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
             let is_used_up_resource = used_up_resources.contains(entity_id);
             if is_dead || is_transforming_into_structure || is_used_up_resource {
-                Core::on_entity_end_state(&entity, &self.teams);
+                if is_dead {
+                    Core::maybe_repay_construction_cost(&entity, &self.teams);
+                }
                 let cell_rect = entity.cell_rect();
                 self.obstacle_grid.set_area(cell_rect, None);
                 removed_entities.push(*entity_id);
@@ -372,7 +374,7 @@ impl Core {
         }
     }
 
-    fn on_entity_end_state(entity: &Entity, teams: &HashMap<Team, RefCell<TeamState>>) {
+    fn maybe_repay_construction_cost(entity: &Entity, teams: &HashMap<Team, RefCell<TeamState>>) {
         if let EntityState::Constructing(structure_type, ..) = entity.state {
             let construction_options = entity.unit().construction_options.as_ref().unwrap();
             let config = construction_options.get(&structure_type).unwrap();
@@ -386,7 +388,7 @@ impl Core {
     }
 
     pub fn issue_command(&self, command: Command, issuing_team: Team) {
-        Core::on_entity_end_state(command.actor().deref(), &self.teams);
+        Core::maybe_repay_construction_cost(command.actor().deref(), &self.teams);
 
         match command {
             Command::Train(TrainCommand {
