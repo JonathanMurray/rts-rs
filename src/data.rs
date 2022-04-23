@@ -6,8 +6,8 @@ use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
 use crate::entities::{
-    Action, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity, EntityConfig,
-    EntityState, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
+    Action, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity, EntityCategory,
+    EntityConfig, EntityState, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 
@@ -486,15 +486,11 @@ impl Animation {
     pub fn draw(
         &self,
         ctx: &mut Context,
-        entity_state: &EntityState,
-        animation: &AnimationState,
-        direction: Direction,
+        entity: &Entity,
         position_on_screen: [f32; 2],
     ) -> GameResult {
         match self {
-            Animation::Tilesheets(tilesheets) => {
-                tilesheets.draw(ctx, entity_state, animation, direction, position_on_screen)
-            }
+            Animation::Tilesheets(tilesheets) => tilesheets.draw(ctx, entity, position_on_screen),
             Animation::Static(image) => image.draw(ctx, position_on_screen),
         }
     }
@@ -527,13 +523,21 @@ impl UnitTilesheets {
     pub fn draw(
         &self,
         ctx: &mut Context,
-        entity_state: &EntityState,
-        animation: &AnimationState,
-        direction: Direction,
+        entity: &Entity,
         position_on_screen: [f32; 2],
     ) -> GameResult {
-        let tilesheet = match entity_state {
-            EntityState::Idle => &self.idle,
+        let mut is_mid_movement = false;
+        if let EntityCategory::Unit(unit) = &entity.category {
+            is_mid_movement = !unit.sub_cell_movement.is_ready();
+        }
+        let tilesheet = match entity.state {
+            EntityState::Idle => {
+                if is_mid_movement {
+                    &self.moving
+                } else {
+                    &self.idle
+                }
+            }
             EntityState::Moving => &self.moving,
             EntityState::Attacking(_) => self.attacking.as_ref().unwrap(),
             EntityState::MovingToResource(_) => &self.moving,
@@ -548,7 +552,12 @@ impl UnitTilesheets {
                 panic!("No animation for state: {:?}", state)
             }
         };
-        tilesheet.draw(ctx, animation, direction, position_on_screen)
+        tilesheet.draw(
+            ctx,
+            &entity.animation,
+            entity.direction(),
+            position_on_screen,
+        )
     }
 }
 

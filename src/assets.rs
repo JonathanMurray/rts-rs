@@ -259,13 +259,7 @@ impl Assets {
                     (entity.entity_type, entity.team)
                 )
             });
-        animation.draw(
-            ctx,
-            &entity.state,
-            &entity.animation,
-            entity.direction(),
-            screen_coords,
-        )?;
+        animation.draw(ctx, &entity, screen_coords)?;
         Ok(())
     }
 
