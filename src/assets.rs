@@ -41,7 +41,7 @@ impl Assets {
 
         let foreground_around_world = create_foreground_around_world(ctx, camera_size)?;
 
-        let entity_animations = data::create_entity_sprites(ctx)?;
+        let entity_animations = data::create_entity_animations(ctx)?;
 
         let movement_command_indicator = MeshBuilder::new()
             .circle(
@@ -259,7 +259,13 @@ impl Assets {
                     (entity.entity_type, entity.team)
                 )
             });
-        animation.draw(ctx, &entity.animation, entity.direction(), screen_coords)?;
+        animation.draw(
+            ctx,
+            &entity.state,
+            &entity.animation,
+            entity.direction(),
+            screen_coords,
+        )?;
         Ok(())
     }
 

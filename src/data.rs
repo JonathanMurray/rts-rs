@@ -7,7 +7,7 @@ use ggez::{Context, GameResult};
 
 use crate::entities::{
     Action, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity, EntityConfig,
-    Team, TrainingConfig, NUM_ENTITY_ACTIONS,
+    EntityState, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 
@@ -302,7 +302,7 @@ impl HudAssets {
     }
 }
 
-pub fn create_entity_sprites(
+pub fn create_entity_animations(
     ctx: &mut Context,
 ) -> GameResult<HashMap<(EntityType, Team), Animation>> {
     let mut animations = Default::default();
@@ -319,8 +319,15 @@ fn create_enforcer(
     ctx: &mut Context,
     animations: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let image = Image::new(ctx, "/images/enforcer_sheet.png")?;
-    unit_sheet(ctx, animations, EntityType::Enforcer, image)
+    let moving = Image::new(ctx, "/images/enforcer_sheet.png")?;
+    let attacking = Image::new(ctx, "/images/enforcer_attacking_sheet.png")?;
+    create_unit_tilesheets(
+        ctx,
+        animations,
+        EntityType::Enforcer,
+        moving,
+        Some(attacking),
+    )
 }
 
 // Sprites must be designed with these reserved colors in mind.
@@ -345,6 +352,7 @@ const TEAM_COLOR_FAMILIES: [(Team, EntityColorFamily); 2] = [
     ),
 ];
 
+#[derive(Copy, Clone)]
 struct EntityColorFamily {
     light: [u8; 4],
     dark: [u8; 4],
@@ -354,59 +362,115 @@ fn create_engineer(
     ctx: &mut Context,
     animations: &mut HashMap<(EntityType, Team), Animation>,
 ) -> GameResult {
-    let image = Image::new(ctx, "/images/engineer_sheet.png")?;
-    unit_sheet(ctx, animations, EntityType::Engineer, image)
+    let moving = Image::new(ctx, "/images/engineer_sheet.png")?;
+    create_unit_tilesheets(ctx, animations, EntityType::Engineer, moving, None)
 }
 
-fn unit_sheet(
+fn create_unit_tilesheets(
     ctx: &mut Context,
     animations: &mut HashMap<(EntityType, Team), Animation>,
     entity_type: EntityType,
-    image: Image,
+    moving_image: Image,
+    attacking_image: Option<Image>,
 ) -> GameResult {
-    let rgba = image.to_rgba8(ctx)?;
+    let moving_size = [moving_image.width(), moving_image.height()];
+    let moving_rgba = moving_image.to_rgba8(ctx)?;
+
     for (team, color_family) in TEAM_COLOR_FAMILIES {
-        let team_image = recolor(ctx, [image.width(), image.height()], &rgba, &color_family)?;
+        let moving_tilesheet = tilesheet(
+            ctx,
+            moving_size,
+            &moving_rgba[..],
+            color_family,
+            AnimationType::Moving,
+        )?;
 
-        let mut frames = HashMap::new();
+        let idle_tilesheet = tilesheet(
+            ctx,
+            moving_size,
+            &moving_rgba[..],
+            color_family,
+            AnimationType::Idle,
+        )?;
 
-        let directions_per_row = [
-            Direction::South,
-            Direction::SouthEast,
-            Direction::East,
-            Direction::NorthEast,
-            Direction::North,
-            Direction::NorthWest,
-            Direction::West,
-            Direction::SouthWest,
-        ];
-        for (row, &direction) in directions_per_row.iter().enumerate() {
-            frames.insert(
-                direction,
-                vec![
-                    Frame::new(1.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
-                    Frame::new(0.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
-                    Frame::new(1.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
-                    Frame::new(2.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
-                ],
-            );
-        }
+        let attacking_tilesheet = if let Some(image) = attacking_image.as_ref() {
+            let rgba = image.to_rgba8(ctx)?;
+            Some(tilesheet(
+                ctx,
+                [image.width(), image.height()],
+                &rgba[..],
+                color_family,
+                AnimationType::Attacking,
+            )?)
+        } else {
+            None
+        };
 
-        // TODO specify idle-pose
         animations.insert(
             (entity_type, team),
-            Animation::Tilesheet(Tilesheet {
-                sheet: team_image,
-                origin: [0.0, 16.0],
-                frames,
+            Animation::Tilesheets(UnitTilesheets {
+                idle: idle_tilesheet,
+                moving: moving_tilesheet,
+                attacking: attacking_tilesheet,
             }),
         );
     }
     Ok(())
 }
 
+fn tilesheet(
+    ctx: &mut Context,
+    size: [u16; 2],
+    rgba: &[u8],
+    color_family: EntityColorFamily,
+    animation_type: AnimationType,
+) -> GameResult<Tilesheet> {
+    let image = recolor(ctx, size, rgba, &color_family)?;
+    let mut frames_by_direction = HashMap::new();
+    let directions_per_row = [
+        Direction::South,
+        Direction::SouthEast,
+        Direction::East,
+        Direction::NorthEast,
+        Direction::North,
+        Direction::NorthWest,
+        Direction::West,
+        Direction::SouthWest,
+    ];
+    for (row, &direction) in directions_per_row.iter().enumerate() {
+        // Different sheets are laid out differently
+        // Animations with more frames use more columns per row
+        let frames = match animation_type {
+            AnimationType::Idle => vec![Frame::new(
+                1.0 / 3.0,
+                row as f32 / 8.0,
+                1.0 / 3.0,
+                1.0 / 8.0,
+            )],
+            AnimationType::Moving => vec![
+                Frame::new(1.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
+                Frame::new(0.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
+                Frame::new(1.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
+                Frame::new(2.0 / 3.0, row as f32 / 8.0, 1.0 / 3.0, 1.0 / 8.0),
+            ],
+            AnimationType::Attacking => vec![
+                Frame::new(0.0 / 2.0, row as f32 / 8.0, 1.0 / 2.0, 1.0 / 8.0),
+                Frame::new(1.0 / 2.0, row as f32 / 8.0, 1.0 / 2.0, 1.0 / 8.0),
+            ],
+        };
+
+        frames_by_direction.insert(direction, frames);
+    }
+
+    Ok(Tilesheet {
+        sheet: image,
+        origin: [0.0, 16.0],
+        frames: frames_by_direction,
+    })
+}
+
 pub enum Animation {
-    Tilesheet(Tilesheet),
+    Tilesheets(UnitTilesheets),
     Static(StaticImage),
 }
 
@@ -414,13 +478,14 @@ impl Animation {
     pub fn draw(
         &self,
         ctx: &mut Context,
+        entity_state: &EntityState,
         animation: &AnimationState,
         direction: Direction,
         position_on_screen: [f32; 2],
     ) -> GameResult {
         match self {
-            Animation::Tilesheet(tilesheet) => {
-                tilesheet.draw(ctx, animation, direction, position_on_screen)
+            Animation::Tilesheets(tilesheets) => {
+                tilesheets.draw(ctx, entity_state, animation, direction, position_on_screen)
             }
             Animation::Static(image) => image.draw(ctx, position_on_screen),
         }
@@ -441,6 +506,35 @@ impl StaticImage {
             position_on_screen[1] - self.origin[1],
         ];
         self.image.draw(ctx, DrawParam::new().dest(pos))
+    }
+}
+
+pub struct UnitTilesheets {
+    idle: Tilesheet,
+    moving: Tilesheet,
+    attacking: Option<Tilesheet>,
+}
+
+impl UnitTilesheets {
+    pub fn draw(
+        &self,
+        ctx: &mut Context,
+        entity_state: &EntityState,
+        animation: &AnimationState,
+        direction: Direction,
+        position_on_screen: [f32; 2],
+    ) -> GameResult {
+        let tilesheet = match entity_state {
+            EntityState::Idle => &self.idle,
+            EntityState::Moving => &self.moving,
+            EntityState::Attacking(_) => self.attacking.as_ref().unwrap(),
+            EntityState::MovingToResource(_) => &self.moving,
+            // TODO gathering animation
+            EntityState::GatheringResource(_) => &self.idle,
+            EntityState::ReturningResource(_) => &self.moving,
+            unhandled => panic!("No animation for entity state: {:?}", unhandled),
+        };
+        tilesheet.draw(ctx, animation, direction, position_on_screen)
     }
 }
 
@@ -563,4 +657,11 @@ fn recolor(
         i += 4;
     }
     Image::from_rgba8(ctx, size[0], size[1], &recolored[..])
+}
+
+#[derive(Debug, Copy, Clone)]
+enum AnimationType {
+    Idle,
+    Moving,
+    Attacking,
 }

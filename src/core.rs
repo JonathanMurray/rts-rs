@@ -61,12 +61,10 @@ impl Core {
             let pos = entity.position;
             if let EntityCategory::Unit(unit) = &mut entity.category {
                 unit.sub_cell_movement.update(dt, pos);
-                let mut is_moving = false;
                 if unit.sub_cell_movement.is_ready() {
                     if let Some(next_pos) = unit.movement_plan.peek() {
                         let obstacle = self.obstacle_grid.get(next_pos);
                         if obstacle.is_none() {
-                            is_moving = true;
                             let old_pos = pos;
                             let new_pos = unit.movement_plan.advance();
                             unit.move_to_adjacent_cell(old_pos, new_pos);
@@ -78,16 +76,12 @@ impl Core {
                     } else if entity.state == EntityState::Moving {
                         entity.state = EntityState::Idle;
                     }
-                } else {
-                    is_moving = true;
                 }
 
-                if is_moving {
-                    entity.animation.ms_counter = entity
-                        .animation
-                        .ms_counter
-                        .wrapping_add(dt.as_millis() as u16);
-                }
+                entity.animation.ms_counter = entity
+                    .animation
+                    .ms_counter
+                    .wrapping_add(dt.as_millis() as u16);
             }
         }
 
