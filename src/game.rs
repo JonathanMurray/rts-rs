@@ -518,20 +518,24 @@ impl EventHandler for Game {
 
         self.player_state.update(ctx, dt);
 
-        if let Some(pixel_coords) = self.player_state.screen_to_world(mouse_position(ctx)) {
-            if self.player_state.cursor_state() == CursorState::Default {
+        if self.player_state.cursor_state() == CursorState::Default {
+            let icon = if let Some(pixel_coords) =
+                self.player_state.screen_to_world(mouse_position(ctx))
+            {
                 let is_hovering_some_entity = self
                     .core
                     .entities()
                     .iter()
                     .any(|(_id, e)| e.borrow().pixel_rect().contains(pixel_coords));
-                let icon = if is_hovering_some_entity {
+                if is_hovering_some_entity {
                     CursorIcon::Hand
                 } else {
                     CursorIcon::Default
-                };
-                mouse::set_cursor_type(ctx, icon);
-            }
+                }
+            } else {
+                CursorIcon::Default
+            };
+            mouse::set_cursor_type(ctx, icon);
         }
 
         self.hud.borrow_mut().update(dt);
