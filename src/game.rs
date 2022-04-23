@@ -12,8 +12,8 @@ use std::cell::{Ref, RefCell, RefMut};
 use crate::assets::Assets;
 use crate::camera::Camera;
 use crate::core::{
-    AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, MoveCommand,
-    ReturnResourceCommand, StopCommand, TrainCommand, UpdateOutcome,
+    AttackCommand, Command, CommandError, ConstructCommand, Core, GatherResourceCommand,
+    MoveCommand, ReturnResourceCommand, StopCommand, TrainCommand, UpdateOutcome,
 };
 use crate::data::EntityType;
 use crate::enemy_ai::EnemyPlayerAi;
@@ -266,21 +266,17 @@ impl Game {
     ) {
         match action {
             Action::Train(trained_unit_type, config) => {
-                self.core.issue_command(
-                    Command::Train(TrainCommand {
-                        trainer: actor,
-                        trained_unit_type,
-                        config,
-                    }),
-                    Team::Player,
-                );
+                self.player_issue_command(Command::Train(TrainCommand {
+                    trainer: actor,
+                    trained_unit_type,
+                    config,
+                }));
             }
             Action::Construct(structure_type, _) => {
                 self.set_player_cursor_state(ctx, CursorState::PlacingStructure(structure_type));
             }
             Action::Stop => {
-                self.core
-                    .issue_command(Command::Stop(StopCommand { entity: actor }), Team::Player);
+                self.player_issue_command(Command::Stop(StopCommand { entity: actor }));
             }
             Action::Move => {
                 self.set_player_cursor_state(ctx, CursorState::SelectingMovementDestination);
@@ -294,6 +290,23 @@ impl Game {
             Action::ReturnResource => {
                 self.player_issue_return_resource(actor, None);
             }
+        }
+    }
+
+    fn player_issue_command(&self, command: Command) {
+        let error_message =
+            self.core
+                .issue_command(command, Team::Player)
+                .map(|error| match error {
+                    CommandError::NotEnoughResources => "Not enough resources".to_owned(),
+                    CommandError::NoPathFound => "Can't go there".to_owned(),
+                    CommandError::AlreadyCarryingResource => "Already carrying fuel".to_owned(),
+                    CommandError::NotCarryingResource => {
+                        "Not carrying any fuel to return".to_owned()
+                    }
+                });
+        if let Some(message) = error_message {
+            self.hud.borrow_mut().set_error_message(message);
         }
     }
 
@@ -350,13 +363,10 @@ impl Game {
                 .borrow_mut()
                 .push(EntityHighlight::new(structure.id, HighlightType::Friendly));
         }
-        self.core.issue_command(
-            Command::ReturnResource(ReturnResourceCommand {
-                gatherer,
-                structure,
-            }),
-            Team::Player,
-        );
+        self.player_issue_command(Command::ReturnResource(ReturnResourceCommand {
+            gatherer,
+            structure,
+        }));
     }
 
     fn player_issue_first_selected_construct(
@@ -370,14 +380,11 @@ impl Game {
             .next()
             .expect("Cannot issue construction without selected entity")
             .borrow_mut();
-        self.core.issue_command(
-            Command::Construct(ConstructCommand {
-                builder,
-                structure_position: clicked_world_pos,
-                structure_type,
-            }),
-            Team::Player,
-        );
+        self.player_issue_command(Command::Construct(ConstructCommand {
+            builder,
+            structure_position: clicked_world_pos,
+            structure_type,
+        }));
     }
 
     fn player_issue_all_selected_attack(&mut self, world_pos: [u32; 2]) {
@@ -386,7 +393,9 @@ impl Game {
                 self._player_issue_attack(attacker.borrow_mut(), victim.borrow());
             }
         } else {
-            println!("Invalid attack target");
+            self.hud
+                .borrow_mut()
+                .set_error_message("Can't attack that target".to_owned());
         }
     }
 
@@ -395,10 +404,7 @@ impl Game {
             .entity_highlights
             .borrow_mut()
             .push(EntityHighlight::new(victim.id, HighlightType::Hostile));
-        self.core.issue_command(
-            Command::Attack(AttackCommand { attacker, victim }),
-            Team::Player,
-        );
+        self.player_issue_command(Command::Attack(AttackCommand { attacker, victim }));
     }
 
     fn player_issue_all_selected_movement(&self, world_pixel_coords: [f32; 2]) {
@@ -413,13 +419,10 @@ impl Game {
             .borrow_mut()
             .set(world_pixel_coordinates);
         let destination = world_to_grid(world_pixel_coordinates);
-        self.core.issue_command(
-            Command::Move(MoveCommand {
-                unit: entity,
-                destination,
-            }),
-            Team::Player,
-        );
+        self.player_issue_command(Command::Move(MoveCommand {
+            unit: entity,
+            destination,
+        }));
     }
 
     fn player_issue_all_selected_gather_resource(&self, world_pos: [u32; 2]) {
@@ -428,7 +431,9 @@ impl Game {
                 self._player_issue_gather_resource(gatherer.borrow_mut(), resource.borrow());
             }
         } else {
-            println!("Invalid resource target");
+            self.hud
+                .borrow_mut()
+                .set_error_message("Invalid target - select a resource".to_owned());
         }
     }
 
@@ -437,10 +442,10 @@ impl Game {
             .entity_highlights
             .borrow_mut()
             .push(EntityHighlight::new(resource.id, HighlightType::Friendly));
-        self.core.issue_command(
-            Command::GatherResource(GatherResourceCommand { gatherer, resource }),
-            Team::Player,
-        );
+        self.player_issue_command(Command::GatherResource(GatherResourceCommand {
+            gatherer,
+            resource,
+        }));
     }
 
     fn set_player_cursor_state(&self, ctx: &mut Context, cursor_state: CursorState) {

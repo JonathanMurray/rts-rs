@@ -27,7 +27,7 @@ impl Core {
         water_cells: Vec<[u32; 2]>,
     ) -> Self {
         let mut teams = HashMap::new();
-        teams.insert(Team::Player, RefCell::new(TeamState { resources: 5 }));
+        teams.insert(Team::Player, RefCell::new(TeamState { resources: 0 }));
         teams.insert(Team::Enemy, RefCell::new(TeamState { resources: 5 }));
 
         let mut obstacle_grid = Grid::new(world_dimensions);
@@ -387,7 +387,7 @@ impl Core {
         }
     }
 
-    pub fn issue_command(&self, command: Command, issuing_team: Team) {
+    pub fn issue_command(&self, command: Command, issuing_team: Team) -> Option<CommandError> {
         Core::maybe_repay_construction_cost(command.actor().deref(), &self.teams);
 
         match command {
@@ -409,6 +409,8 @@ impl Core {
                         trainer.state = EntityState::TrainingUnit(trained_unit_type);
                         team_state.resources -= config.cost;
                     }
+                } else {
+                    return Some(CommandError::NotEnoughResources);
                 }
             }
 
@@ -440,6 +442,8 @@ impl Core {
                     ) {
                         builder.unit_mut().movement_plan.set(plan);
                     }
+                } else {
+                    return Some(CommandError::NotEnoughResources);
                 }
             }
 
@@ -465,6 +469,8 @@ impl Core {
                 ) {
                     mover.state = EntityState::Moving;
                     mover.unit_mut().movement_plan.set(plan);
+                } else {
+                    return Some(CommandError::NoPathFound);
                 }
             }
 
@@ -481,6 +487,8 @@ impl Core {
                     &self.obstacle_grid,
                 ) {
                     attacker.unit_mut().movement_plan.set(plan);
+                } else {
+                    return Some(CommandError::NoPathFound);
                 }
             }
 
@@ -498,11 +506,7 @@ impl Core {
                     .is_carrying();
                 if is_carrying_resource {
                     // TODO improve UI so that no player input leads to this situation
-                    eprintln!(
-                        "WARN: {:?} was issued to gather a resource, but they already carry some",
-                        gatherer.id
-                    );
-                    return;
+                    return Some(CommandError::AlreadyCarryingResource);
                 }
                 gatherer.state = EntityState::MovingToResource(resource.id);
                 if let Some(plan) = pathfind::find_path(
@@ -511,6 +515,8 @@ impl Core {
                     &self.obstacle_grid,
                 ) {
                     gatherer.unit_mut().movement_plan.set(plan);
+                } else {
+                    return Some(CommandError::NoPathFound);
                 }
             }
 
@@ -529,13 +535,11 @@ impl Core {
                     self.unit_return_resource(gatherer, structure);
                 } else {
                     // TODO improve UI so that no player input leads to this situation
-                    eprintln!(
-                        "WARN: {:?} was issued to return a resource, but they don't carry any",
-                        gatherer.id
-                    );
+                    return Some(CommandError::NotCarryingResource);
                 }
             }
         }
+        None
     }
 
     fn unit_return_resource(&self, mut gatherer: RefMut<Entity>, structure: Option<Ref<Entity>>) {
@@ -742,4 +746,12 @@ pub struct UpdateOutcome {
 pub enum ObstacleType {
     Entity(Team),
     Water,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub enum CommandError {
+    NotEnoughResources,
+    NoPathFound,
+    AlreadyCarryingResource,
+    NotCarryingResource,
 }

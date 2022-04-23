@@ -36,6 +36,7 @@ pub struct HudGraphics {
     buttons: [Button; NUM_BUTTONS],
     minimap: Minimap,
     hovered_button_index: Option<usize>,
+    error_message: ErrorMessage,
     tooltip: Tooltip,
     entity_header: EntityHeader,
     group_header: GroupHeader,
@@ -61,6 +62,8 @@ impl HudGraphics {
         let header_pos = [position[0], position[1] + 200.0];
         let entity_header = EntityHeader::new(ctx, header_pos, font)?;
         let group_header = GroupHeader::new(ctx, header_pos)?;
+        let error_position = [tooltip_position[0] + 5.0, tooltip_position[1] - 30.0];
+        let error_message = ErrorMessage::new(font, error_position);
         let tooltip = Tooltip::new(font, tooltip_position, &assets);
 
         let buttons_x = header_pos[0];
@@ -84,6 +87,7 @@ impl HudGraphics {
             buttons,
             minimap,
             hovered_button_index: None,
+            error_message,
             tooltip,
             entity_header,
             group_header,
@@ -194,6 +198,7 @@ impl HudGraphics {
             CursorState::SelectingResourceTarget => Some(TooltipText::CursorSelectResource),
             CursorState::DraggingSelectionArea(_) => None,
         };
+        self.error_message.draw(ctx)?;
         self.tooltip.draw(ctx, tooltip_text, &self.assets)?;
 
         self.minimap
@@ -259,6 +264,7 @@ impl HudGraphics {
         for button in &mut self.buttons {
             button.update(dt);
         }
+        self.error_message.update(dt);
     }
 
     pub fn set_entity_actions(&mut self, actions: [Option<Action>; NUM_ENTITY_ACTIONS]) {
@@ -275,6 +281,10 @@ impl HudGraphics {
 
     pub fn set_num_selected_entities(&mut self, num: usize) {
         self.num_selected_entities = num;
+    }
+
+    pub fn set_error_message(&mut self, message: String) {
+        self.error_message.set_text(message);
     }
 }
 
@@ -308,6 +318,44 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
 }
 
 const TOOLTIP_FONT_SIZE: f32 = 17.5;
+const ERROR_MESSAGE_FONT_SIZE: f32 = 15.0;
+
+struct ErrorMessage {
+    position: [f32; 2],
+    font: SharpFont,
+    text: Option<SharpText>,
+    remaining: Duration,
+}
+
+impl ErrorMessage {
+    fn new(font: SharpFont, position: [f32; 2]) -> Self {
+        Self {
+            position,
+            font,
+            text: None,
+            remaining: Duration::ZERO,
+        }
+    }
+
+    fn set_text(&mut self, text: String) {
+        self.text = Some(self.font.text(ERROR_MESSAGE_FONT_SIZE, text));
+        self.remaining = Duration::from_secs_f32(1.5);
+    }
+
+    fn update(&mut self, dt: Duration) {
+        self.remaining = self.remaining.saturating_sub(dt);
+        if self.remaining.is_zero() {
+            self.text = None;
+        }
+    }
+
+    fn draw(&self, ctx: &mut Context) -> GameResult {
+        if let Some(text) = &self.text {
+            text.draw(ctx, self.position)?;
+        };
+        Ok(())
+    }
+}
 
 struct Tooltip {
     position: [f32; 2],
