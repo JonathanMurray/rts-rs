@@ -172,6 +172,8 @@ impl HudAssets {
         let gather_icon = Image::new(ctx, "/images/icons/gather.png")?;
         let return_icon = Image::new(ctx, "/images/icons/return.png")?;
 
+        let resource_icon = Image::new(ctx, "/images/icons/resource.png")?;
+
         let engineer_icon = Image::new(ctx, "/images/icons/engineer.png")?;
         let enforcer_icon = Image::new(ctx, "/images/icons/enforcer.png")?;
         let tech_lab_icon = Image::new(ctx, "/images/icons/tech_lab.png")?;
@@ -205,17 +207,7 @@ impl HudAssets {
             },
             fuel_rift: EntityHudConfig {
                 name: "Fuel rift".to_string(),
-                portrait: Picture::Mesh(Mesh::new_rectangle(
-                    ctx,
-                    DrawMode::fill(),
-                    Rect::new(
-                        5.0,
-                        5.0,
-                        PORTRAIT_DIMENSIONS[0] - 10.0,
-                        PORTRAIT_DIMENSIONS[1] - 10.0,
-                    ),
-                    color,
-                )?),
+                portrait: Picture::Image(resource_icon),
             },
             stop_icon,
             move_icon,
@@ -547,8 +539,7 @@ impl UnitTilesheets {
             // TODO gathering animation
             EntityState::GatheringResource(_) => &self.idle,
 
-            state @ EntityState::TrainingUnit(_)
-            | state @ EntityState::UnderConstruction(_, _) => {
+            state @ EntityState::TrainingUnit(_) | state @ EntityState::UnderConstruction(_, _) => {
                 panic!("No animation for state: {:?}", state)
             }
         };

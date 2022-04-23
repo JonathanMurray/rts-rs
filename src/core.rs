@@ -268,7 +268,9 @@ impl Core {
         let mut structures_to_add = Vec::new();
         for (entity_id, entity) in &self.entities {
             let mut entity = entity.borrow_mut();
-            if let EntityState::MovingToConstruction(structure_type, structure_position) = entity.state {
+            if let EntityState::MovingToConstruction(structure_type, structure_position) =
+                entity.state
+            {
                 let has_arrived = entity.unit_mut().movement_plan.peek().is_none()
                     && !entity.unit_mut().sub_cell_movement.is_between_cells();
                 if has_arrived {
@@ -478,7 +480,8 @@ impl Core {
                 }
 
                 team_state.resources -= cost;
-                builder.state = EntityState::MovingToConstruction(structure_type, structure_position);
+                builder.state =
+                    EntityState::MovingToConstruction(structure_type, structure_position);
                 let structure_rect = CellRect {
                     position: structure_position,
                     size: *self.structure_sizes.get(&structure_type).unwrap(),
