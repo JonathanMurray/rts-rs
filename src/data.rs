@@ -176,7 +176,9 @@ impl HudAssets {
 
         let engineer_icon = Image::new(ctx, "/images/icons/engineer.png")?;
         let enforcer_icon = Image::new(ctx, "/images/icons/enforcer.png")?;
+
         let tech_lab_icon = Image::new(ctx, "/images/icons/tech_lab.png")?;
+        let battle_academy_icon = Image::new(ctx, "/images/icons/battle_academy.png")?;
 
         Ok(Self {
             enforcer: EntityHudConfig {
@@ -189,17 +191,7 @@ impl HudAssets {
             },
             battle_academy: EntityHudConfig {
                 name: "Battle Academy".to_string(),
-                portrait: Picture::Mesh(Mesh::new_rectangle(
-                    ctx,
-                    DrawMode::fill(),
-                    Rect::new(
-                        5.0,
-                        5.0,
-                        PORTRAIT_DIMENSIONS[0] - 10.0,
-                        PORTRAIT_DIMENSIONS[1] - 10.0,
-                    ),
-                    color,
-                )?),
+                portrait: Picture::Image(battle_academy_icon),
             },
             tech_lab: EntityHudConfig {
                 name: "Tech Lab".to_string(),
