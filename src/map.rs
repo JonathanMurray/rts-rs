@@ -113,7 +113,6 @@ impl WorldInitData {
                 ));
             }
             MapType::LoadTest => {
-
                 let dimensions = [100, 100];
                 for y in 5..dimensions[1] {
                     for x in 5..dimensions[0] {

@@ -540,23 +540,24 @@ impl EventHandler for Game {
         let mouse_pos = mouse_position(ctx);
         match self.player_state.cursor_state() {
             CursorState::Default => {
-                let icon = if let Some(pixel_coords) = self.player_state.screen_to_world(mouse_pos)
-                {
-                    let is_hovering_some_entity = self
-                        .core
-                        .entities()
-                        .iter()
-                        .any(|(_id, e)| e.borrow().pixel_rect().contains(pixel_coords));
-                    if is_hovering_some_entity {
-                        CursorIcon::Hand
+                let hovered_entity =
+                    if let Some(pixel_coords) = self.player_state.screen_to_world(mouse_pos) {
+                        self.core
+                            .entities()
+                            .iter()
+                            .find(|(_id, e)| e.borrow().pixel_rect().contains(pixel_coords))
                     } else {
-                        CursorIcon::Default
-                    }
+                        None
+                    };
+
+                if let Some((entity_id, _entity)) = hovered_entity {
+                    mouse::set_cursor_type(ctx, CursorIcon::Hand);
+                    self.player_state.hovered_entity_highlight =
+                        Some((*entity_id, HighlightType::Neutral));
                 } else {
-                    CursorIcon::Default
-                };
-                mouse::set_cursor_type(ctx, icon);
-                self.player_state.hovered_entity_highlight = None;
+                    mouse::set_cursor_type(ctx, CursorIcon::Default);
+                    self.player_state.hovered_entity_highlight = None;
+                }
             }
 
             CursorState::SelectingAttackTarget => {
@@ -645,6 +646,11 @@ impl EventHandler for Game {
                 self.assets
                     .draw_selection(ctx, entity.size(), entity.team, *screen_coords)?;
             }
+            if let Some((hovered_id, highlight_type)) = self.player_state.hovered_entity_highlight {
+                if hovered_id == entity.id {
+                    Assets::draw_highlight(ctx, entity.size(), *screen_coords, highlight_type)?;
+                }
+            }
             if let Some(highlight) = self
                 .player_state
                 .timed_entity_highlights
@@ -658,11 +664,6 @@ impl EventHandler for Game {
                     *screen_coords,
                     highlight.highlight_type,
                 )?;
-            }
-            if let Some((hovered_id, highlight_type)) = self.player_state.hovered_entity_highlight {
-                if hovered_id == entity.id {
-                    Assets::draw_highlight(ctx, entity.size(), *screen_coords, highlight_type)?;
-                }
             }
         }
 

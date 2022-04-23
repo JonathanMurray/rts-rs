@@ -54,6 +54,7 @@ impl MovementCommandIndicator {
 pub enum HighlightType {
     Hostile,
     Friendly,
+    Neutral,
 }
 
 pub struct EntityHighlight {

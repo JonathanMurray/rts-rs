@@ -99,9 +99,10 @@ impl Assets {
         let color = match highlight_type {
             HighlightType::Hostile => Color::new(1.0, 0.2, 0.2, 1.0),
             HighlightType::Friendly => Color::new(0.2, 0.7, 0.2, 1.0),
+            HighlightType::Neutral => Color::new(1.0, 1.0, 1.0, 0.2),
         };
         let padding = 3.0;
-        let rounding = 4.0;
+        let corner_radius = 4.0;
         Mesh::new_rounded_rectangle(
             ctx,
             DrawMode::stroke(1.0),
@@ -111,7 +112,7 @@ impl Assets {
                 size[0] as f32 * CELL_PIXEL_SIZE[0] + padding * 2.0,
                 size[1] as f32 * CELL_PIXEL_SIZE[1] + padding * 2.0,
             ),
-            rounding,
+            corner_radius,
             color,
         )?
         .draw(ctx, DrawParam::default())
@@ -284,18 +285,19 @@ fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameR
         Team::Enemy => Color::new(0.8, 0.4, 0.4, 1.0),
         Team::Neutral => Color::new(0.8, 0.8, 0.6, 1.0),
     };
-    MeshBuilder::new()
-        .rectangle(
-            DrawMode::stroke(1.0),
-            Rect::new(
-                -1.0,
-                -1.0,
-                CELL_PIXEL_SIZE[0] * size[0] as f32 + 2.0,
-                CELL_PIXEL_SIZE[1] * size[1] as f32 + 2.0,
-            ),
-            color,
-        )?
-        .build(ctx)
+    let corner_radius = 4.0;
+    Mesh::new_rounded_rectangle(
+        ctx,
+        DrawMode::stroke(1.0),
+        Rect::new(
+            -1.0,
+            -1.0,
+            CELL_PIXEL_SIZE[0] * size[0] as f32 + 2.0,
+            CELL_PIXEL_SIZE[1] * size[1] as f32 + 2.0,
+        ),
+        corner_radius,
+        color,
+    )
 }
 
 fn create_construction_outline_mesh(ctx: &mut Context, size: [u32; 2]) -> GameResult<Mesh> {
