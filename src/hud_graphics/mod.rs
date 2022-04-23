@@ -294,7 +294,7 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
             state == EntityState::TrainingUnit(trained_entity_type)
         }
         Action::Construct(structure_type, _) => {
-            if let EntityState::Constructing(constructing_type, _) = state {
+            if let EntityState::MovingToConstruction(constructing_type, _) = state {
                 structure_type == constructing_type
             } else {
                 false

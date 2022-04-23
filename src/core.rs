@@ -268,7 +268,7 @@ impl Core {
         let mut structures_to_add = Vec::new();
         for (entity_id, entity) in &self.entities {
             let mut entity = entity.borrow_mut();
-            if let EntityState::Constructing(structure_type, structure_position) = entity.state {
+            if let EntityState::MovingToConstruction(structure_type, structure_position) = entity.state {
                 let has_arrived = entity.unit_mut().movement_plan.peek().is_none()
                     && !entity.unit_mut().sub_cell_movement.is_between_cells();
                 if has_arrived {
@@ -414,7 +414,7 @@ impl Core {
     }
 
     fn maybe_repay_construction_cost(entity: &Entity, teams: &HashMap<Team, RefCell<TeamState>>) {
-        if let EntityState::Constructing(structure_type, ..) = entity.state {
+        if let EntityState::MovingToConstruction(structure_type, ..) = entity.state {
             let construction_options = entity.unit().construction_options.as_ref().unwrap();
             let config = construction_options.get(&structure_type).unwrap();
             let mut team_state = teams.get(&entity.team).unwrap().borrow_mut();
@@ -478,7 +478,7 @@ impl Core {
                 }
 
                 team_state.resources -= cost;
-                builder.state = EntityState::Constructing(structure_type, structure_position);
+                builder.state = EntityState::MovingToConstruction(structure_type, structure_position);
                 let structure_rect = CellRect {
                     position: structure_position,
                     size: *self.structure_sizes.get(&structure_type).unwrap(),

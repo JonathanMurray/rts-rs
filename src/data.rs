@@ -543,11 +543,11 @@ impl UnitTilesheets {
             EntityState::MovingToResource(_) => &self.moving,
             EntityState::ReturningResource(_) => &self.moving,
             EntityState::MovingToAttackTarget(_) => &self.moving,
+            EntityState::MovingToConstruction(..) => &self.moving,
             // TODO gathering animation
             EntityState::GatheringResource(_) => &self.idle,
 
             state @ EntityState::TrainingUnit(_)
-            | state @ EntityState::Constructing(_, _)
             | state @ EntityState::UnderConstruction(_, _) => {
                 panic!("No animation for state: {:?}", state)
             }

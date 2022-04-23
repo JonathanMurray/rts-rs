@@ -20,7 +20,7 @@ pub struct EntityId(usize);
 pub enum EntityState {
     Idle,
     TrainingUnit(EntityType),
-    Constructing(EntityType, [u32; 2]),
+    MovingToConstruction(EntityType, [u32; 2]),
     Moving,
     MovingToAttackTarget(EntityId),
     Attacking(EntityId),

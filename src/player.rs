@@ -83,10 +83,11 @@ impl EntityHighlight {
 
 pub struct PlayerState {
     pub selected_entity_ids: Vec<EntityId>,
-    pub cursor_state: Cell<CursorState>,
+    cursor_state: Cell<CursorState>,
     pub camera: RefCell<Camera>,
     pub movement_command_indicator: RefCell<MovementCommandIndicator>,
-    pub entity_highlights: RefCell<Vec<EntityHighlight>>,
+    pub timed_entity_highlights: RefCell<Vec<EntityHighlight>>,
+    pub hovered_entity_highlight: Option<(EntityId, HighlightType)>,
 }
 
 impl PlayerState {
@@ -96,7 +97,8 @@ impl PlayerState {
             cursor_state: Cell::new(CursorState::Default),
             camera: RefCell::new(camera),
             movement_command_indicator: RefCell::new(MovementCommandIndicator::new()),
-            entity_highlights: RefCell::new(vec![]),
+            timed_entity_highlights: RefCell::new(vec![]),
+            hovered_entity_highlight: None,
         }
     }
 
@@ -147,7 +149,7 @@ impl PlayerState {
     pub fn update(&mut self, ctx: &mut Context, dt: Duration) {
         self.camera.borrow_mut().update(ctx, dt);
         self.movement_command_indicator.borrow_mut().update(dt);
-        let mut highlights = self.entity_highlights.borrow_mut();
+        let mut highlights = self.timed_entity_highlights.borrow_mut();
         for highlight in highlights.iter_mut() {
             highlight.update(dt);
         }

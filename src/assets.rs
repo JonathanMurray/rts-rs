@@ -100,15 +100,18 @@ impl Assets {
             HighlightType::Hostile => Color::new(1.0, 0.2, 0.2, 1.0),
             HighlightType::Friendly => Color::new(0.2, 0.7, 0.2, 1.0),
         };
-        Mesh::new_rectangle(
+        let padding = 3.0;
+        let rounding = 4.0;
+        Mesh::new_rounded_rectangle(
             ctx,
             DrawMode::stroke(1.0),
             Rect::new(
-                screen_coords[0],
-                screen_coords[1],
-                size[0] as f32 * CELL_PIXEL_SIZE[0],
-                size[1] as f32 * CELL_PIXEL_SIZE[1],
+                screen_coords[0] - padding,
+                screen_coords[1] - padding,
+                size[0] as f32 * CELL_PIXEL_SIZE[0] + padding * 2.0,
+                size[1] as f32 * CELL_PIXEL_SIZE[1] + padding * 2.0,
             ),
+            rounding,
             color,
         )?
         .draw(ctx, DrawParam::default())
@@ -259,7 +262,7 @@ impl Assets {
                     (entity.entity_type, entity.team)
                 )
             });
-        animation.draw(ctx, &entity, screen_coords)?;
+        animation.draw(ctx, entity, screen_coords)?;
         Ok(())
     }
 

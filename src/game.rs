@@ -149,10 +149,10 @@ impl Game {
             .filter(|entity| RefCell::borrow(entity).team == Team::Player)
     }
 
-    fn resource_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<&RefCell<Entity>> {
+    fn resource_at_position(&self, world_pixel_coords: [f32; 2]) -> Option<&RefCell<Entity>> {
         self.core.entities().iter().find_map(|(_id, entity)| {
-            if entity.borrow().cell_rect().contains(clicked_world_pos)
-                && entity.borrow().entity_type == EntityType::FuelRift
+            if entity.borrow().entity_type == EntityType::FuelRift
+                && entity.borrow().pixel_rect().contains(world_pixel_coords)
             {
                 Some(entity)
             } else {
@@ -161,12 +161,11 @@ impl Game {
         })
     }
 
-    fn enemy_at_position(&self, clicked_world_pos: [u32; 2]) -> Option<&RefCell<Entity>> {
+    fn enemy_at_position(&self, world_pixel_coords: [f32; 2]) -> Option<&RefCell<Entity>> {
         self.core.entities().iter().find_map(|(_id, entity)| {
             let entity_ref = entity.borrow();
-            if entity_ref.cell_rect().contains(clicked_world_pos)
-                && entity_ref.health.is_some()
-                && entity_ref.team == Team::Enemy
+            if entity_ref.team == Team::Enemy
+                && entity_ref.pixel_rect().contains(world_pixel_coords)
             {
                 drop(entity_ref);
                 Some(entity)
@@ -320,14 +319,14 @@ impl Game {
             match &entity_ref.category {
                 EntityCategory::Unit(unit) => {
                     if unit.combat.is_some() {
-                        if let Some(victim) = self.enemy_at_position(world_pos) {
+                        if let Some(victim) = self.enemy_at_position(world_pixel_coords) {
                             drop(entity_ref);
                             self._player_issue_attack(entity.borrow_mut(), victim.borrow());
                             continue;
                         }
                     }
                     if entity_ref.actions.contains(&Some(Action::GatherResource)) {
-                        if let Some(resource) = self.resource_at_position(world_pos) {
+                        if let Some(resource) = self.resource_at_position(world_pixel_coords) {
                             drop(entity_ref);
                             self._player_issue_gather_resource(
                                 entity.borrow_mut(),
@@ -362,7 +361,7 @@ impl Game {
     ) {
         if let Some(structure) = structure.as_ref() {
             self.player_state
-                .entity_highlights
+                .timed_entity_highlights
                 .borrow_mut()
                 .push(EntityHighlight::new(structure.id, HighlightType::Friendly));
         }
@@ -390,8 +389,8 @@ impl Game {
         }));
     }
 
-    fn player_issue_all_selected_attack(&mut self, world_pos: [u32; 2]) {
-        if let Some(victim) = self.enemy_at_position(world_pos) {
+    fn player_issue_all_selected_attack(&mut self, world_pixel_coords: [f32; 2]) {
+        if let Some(victim) = self.enemy_at_position(world_pixel_coords) {
             for attacker in self.selected_player_entities() {
                 self._player_issue_attack(attacker.borrow_mut(), victim.borrow());
             }
@@ -404,7 +403,7 @@ impl Game {
 
     fn _player_issue_attack(&self, attacker: RefMut<Entity>, victim: Ref<Entity>) {
         self.player_state
-            .entity_highlights
+            .timed_entity_highlights
             .borrow_mut()
             .push(EntityHighlight::new(victim.id, HighlightType::Hostile));
         self.player_issue_command(Command::Attack(AttackCommand { attacker, victim }));
@@ -428,7 +427,7 @@ impl Game {
         }));
     }
 
-    fn player_issue_all_selected_gather_resource(&self, world_pos: [u32; 2]) {
+    fn player_issue_all_selected_gather_resource(&self, world_pos: [f32; 2]) {
         if let Some(resource) = self.resource_at_position(world_pos) {
             for gatherer in self.selected_player_entities() {
                 self._player_issue_gather_resource(gatherer.borrow_mut(), resource.borrow());
@@ -442,7 +441,7 @@ impl Game {
 
     fn _player_issue_gather_resource(&self, gatherer: RefMut<Entity>, resource: Ref<Entity>) {
         self.player_state
-            .entity_highlights
+            .timed_entity_highlights
             .borrow_mut()
             .push(EntityHighlight::new(resource.id, HighlightType::Friendly));
         self.player_issue_command(Command::GatherResource(GatherResourceCommand {
@@ -526,24 +525,44 @@ impl EventHandler for Game {
 
         self.player_state.update(ctx, dt);
 
-        if self.player_state.cursor_state() == CursorState::Default {
-            let icon = if let Some(pixel_coords) =
-                self.player_state.screen_to_world(mouse_position(ctx))
-            {
-                let is_hovering_some_entity = self
-                    .core
-                    .entities()
-                    .iter()
-                    .any(|(_id, e)| e.borrow().pixel_rect().contains(pixel_coords));
-                if is_hovering_some_entity {
-                    CursorIcon::Hand
+        let mouse_pos = mouse_position(ctx);
+        match self.player_state.cursor_state() {
+            CursorState::Default => {
+                let icon = if let Some(pixel_coords) = self.player_state.screen_to_world(mouse_pos)
+                {
+                    let is_hovering_some_entity = self
+                        .core
+                        .entities()
+                        .iter()
+                        .any(|(_id, e)| e.borrow().pixel_rect().contains(pixel_coords));
+                    if is_hovering_some_entity {
+                        CursorIcon::Hand
+                    } else {
+                        CursorIcon::Default
+                    }
                 } else {
                     CursorIcon::Default
+                };
+                mouse::set_cursor_type(ctx, icon);
+                self.player_state.hovered_entity_highlight = None;
+            }
+
+            CursorState::SelectingAttackTarget => {
+                if let Some(world_pixel_coords) = self.player_state.screen_to_world(mouse_pos) {
+                    self.player_state.hovered_entity_highlight = self
+                        .enemy_at_position(world_pixel_coords)
+                        .map(|enemy| (enemy.borrow().id, HighlightType::Hostile));
                 }
-            } else {
-                CursorIcon::Default
-            };
-            mouse::set_cursor_type(ctx, icon);
+            }
+
+            CursorState::SelectingResourceTarget => {
+                if let Some(world_pixel_coords) = self.player_state.screen_to_world(mouse_pos) {
+                    self.player_state.hovered_entity_highlight = self
+                        .resource_at_position(world_pixel_coords)
+                        .map(|enemy| (enemy.borrow().id, HighlightType::Friendly));
+                }
+            }
+            _ => {}
         }
 
         self.hud.borrow_mut().update(dt);
@@ -581,7 +600,7 @@ impl EventHandler for Game {
                 .world_to_screen(entity.world_pixel_position());
 
             if self.player_state.selected_entity_ids.contains(entity_id) {
-                if let EntityState::Constructing(structure_type, grid_pos) = entity.state {
+                if let EntityState::MovingToConstruction(structure_type, grid_pos) = entity.state {
                     let screen_coords = self.player_state.world_to_screen(grid_to_world(grid_pos));
                     let size = *self.core.structure_size(&structure_type);
                     self.assets
@@ -616,7 +635,7 @@ impl EventHandler for Game {
             }
             if let Some(highlight) = self
                 .player_state
-                .entity_highlights
+                .timed_entity_highlights
                 .borrow()
                 .iter()
                 .find(|highlight| highlight.entity_id == entity.id && highlight.is_visible())
@@ -627,6 +646,11 @@ impl EventHandler for Game {
                     *screen_coords,
                     highlight.highlight_type,
                 )?;
+            }
+            if let Some((hovered_id, highlight_type)) = self.player_state.hovered_entity_highlight {
+                if hovered_id == entity.id {
+                    Assets::draw_highlight(ctx, entity.size(), *screen_coords, highlight_type)?;
+                }
             }
         }
 
@@ -704,11 +728,11 @@ impl EventHandler for Game {
                     self.set_player_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::SelectingAttackTarget => {
-                    self.player_issue_all_selected_attack(clicked_world_pos);
+                    self.player_issue_all_selected_attack(clicked_world_pixel_coords);
                     self.set_player_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::SelectingResourceTarget => {
-                    self.player_issue_all_selected_gather_resource(clicked_world_pos);
+                    self.player_issue_all_selected_gather_resource(clicked_world_pixel_coords);
                     self.set_player_cursor_state(ctx, CursorState::Default);
                 }
                 CursorState::DraggingSelectionArea(..) => {
