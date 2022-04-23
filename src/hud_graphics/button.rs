@@ -1,9 +1,8 @@
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Mesh, MeshBuilder, Rect};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Image, Mesh, MeshBuilder, Rect};
 use ggez::{Context, GameResult};
 
 use std::time::Duration;
 
-use crate::data::Picture;
 use crate::entities::Action;
 use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 use crate::hud_graphics::HUD_BORDER_COLOR;
@@ -17,7 +16,7 @@ pub struct Button {
     highlight: Mesh,
     is_down: bool,
     down_cooldown: Duration,
-    graphics: Option<Picture>,
+    graphics: Option<Image>,
 }
 
 impl Button {
@@ -122,7 +121,7 @@ impl Button {
         })
     }
 
-    pub fn set_action(&mut self, action_and_picture: Option<(Action, Picture)>) {
+    pub fn set_action(&mut self, action_and_picture: Option<(Action, Image)>) {
         if let Some((action, picture)) = action_and_picture {
             self.action = Some(action);
             self.graphics = Some(picture);

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Image, Mesh, Rect};
+use ggez::graphics::{DrawParam, Drawable, Image, Rect};
 use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
@@ -9,7 +9,6 @@ use crate::entities::{
     Action, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity, EntityCategory,
     EntityConfig, EntityState, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
-use crate::hud_graphics::entity_portrait::PORTRAIT_DIMENSIONS;
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
@@ -125,27 +124,26 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
 
 pub struct EntityHudConfig {
     pub name: String,
-    pub portrait: Picture,
+    pub portrait: Image,
 }
 
-#[derive(Clone, Debug)]
-pub enum Picture {
-    Mesh(Mesh),
-    Image(Image),
-}
-
-impl Picture {
-    pub fn draw(&self, ctx: &mut Context, param: DrawParam) -> GameResult {
-        match self {
-            Picture::Mesh(mesh) => mesh.draw(ctx, param),
-            Picture::Image(image) => image.draw(ctx, param),
-        }
+impl EntityHudConfig {
+    fn new(ctx: &mut Context, name: impl Into<String>, icon_filename: &str) -> GameResult<Self> {
+        let icon = load_icon(ctx, icon_filename)?;
+        Ok(Self {
+            name: name.into(),
+            portrait: icon,
+        })
     }
+}
+
+fn load_icon(ctx: &mut Context, filename: &str) -> GameResult<Image> {
+    Image::new(ctx, format!("/images/icons/{}", filename))
 }
 
 pub struct ActionHudConfig {
     pub text: String,
-    pub icon: Picture,
+    pub icon: Image,
     pub keycode: KeyCode,
 }
 
@@ -164,48 +162,17 @@ pub struct HudAssets {
 
 impl HudAssets {
     pub fn new(ctx: &mut Context) -> GameResult<Self> {
-        let color = Color::new(0.6, 0.6, 0.6, 1.0);
-
-        let stop_icon = Image::new(ctx, "/images/icons/stop.png")?;
-        let move_icon = Image::new(ctx, "/images/icons/move.png")?;
-        let attack_icon = Image::new(ctx, "/images/icons/attack.png")?;
-        let gather_icon = Image::new(ctx, "/images/icons/gather.png")?;
-        let return_icon = Image::new(ctx, "/images/icons/return.png")?;
-
-        let resource_icon = Image::new(ctx, "/images/icons/resource.png")?;
-
-        let engineer_icon = Image::new(ctx, "/images/icons/engineer.png")?;
-        let enforcer_icon = Image::new(ctx, "/images/icons/enforcer.png")?;
-
-        let tech_lab_icon = Image::new(ctx, "/images/icons/tech_lab.png")?;
-        let battle_academy_icon = Image::new(ctx, "/images/icons/battle_academy.png")?;
-
         Ok(Self {
-            enforcer: EntityHudConfig {
-                name: "Enforcer".to_string(),
-                portrait: Picture::Image(enforcer_icon),
-            },
-            engineer: EntityHudConfig {
-                name: "Engineer".to_string(),
-                portrait: Picture::Image(engineer_icon),
-            },
-            battle_academy: EntityHudConfig {
-                name: "Battle Academy".to_string(),
-                portrait: Picture::Image(battle_academy_icon),
-            },
-            tech_lab: EntityHudConfig {
-                name: "Tech Lab".to_string(),
-                portrait: Picture::Image(tech_lab_icon),
-            },
-            fuel_rift: EntityHudConfig {
-                name: "Fuel rift".to_string(),
-                portrait: Picture::Image(resource_icon),
-            },
-            stop_icon,
-            move_icon,
-            attack_icon,
-            gather_icon,
-            return_icon,
+            enforcer: EntityHudConfig::new(ctx, "Enforcer", "enforcer.png")?,
+            engineer: EntityHudConfig::new(ctx, "Engineer", "engineer.png")?,
+            battle_academy: EntityHudConfig::new(ctx, "Battle Academy", "battle_academy.png")?,
+            tech_lab: EntityHudConfig::new(ctx, "Tech Lab", "tech_lab.png")?,
+            fuel_rift: EntityHudConfig::new(ctx, "Fuel rift", "resource.png")?,
+            stop_icon: load_icon(ctx, "stop.png")?,
+            move_icon: load_icon(ctx, "move.png")?,
+            attack_icon: load_icon(ctx, "attack.png")?,
+            gather_icon: load_icon(ctx, "gather.png")?,
+            return_icon: load_icon(ctx, "return.png")?,
         })
     }
 
@@ -259,27 +226,27 @@ impl HudAssets {
             }
             Action::Stop => ActionHudConfig {
                 text: "Stop".to_owned(),
-                icon: Picture::Image(self.stop_icon.clone()),
+                icon: self.stop_icon.clone(),
                 keycode: KeyCode::S,
             },
             Action::Move => ActionHudConfig {
                 text: "Move".to_owned(),
-                icon: Picture::Image(self.move_icon.clone()),
+                icon: self.move_icon.clone(),
                 keycode: KeyCode::M,
             },
             Action::Attack => ActionHudConfig {
                 text: "Attack".to_owned(),
-                icon: Picture::Image(self.attack_icon.clone()),
+                icon: self.attack_icon.clone(),
                 keycode: KeyCode::A,
             },
             Action::GatherResource => ActionHudConfig {
                 text: "Gather".to_owned(),
-                icon: Picture::Image(self.gather_icon.clone()),
+                icon: self.gather_icon.clone(),
                 keycode: KeyCode::G,
             },
             Action::ReturnResource => ActionHudConfig {
                 text: "Return".to_owned(),
-                icon: Picture::Image(self.return_icon.clone()),
+                icon: self.return_icon.clone(),
                 keycode: KeyCode::R,
             },
         }

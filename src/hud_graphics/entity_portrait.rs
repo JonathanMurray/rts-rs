@@ -1,7 +1,6 @@
-use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Mesh, MeshBuilder, Rect};
+use ggez::graphics::{Color, DrawMode, DrawParam, Drawable, Image, Mesh, MeshBuilder, Rect};
 use ggez::{Context, GameResult};
 
-use crate::data::Picture;
 use crate::game::COLOR_BG;
 
 pub const PORTRAIT_DIMENSIONS: [f32; 2] = [40.0, 40.0];
@@ -36,7 +35,7 @@ impl EntityPortrait {
         })
     }
 
-    pub fn draw(&self, ctx: &mut Context, portrait: &Picture, highlight: bool) -> GameResult {
+    pub fn draw(&self, ctx: &mut Context, portrait: &Image, highlight: bool) -> GameResult {
         self.border.draw(ctx, DrawParam::new())?;
         portrait.draw(ctx, DrawParam::new().dest(self.position_on_screen))?;
         if highlight {
