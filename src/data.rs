@@ -526,13 +526,13 @@ impl UnitTilesheets {
         entity: &Entity,
         position_on_screen: [f32; 2],
     ) -> GameResult {
-        let mut is_mid_movement = false;
+        let mut is_between_cells = false;
         if let EntityCategory::Unit(unit) = &entity.category {
-            is_mid_movement = !unit.sub_cell_movement.is_ready();
+            is_between_cells = unit.sub_cell_movement.is_between_cells();
         }
         let tilesheet = match entity.state {
             EntityState::Idle => {
-                if is_mid_movement {
+                if is_between_cells {
                     &self.moving
                 } else {
                     &self.idle

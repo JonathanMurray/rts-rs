@@ -368,8 +368,8 @@ impl SubCellMovement {
         ]
     }
 
-    pub fn is_ready(&self) -> bool {
-        self.remaining.is_zero()
+    pub fn is_between_cells(&self) -> bool {
+        !self.remaining.is_zero()
     }
 
     fn set_moving(&mut self, old_position: [u32; 2], new_position: [u32; 2]) {

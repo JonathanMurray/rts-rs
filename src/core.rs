@@ -61,7 +61,7 @@ impl Core {
             let pos = entity.position;
             if let EntityCategory::Unit(unit) = &mut entity.category {
                 unit.sub_cell_movement.update(dt, pos);
-                if unit.sub_cell_movement.is_ready() {
+                if !unit.sub_cell_movement.is_between_cells() {
                     if let Some(next_pos) = unit.movement_plan.peek() {
                         let obstacle = self.obstacle_grid.get(next_pos);
                         if obstacle.is_none() {
@@ -174,7 +174,7 @@ impl Core {
             let entity = entity.borrow_mut();
             if let EntityState::MovingToResource(resource_id) = entity.state {
                 let mut gatherer = entity;
-                if gatherer.unit_mut().sub_cell_movement.is_ready() {
+                if !gatherer.unit_mut().sub_cell_movement.is_between_cells() {
                     if let Some(resource) = self.find_entity(resource_id) {
                         let resource = resource.borrow();
                         if is_unit_within_melee_range_of(gatherer.position, resource.cell_rect()) {
@@ -227,7 +227,7 @@ impl Core {
             let entity = entity.borrow_mut();
             if let EntityState::ReturningResource(structure_id) = entity.state {
                 let mut returner = entity;
-                if returner.unit_mut().sub_cell_movement.is_ready() {
+                if !returner.unit_mut().sub_cell_movement.is_between_cells() {
                     if let Some(structure) = self.find_entity(structure_id) {
                         let structure = structure.borrow();
                         if is_unit_within_melee_range_of(returner.position, structure.cell_rect()) {
@@ -270,7 +270,7 @@ impl Core {
             let mut entity = entity.borrow_mut();
             if let EntityState::Constructing(structure_type, structure_position) = entity.state {
                 let has_arrived = entity.unit_mut().movement_plan.peek().is_none()
-                    && entity.unit_mut().sub_cell_movement.is_ready();
+                    && !entity.unit_mut().sub_cell_movement.is_between_cells();
                 if has_arrived {
                     if self.can_structure_fit(&entity, structure_position, structure_type) {
                         let constructions_options =
