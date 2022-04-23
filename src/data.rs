@@ -462,13 +462,21 @@ fn tilesheet(
         frames_by_direction.insert(direction, frames);
     }
 
+    let frame_duration = match animation_type {
+        AnimationType::Idle => Duration::MAX,
+        AnimationType::Moving => Duration::from_millis(150),
+        AnimationType::Attacking => Duration::from_millis(500),
+    };
+
     Ok(Tilesheet {
         sheet: image,
         origin: [0.0, 16.0],
         frames: frames_by_direction,
+        frame_duration,
     })
 }
 
+#[allow(clippy::large_enum_variant)]
 pub enum Animation {
     Tilesheets(UnitTilesheets),
     Static(StaticImage),
@@ -529,10 +537,16 @@ impl UnitTilesheets {
             EntityState::Moving => &self.moving,
             EntityState::Attacking(_) => self.attacking.as_ref().unwrap(),
             EntityState::MovingToResource(_) => &self.moving,
+            EntityState::ReturningResource(_) => &self.moving,
+            EntityState::MovingToAttackTarget(_) => &self.moving,
             // TODO gathering animation
             EntityState::GatheringResource(_) => &self.idle,
-            EntityState::ReturningResource(_) => &self.moving,
-            unhandled => panic!("No animation for entity state: {:?}", unhandled),
+
+            state @ EntityState::TrainingUnit(_)
+            | state @ EntityState::Constructing(_, _)
+            | state @ EntityState::UnderConstruction(_, _) => {
+                panic!("No animation for state: {:?}", state)
+            }
         };
         tilesheet.draw(ctx, animation, direction, position_on_screen)
     }
@@ -545,6 +559,7 @@ pub struct Tilesheet {
     // will protrude 20 pixels above the cell that it occupies.
     origin: [f32; 2],
     frames: HashMap<Direction, Vec<Frame>>,
+    frame_duration: Duration,
 }
 
 impl Tilesheet {
@@ -563,8 +578,8 @@ impl Tilesheet {
             .frames
             .get(&direction)
             .unwrap_or_else(|| self.frames.get(&Direction::South).unwrap());
-        let frame_duration_ms = 150.0;
-        let i = (animation.ms_counter as f32 / frame_duration_ms) as usize % frames.len();
+        let i = (animation.ms_counter as f32 / self.frame_duration.as_millis() as f32) as usize
+            % frames.len();
         let frame = frames[i];
         self.sheet
             .draw(ctx, DrawParam::new().src(frame.src_rect).dest(pos))

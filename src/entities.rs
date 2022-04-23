@@ -22,6 +22,7 @@ pub enum EntityState {
     TrainingUnit(EntityType),
     Constructing(EntityType, [u32; 2]),
     Moving,
+    MovingToAttackTarget(EntityId),
     Attacking(EntityId),
     MovingToResource(EntityId),
     GatheringResource(EntityId),
@@ -487,13 +488,17 @@ impl Combat {
         }
     }
 
-    pub fn count_down_cooldown(&mut self, dt: Duration) -> bool {
+    pub fn count_down_cooldown(&mut self, dt: Duration) {
         self.cooldown = self.cooldown.saturating_sub(dt);
+    }
+
+    pub fn is_attack_ready(&self) -> bool {
         self.cooldown.is_zero()
     }
 
     pub fn start_cooldown(&mut self) {
-        self.cooldown = Duration::from_secs(3);
+        // note: might be good to keep this in sync with attack animation
+        self.cooldown = Duration::from_millis(1000);
     }
 }
 

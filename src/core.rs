@@ -86,10 +86,45 @@ impl Core {
         }
 
         //-------------------------------
-        //           COMBAT
+        //      MOVING TO COMBAT
         //-------------------------------
         for (_entity_id, entity) in &self.entities {
             let entity = entity.borrow_mut();
+
+            if let EntityState::MovingToAttackTarget(victim_id) = entity.state {
+                let mut attacker = entity;
+                if let Some(victim) = self.find_entity(victim_id) {
+                    let victim = victim.borrow_mut();
+                    if is_unit_within_melee_range_of(attacker.position, victim.cell_rect()) {
+                        attacker.state = EntityState::Attacking(victim_id);
+                    } else if attacker.unit_mut().movement_plan.peek().is_none() {
+                        if let Some(plan) = pathfind::find_path(
+                            attacker.position,
+                            Destination::AdjacentToEntity(victim.cell_rect()),
+                            &self.obstacle_grid,
+                        ) {
+                            attacker.unit_mut().movement_plan.set(plan);
+                        }
+                    }
+                } else {
+                    attacker.state = EntityState::Idle;
+                    attacker.unit_mut().movement_plan.clear();
+                }
+            }
+        }
+
+        //-------------------------------
+        //        ATTACKING
+        //-------------------------------
+        for (_entity_id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
+
+            if let EntityCategory::Unit(unit) = &mut entity.category {
+                if let Some(combat) = &mut unit.combat {
+                    combat.count_down_cooldown(dt);
+                }
+            }
+
             if let EntityState::Attacking(victim_id) = entity.state {
                 let mut attacker = entity;
                 let combat = attacker
@@ -97,7 +132,7 @@ impl Core {
                     .combat
                     .as_mut()
                     .expect("non-combat attacker");
-                if combat.count_down_cooldown(dt) {
+                if combat.is_attack_ready() {
                     if let Some(victim) = self.find_entity(victim_id) {
                         let mut victim = victim.borrow_mut();
                         if is_unit_within_melee_range_of(attacker.position, victim.cell_rect()) {
@@ -114,7 +149,8 @@ impl Core {
                                 .as_mut()
                                 .unwrap()
                                 .start_cooldown();
-                        } else if attacker.unit_mut().movement_plan.peek().is_none() {
+                        } else {
+                            attacker.state = EntityState::MovingToAttackTarget(victim_id);
                             if let Some(plan) = pathfind::find_path(
                                 attacker.position,
                                 Destination::AdjacentToEntity(victim.cell_rect()),
