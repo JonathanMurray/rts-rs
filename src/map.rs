@@ -44,12 +44,16 @@ impl WorldInitData {
             MapType::LoadTest => [100, 100],
         };
 
+        let mut rng = rand::thread_rng();
+
         let mut water_grid = Grid::new(dimensions);
         for x in 0..dimensions[0] {
             for y in 0..dimensions[1] {
                 let water_cell = x % 4 == 0 && (y % 3 < 2);
                 if water_cell {
-                    water_grid.set([x, y], Some(()));
+                    if rng.gen_bool(0.8) {
+                        water_grid.set([x, y], Some(()));
+                    }
                 }
             }
         }
@@ -109,7 +113,7 @@ impl WorldInitData {
                 ));
             }
             MapType::LoadTest => {
-                let mut rng = rand::thread_rng();
+
                 let dimensions = [100, 100];
                 for y in 5..dimensions[1] {
                     for x in 5..dimensions[0] {
