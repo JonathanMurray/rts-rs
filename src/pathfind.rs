@@ -268,7 +268,7 @@ mod test {
     #[test]
     fn path_going_around_obstacle() {
         let mut grid = Grid::new([10, 10]);
-        grid.set([1, 0], Some(ObstacleType::Entity(Team::Enemy)));
+        grid.set([1, 0], Some(ObstacleType::Entity(Team::Enemy1)));
         let path = find_path([0, 0], Destination::Point([2, 0]), &grid);
         let expected = vec![[2, 0], [1, 1]];
         assert_eq!(path, Some(expected));
@@ -277,8 +277,8 @@ mod test {
     #[test]
     fn impossible_path() {
         let mut grid = Grid::new([10, 2]);
-        grid.set([2, 0], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([2, 1], Some(ObstacleType::Entity(Team::Enemy)));
+        grid.set([2, 0], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([2, 1], Some(ObstacleType::Entity(Team::Enemy1)));
         let path = find_path([0, 0], Destination::Point([4, 0]), &grid);
         assert_eq!(path, None);
     }
@@ -286,12 +286,12 @@ mod test {
     #[test]
     fn zigzag_path() {
         let mut grid = Grid::new([10, 4]);
-        grid.set([2, 0], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([2, 1], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([2, 2], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([4, 3], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([4, 2], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([4, 1], Some(ObstacleType::Entity(Team::Enemy)));
+        grid.set([2, 0], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([2, 1], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([2, 2], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([4, 3], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([4, 2], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([4, 1], Some(ObstacleType::Entity(Team::Enemy1)));
         let start = [0, 0];
         let path = find_path(start, Destination::Point([6, 3]), &grid).unwrap();
         visualize_path(&grid, start, &path[..]);
@@ -316,12 +316,12 @@ mod test {
             position: [7, 3],
             size: [3, 2],
         };
-        grid.set([7, 3], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([8, 3], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([9, 3], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([7, 4], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([8, 4], Some(ObstacleType::Entity(Team::Enemy)));
-        grid.set([9, 4], Some(ObstacleType::Entity(Team::Enemy)));
+        grid.set([7, 3], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([8, 3], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([9, 3], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([7, 4], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([8, 4], Some(ObstacleType::Entity(Team::Enemy1)));
+        grid.set([9, 4], Some(ObstacleType::Entity(Team::Enemy1)));
 
         let start = [4, 4];
         let path = find_path(

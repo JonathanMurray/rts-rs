@@ -15,6 +15,7 @@ pub enum MapType {
     Small,
     Medium,
     LoadTest,
+    Spectator,
 }
 
 pub enum MapConfig {
@@ -43,6 +44,7 @@ impl WorldInitData {
             MapType::Small => [30, 20],
             MapType::Medium => [30, 20],
             MapType::LoadTest => [100, 100],
+            MapType::Spectator => [30, 20],
         };
 
         let mut rng = rand::thread_rng();
@@ -58,11 +60,25 @@ impl WorldInitData {
         }
         let tile_grid = create_tile_grid(&water_grid);
 
-        let mut entities = vec![
-            data::create_entity(EntityType::Engineer, [6, 2], Team::Player),
-            data::create_entity(EntityType::Enforcer, [8, 2], Team::Player),
-            data::create_entity(EntityType::TechLab, [1, 6], Team::Player),
-        ];
+        let mut entities = vec![];
+
+        if map_type != MapType::Spectator {
+            entities.push(data::create_entity(
+                EntityType::Engineer,
+                [6, 2],
+                Team::Player,
+            ));
+            entities.push(data::create_entity(
+                EntityType::Enforcer,
+                [8, 2],
+                Team::Player,
+            ));
+            entities.push(data::create_entity(
+                EntityType::TechLab,
+                [1, 6],
+                Team::Player,
+            ));
+        }
 
         entities.push(data::create_entity(
             EntityType::FuelRift,
@@ -76,39 +92,39 @@ impl WorldInitData {
                 entities.push(data::create_entity(
                     EntityType::Enforcer,
                     [7, 7],
-                    Team::Enemy,
+                    Team::Enemy1,
                 ));
                 entities.push(data::create_entity(
                     EntityType::TechLab,
                     [1, 2],
-                    Team::Enemy,
+                    Team::Enemy1,
                 ));
             }
             MapType::Medium => {
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [5, 2],
-                    Team::Enemy,
+                    Team::Enemy1,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [3, 0],
-                    Team::Enemy,
+                    Team::Enemy1,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [0, 4],
-                    Team::Enemy,
+                    Team::Enemy1,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [3, 4],
-                    Team::Enemy,
+                    Team::Enemy1,
                 ));
                 entities.push(data::create_entity(
                     EntityType::TechLab,
                     [8, 4],
-                    Team::Enemy,
+                    Team::Enemy1,
                 ));
             }
             MapType::LoadTest => {
@@ -119,7 +135,7 @@ impl WorldInitData {
                             let team = if rng.gen_bool(0.5) {
                                 Team::Player
                             } else {
-                                Team::Enemy
+                                Team::Enemy1
                             };
                             let entity_type = if rng.gen_bool(0.5) {
                                 EntityType::Engineer
@@ -130,6 +146,18 @@ impl WorldInitData {
                         }
                     }
                 }
+            }
+            MapType::Spectator => {
+                entities.push(data::create_entity(
+                    EntityType::Engineer,
+                    [5, 2],
+                    Team::Enemy1,
+                ));
+                entities.push(data::create_entity(
+                    EntityType::Engineer,
+                    [5, 4],
+                    Team::Enemy2,
+                ));
             }
         };
 
@@ -187,7 +215,7 @@ impl WorldInitData {
                         entities.push(create_entity(EntityType::TechLab, [x, y], Team::Player));
                     }
                     '2' => {
-                        entities.push(create_entity(EntityType::TechLab, [x, y], Team::Enemy));
+                        entities.push(create_entity(EntityType::TechLab, [x, y], Team::Enemy1));
                     }
                     'R' => {
                         entities.push(create_entity(EntityType::FuelRift, [x, y], Team::Neutral));
@@ -231,7 +259,7 @@ impl WorldInitData {
                         (EntityType::TechLab, Team::Player) => {
                             content.push('1');
                         }
-                        (EntityType::TechLab, Team::Enemy) => {
+                        (EntityType::TechLab, Team::Enemy1) => {
                             content.push('2');
                         }
                         (EntityType::FuelRift, Team::Neutral) => {

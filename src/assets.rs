@@ -293,7 +293,7 @@ impl Assets {
 fn create_selection_mesh(ctx: &mut Context, size: [u32; 2], team: Team) -> GameResult<Mesh> {
     let color = match team {
         Team::Player => Color::new(0.6, 0.9, 0.6, 1.0),
-        Team::Enemy => Color::new(0.8, 0.4, 0.4, 1.0),
+        Team::Enemy1 | Team::Enemy2 => Color::new(0.8, 0.4, 0.4, 1.0),
         Team::Neutral => Color::new(0.8, 0.8, 0.6, 1.0),
     };
     let corner_radius = 4.0;

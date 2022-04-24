@@ -11,6 +11,7 @@ use crate::entities::{
 use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
 use std::borrow::BorrowMut;
+use std::collections::hash_map::Entry;
 use std::ops::Deref;
 
 pub struct Core {
@@ -26,9 +27,12 @@ impl Core {
         world_dimensions: [u32; 2],
         water_cells: Vec<[u32; 2]>,
     ) -> Self {
-        let mut teams = HashMap::new();
-        teams.insert(Team::Player, RefCell::new(TeamState { resources: 0 }));
-        teams.insert(Team::Enemy, RefCell::new(TeamState { resources: 5 }));
+        let mut teams: HashMap<Team, RefCell<TeamState>> = HashMap::new();
+        for entity in &entities {
+            if let Entry::Vacant(entry) = teams.entry(entity.team) {
+                entry.insert(RefCell::new(TeamState { resources: 3 }));
+            }
+        }
 
         let mut obstacle_grid = Grid::new(world_dimensions);
         for water_cell in water_cells {
@@ -231,7 +235,9 @@ impl Core {
                     if let Some(structure) = self.find_entity(structure_id) {
                         let structure = structure.borrow();
                         if is_unit_within_melee_range_of(returner.position, structure.cell_rect()) {
-                            self.team_state(&returner.team).borrow_mut().resources += 1;
+                            self.team_state_unchecked(&returner.team)
+                                .borrow_mut()
+                                .resources += 1;
                             // Unit goes back out to gather more
                             let gathering = returner.unit_mut().gathering.as_mut().unwrap();
                             let resource_id = gathering.drop_resource();
@@ -293,7 +299,9 @@ impl Core {
                         let construction_options =
                             entity.unit_mut().construction_options.as_ref().unwrap();
                         let config = construction_options.get(&structure_type).unwrap();
-                        self.team_state(&entity.team).borrow_mut().resources += config.cost;
+                        self.team_state_unchecked(&entity.team)
+                            .borrow_mut()
+                            .resources += config.cost;
                         entity.state = EntityState::Idle;
                     }
                 }
@@ -624,8 +632,14 @@ impl Core {
         }
     }
 
-    pub fn team_state(&self, team: &Team) -> &RefCell<TeamState> {
-        self.teams.get(team).expect("Unknown team")
+    pub fn team_state_unchecked(&self, team: &Team) -> &RefCell<TeamState> {
+        self.teams
+            .get(team)
+            .unwrap_or_else(|| panic!("Unknown team: {:?}", team))
+    }
+
+    pub fn team_state(&self, team: &Team) -> Option<&RefCell<TeamState>> {
+        self.teams.get(team)
     }
 
     pub fn entities(&self) -> &[(EntityId, RefCell<Entity>)] {

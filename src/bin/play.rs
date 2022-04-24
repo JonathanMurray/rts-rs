@@ -10,6 +10,8 @@ fn main() {
         MapConfig::Type(MapType::LoadTest)
     } else if args.get(1).map(String::as_str) == Some("empty") {
         MapConfig::Type(MapType::Empty)
+    } else if args.get(1).map(String::as_str) == Some("spectator") {
+        MapConfig::Type(MapType::Spectator)
     } else if args.get(1).map(String::as_str) == Some("small") {
         MapConfig::Type(MapType::Small)
     } else if let Some(filename) = args.get(1) {

@@ -243,7 +243,8 @@ impl HealthComponent {
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum Team {
     Player,
-    Enemy,
+    Enemy1,
+    Enemy2,
     Neutral,
 }
 

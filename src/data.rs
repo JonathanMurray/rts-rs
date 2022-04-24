@@ -286,7 +286,7 @@ fn create_enforcer(
 const TEMPLATE_COLOR_LIGHT: [u8; 4] = [122, 171, 255, 255];
 const TEMPLATE_COLOR_DARK: [u8; 4] = [99, 155, 255, 255];
 
-const TEAM_COLOR_FAMILIES: [(Team, EntityColorFamily); 2] = [
+const TEAM_COLOR_FAMILIES: [(Team, EntityColorFamily); 3] = [
     (
         Team::Player,
         EntityColorFamily {
@@ -295,10 +295,17 @@ const TEAM_COLOR_FAMILIES: [(Team, EntityColorFamily); 2] = [
         },
     ),
     (
-        Team::Enemy,
+        Team::Enemy1,
         EntityColorFamily {
-            light: [200, 120, 120, 255],
-            dark: [180, 100, 100, 255],
+            light: [240, 100, 100, 255],
+            dark: [220, 80, 80, 255],
+        },
+    ),
+    (
+        Team::Enemy2,
+        EntityColorFamily {
+            light: [200, 60, 200, 255],
+            dark: [180, 40, 180, 255],
         },
     ),
 ];

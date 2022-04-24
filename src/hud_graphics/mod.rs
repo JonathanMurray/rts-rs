@@ -19,7 +19,7 @@ use self::button::Button;
 use self::entity_header::{EntityHeader, EntityHeaderContent};
 use self::group_header::GroupHeader;
 use self::minimap::Minimap;
-use crate::core::{ObstacleType, TeamState};
+use crate::core::ObstacleType;
 use crate::data::{EntityType, HudAssets};
 use crate::entities::{Action, Entity, EntityCategory, EntityState, Team, NUM_ENTITY_ACTIONS};
 use crate::game::MAX_NUM_SELECTED_ENTITIES;
@@ -100,7 +100,7 @@ impl HudGraphics {
     pub fn draw<'a>(
         &mut self,
         ctx: &mut Context,
-        player_team_state: Ref<TeamState>,
+        player_resources: u32,
         selected_entities: Vec<Ref<'a, Entity>>,
         player_state: &PlayerState,
         grid: &Grid<ObstacleType>,
@@ -110,7 +110,7 @@ impl HudGraphics {
         let cursor_state = player_state.cursor_state();
 
         self.font
-            .text(15.0, format!("Fuel: {}", player_team_state.resources))
+            .text(15.0, format!("Fuel: {}", player_resources))
             .draw(ctx, self.resources_position)?;
 
         if selected_entities.len() > 1 {

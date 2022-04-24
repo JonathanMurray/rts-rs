@@ -16,14 +16,15 @@ use crate::core::{
     MoveCommand, ReturnResourceCommand, StopCommand, TrainCommand, UpdateOutcome,
 };
 use crate::data::EntityType;
-use crate::enemy_ai::EnemyPlayerAi;
 use crate::entities::{
     Action, Entity, EntityCategory, EntityId, EntityState, Team, NUM_ENTITY_ACTIONS,
 };
 use crate::hud_graphics::{HudGraphics, PlayerInput};
 use crate::map::{MapConfig, WorldInitData};
 use crate::player::{CursorState, EntityHighlight, HighlightType, PlayerState};
+use crate::team_ai::TeamAi;
 use crate::text::SharpFont;
+use std::collections::HashSet;
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -75,7 +76,7 @@ struct Game {
     assets: Assets,
     hud: RefCell<HudGraphics>,
     player_state: PlayerState,
-    enemy_player_ai: EnemyPlayerAi,
+    enemy_team_ais: Vec<TeamAi>,
     rng: ThreadRng,
     core: Core,
 }
@@ -95,7 +96,27 @@ impl Game {
 
         let rng = rand::thread_rng();
 
-        let enemy_player_ai = EnemyPlayerAi::new(world_dimensions);
+        let mut teams = HashSet::new();
+        for entity in &entities {
+            teams.insert(entity.team);
+        }
+        let mut enemy_team_ais = vec![];
+        if teams.contains(&Team::Enemy1) {
+            let opponent = if teams.contains(&Team::Player) {
+                Team::Player
+            } else {
+                Team::Enemy2
+            };
+            enemy_team_ais.push(TeamAi::new(Team::Enemy1, opponent, world_dimensions));
+        }
+        if teams.contains(&Team::Enemy2) {
+            let opponent = if teams.contains(&Team::Player) {
+                Team::Player
+            } else {
+                Team::Enemy1
+            };
+            enemy_team_ais.push(TeamAi::new(Team::Enemy2, opponent, world_dimensions));
+        }
 
         let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
         // let font = Font::new(ctx, "/fonts/Retro Gaming.ttf")?;
@@ -128,7 +149,7 @@ impl Game {
             assets,
             hud,
             player_state,
-            enemy_player_ai,
+            enemy_team_ais,
             rng,
             core,
         })
@@ -164,7 +185,7 @@ impl Game {
     fn enemy_at_position(&self, world_pixel_coords: [f32; 2]) -> Option<&RefCell<Entity>> {
         self.core.entities().iter().find_map(|(_id, entity)| {
             let entity_ref = entity.borrow();
-            if entity_ref.team == Team::Enemy
+            if (entity_ref.team == Team::Enemy1 || entity_ref.team == Team::Enemy2)
                 && entity_ref.pixel_rect().contains(world_pixel_coords)
             {
                 drop(entity_ref);
@@ -272,7 +293,11 @@ impl Game {
                 }));
             }
             Action::Construct(structure_type, _) => {
-                let resources = self.core.team_state(&Team::Player).borrow().resources;
+                let resources = self
+                    .core
+                    .team_state_unchecked(&Team::Player)
+                    .borrow()
+                    .resources;
                 let construction_options = actor.unit().construction_options.as_ref().unwrap();
                 let cost = construction_options.get(&structure_type).unwrap().cost;
                 if resources >= cost {
@@ -498,15 +523,15 @@ impl EventHandler for Game {
 
         let dt = ggez::timer::delta(ctx);
 
-        let enemy_commands = self
-            .enemy_player_ai
-            .run(dt, self.core.entities(), &mut self.rng);
-        if !enemy_commands.is_empty() {
-            println!("Issuing {} AI commands:", enemy_commands.len());
-        }
-        for command in enemy_commands {
-            //println!("  {:?}", command);
-            self.core.issue_command(command, Team::Enemy);
+        for ai in &mut self.enemy_team_ais {
+            let commands = ai.run(dt, self.core.entities(), &mut self.rng);
+            if !commands.is_empty() {
+                println!("[{:?}] Issuing {} AI commands:", ai.team(), commands.len());
+            }
+            for command in commands {
+                //println!("  {:?}", command);
+                self.core.issue_command(command, ai.team());
+            }
         }
 
         let UpdateOutcome {
@@ -700,9 +725,14 @@ impl EventHandler for Game {
             .map(|entity| entity.borrow())
             .collect();
 
+        let player_resources = self
+            .core
+            .team_state(&Team::Player)
+            .map(|team_state| team_state.borrow().resources)
+            .unwrap_or(0);
         self.hud.borrow_mut().draw(
             ctx,
-            self.core.team_state(&Team::Player).borrow(),
+            player_resources,
             selected_entities,
             &self.player_state,
             self.core.obstacle_grid(),

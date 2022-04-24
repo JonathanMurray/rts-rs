@@ -15,7 +15,8 @@ pub struct Minimap {
     bg: Mesh,
     camera: Mesh,
     player_entity_sprite_batch: SpriteBatch,
-    enemy_entity_sprite_batch: SpriteBatch,
+    enemy_1_entity_sprite_batch: SpriteBatch,
+    enemy_2_entity_sprite_batch: SpriteBatch,
     neutral_entity_sprite_batch: SpriteBatch,
     water_sprite_batch: SpriteBatch,
     camera_scale: [f32; 2],
@@ -76,8 +77,10 @@ impl Minimap {
         let cell_rect = Rect::new(0.0, 0.0, cell_size[0], cell_size[1]);
         let player_entity_sprite_batch =
             sprite_batch(ctx, cell_rect, Color::new(0.5, 1.0, 0.5, 1.0))?;
-        let enemy_entity_sprite_batch =
-            sprite_batch(ctx, cell_rect, Color::new(1.0, 0.5, 0.5, 1.0))?;
+        let enemy_1_entity_sprite_batch =
+            sprite_batch(ctx, cell_rect, Color::new(0.8, 0.3, 0.3, 1.0))?;
+        let enemy_2_entity_sprite_batch =
+            sprite_batch(ctx, cell_rect, Color::new(1.0, 0.2, 1.0, 1.0))?;
         let neutral_entity_sprite_batch =
             sprite_batch(ctx, cell_rect, Color::new(0.5, 0.5, 0.5, 1.0))?;
         let water_sprite_batch = sprite_batch(ctx, cell_rect, Color::new(0.5, 0.5, 1.0, 1.0))?;
@@ -87,7 +90,8 @@ impl Minimap {
             bg,
             camera,
             player_entity_sprite_batch,
-            enemy_entity_sprite_batch,
+            enemy_1_entity_sprite_batch,
+            enemy_2_entity_sprite_batch,
             neutral_entity_sprite_batch,
             water_sprite_batch,
             camera_scale,
@@ -129,7 +133,8 @@ impl Minimap {
                     ];
                     let sprite_batch = match obstacle {
                         ObstacleType::Entity(Team::Player) => &mut self.player_entity_sprite_batch,
-                        ObstacleType::Entity(Team::Enemy) => &mut self.enemy_entity_sprite_batch,
+                        ObstacleType::Entity(Team::Enemy1) => &mut self.enemy_1_entity_sprite_batch,
+                        ObstacleType::Entity(Team::Enemy2) => &mut self.enemy_2_entity_sprite_batch,
                         ObstacleType::Entity(Team::Neutral) => {
                             &mut self.neutral_entity_sprite_batch
                         }
@@ -141,11 +146,13 @@ impl Minimap {
         }
         let param = DrawParam::default().dest(self.rect.point());
         self.player_entity_sprite_batch.draw(ctx, param)?;
-        self.enemy_entity_sprite_batch.draw(ctx, param)?;
+        self.enemy_1_entity_sprite_batch.draw(ctx, param)?;
+        self.enemy_2_entity_sprite_batch.draw(ctx, param)?;
         self.neutral_entity_sprite_batch.draw(ctx, param)?;
         self.water_sprite_batch.draw(ctx, param)?;
         self.player_entity_sprite_batch.clear();
-        self.enemy_entity_sprite_batch.clear();
+        self.enemy_1_entity_sprite_batch.clear();
+        self.enemy_2_entity_sprite_batch.clear();
         self.neutral_entity_sprite_batch.clear();
         self.water_sprite_batch.clear();
         Ok(())
