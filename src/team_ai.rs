@@ -3,7 +3,10 @@ use rand::Rng;
 use std::cell::RefCell;
 use std::time::Duration;
 
-use crate::core::{AttackCommand, Command, MoveCommand, TrainCommand};
+use crate::core::{
+    AttackCommand, Command, ConstructCommand, GatherResourceCommand, MoveCommand, TrainCommand,
+};
+use crate::data::EntityType;
 use crate::entities::{Action, Entity, EntityId, Team};
 
 pub struct TeamAi {
@@ -63,6 +66,41 @@ impl TeamAi {
                                     break;
                                 }
                             }
+                            if let Action::Construct(structure_type, _config) = action {
+                                if rng.gen_bool(0.5) {
+                                    let structure_type = *structure_type;
+                                    let x: u32 = rng.gen_range(0..self.world_dimensions[0]);
+                                    let y: u32 = rng.gen_range(0..self.world_dimensions[1]);
+                                    commands.push(Command::Construct(ConstructCommand {
+                                        builder: friendly_entity,
+                                        structure_position: [x, y],
+                                        structure_type,
+                                    }));
+                                    break;
+                                }
+                            }
+
+                            if let Action::GatherResource = action {
+                                if rng.gen_bool(0.2) {
+                                    if let Some(resource) = entities.iter().find_map(|(_id, e)| {
+                                        match RefCell::try_borrow(e) {
+                                            Ok(e) if e.entity_type == EntityType::FuelRift => {
+                                                Some(e)
+                                            }
+                                            _ => None,
+                                        }
+                                    }) {
+                                        commands.push(Command::GatherResource(
+                                            GatherResourceCommand {
+                                                gatherer: friendly_entity,
+                                                resource,
+                                            },
+                                        ));
+                                        break;
+                                    }
+                                }
+                            }
+
                             if action == &Action::Move && rng.gen_bool(0.3) {
                                 let x: u32 = rng.gen_range(0..self.world_dimensions[0]);
                                 let y: u32 = rng.gen_range(0..self.world_dimensions[1]);

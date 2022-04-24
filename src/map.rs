@@ -52,8 +52,8 @@ impl WorldInitData {
         let mut water_grid = Grid::new(dimensions);
         for x in 0..dimensions[0] {
             for y in 0..dimensions[1] {
-                let water_cell = x % 4 == 0 && (y % 3 < 2);
-                if water_cell && rng.gen_bool(0.8) {
+                let water_cell = x % 4 < 2 && y % 3 < 2;
+                if water_cell && rng.gen_bool(0.4) {
                     water_grid.set([x, y], Some(()));
                 }
             }
