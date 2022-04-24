@@ -251,10 +251,13 @@ impl HudGraphics {
         self.minimap.on_mouse_button_up(button);
     }
 
-    pub fn on_key_down(&self, keycode: KeyCode) -> Option<PlayerInput> {
-        for action in self.buttons.iter().filter_map(|b| b.action()) {
-            if keycode == self.assets.action(action).keycode {
-                return Some(PlayerInput::UseEntityAction(action));
+    pub fn on_key_down(&mut self, keycode: KeyCode) -> Option<PlayerInput> {
+        for button in &mut self.buttons {
+            if let Some(action) = button.action() {
+                if keycode == self.assets.action(action).keycode {
+                    button.on_click();
+                    return Some(PlayerInput::UseEntityAction(action));
+                }
             }
         }
         None

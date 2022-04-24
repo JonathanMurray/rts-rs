@@ -838,7 +838,7 @@ impl EventHandler for Game {
         match keycode {
             KeyCode::Escape => ggez::event::quit(ctx),
             _ => {
-                let hud = self.hud.borrow();
+                let mut hud = self.hud.borrow_mut();
                 if let Some(player_input) = hud.on_key_down(keycode) {
                     drop(hud); // HUD may need to be updated, as part of handling the input
                     self.handle_player_input(ctx, player_input);
