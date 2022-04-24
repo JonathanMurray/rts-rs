@@ -126,20 +126,27 @@ impl Minimap {
         let [w, h] = grid.dimensions;
         for x in 0..w {
             for y in 0..h {
-                if let Some(obstacle) = grid.get(&[x, y]) {
+                let sprite_batch = match grid.get(&[x, y]).unwrap() {
+                    ObstacleType::Entity(Team::Player) => {
+                        Some(&mut self.player_entity_sprite_batch)
+                    }
+                    ObstacleType::Entity(Team::Enemy1) => {
+                        Some(&mut self.enemy_1_entity_sprite_batch)
+                    }
+                    ObstacleType::Entity(Team::Enemy2) => {
+                        Some(&mut self.enemy_2_entity_sprite_batch)
+                    }
+                    ObstacleType::Entity(Team::Neutral) => {
+                        Some(&mut self.neutral_entity_sprite_batch)
+                    }
+                    ObstacleType::Water => Some(&mut self.water_sprite_batch),
+                    ObstacleType::None => None,
+                };
+                if let Some(sprite_batch) = sprite_batch {
                     let pos = [
                         (x as f32 / w as f32) * self.rect.w,
                         (y as f32 / h as f32) * self.rect.h,
                     ];
-                    let sprite_batch = match obstacle {
-                        ObstacleType::Entity(Team::Player) => &mut self.player_entity_sprite_batch,
-                        ObstacleType::Entity(Team::Enemy1) => &mut self.enemy_1_entity_sprite_batch,
-                        ObstacleType::Entity(Team::Enemy2) => &mut self.enemy_2_entity_sprite_batch,
-                        ObstacleType::Entity(Team::Neutral) => {
-                            &mut self.neutral_entity_sprite_batch
-                        }
-                        ObstacleType::Water => &mut self.water_sprite_batch,
-                    };
                     sprite_batch.add(DrawParam::default().dest(pos));
                 }
             }

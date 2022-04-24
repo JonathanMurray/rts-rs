@@ -192,41 +192,41 @@ impl Assets {
 
         for x in 0..tile_grid.dimensions[0] {
             for y in 0..tile_grid.dimensions[1] {
-                if let Some(tile) = tile_grid.get(&[x, y]) {
-                    // One tile takes up a fraction of the entire tile-map
-                    // ggez requires us to specify the src of the tile-map in "relative" terms
-                    // (where [0.0, 0.0] is the top-left corner and [1.0, 1.0] is the bottom-right)
-                    let fraction = 1.0 / 8.0;
+                let tile = tile_grid.get(&[x, y]).unwrap();
+                // One tile takes up a fraction of the entire tile-map
+                // ggez requires us to specify the src of the tile-map in "relative" terms
+                // (where [0.0, 0.0] is the top-left corner and [1.0, 1.0] is the bottom-right)
+                let fraction = 1.0 / 8.0;
 
-                    let position_of_tile_in_tilemap = match tile {
-                        TileId::Ground => [0, 0],
-                        TileId::WaterCenter => [1, 2],
-                        TileId::WaterEdgeNorth => [1, 1],
-                        TileId::WaterCornerNE => [2, 1],
-                        TileId::WaterEdgeEast => [2, 2],
-                        TileId::WaterCornerSE => [2, 3],
-                        TileId::WaterEdgeSouth => [1, 3],
-                        TileId::WaterCornerSW => [0, 3],
-                        TileId::WaterEdgeWest => [0, 2],
-                        TileId::WaterCornerNW => [0, 1],
-                        TileId::WaterConcaveNE => [0, 5],
-                        TileId::WaterConcaveSE => [0, 4],
-                        TileId::WaterConcaveSW => [1, 4],
-                        TileId::WaterConcaveNW => [1, 5],
-                    };
+                let position_of_tile_in_tilemap = match tile {
+                    TileId::Ground => [0, 0],
+                    TileId::WaterCenter => [1, 2],
+                    TileId::WaterEdgeNorth => [1, 1],
+                    TileId::WaterCornerNE => [2, 1],
+                    TileId::WaterEdgeEast => [2, 2],
+                    TileId::WaterCornerSE => [2, 3],
+                    TileId::WaterEdgeSouth => [1, 3],
+                    TileId::WaterCornerSW => [0, 3],
+                    TileId::WaterEdgeWest => [0, 2],
+                    TileId::WaterCornerNW => [0, 1],
+                    TileId::WaterConcaveNE => [0, 5],
+                    TileId::WaterConcaveSE => [0, 4],
+                    TileId::WaterConcaveSW => [1, 4],
+                    TileId::WaterConcaveNW => [1, 5],
+                    TileId::InvalidTile => panic!("Invalid tile on {:?}", [x, y]),
+                };
 
-                    tile_map.draw(
-                        ctx,
-                        DrawParam::new()
-                            .src(Rect::new(
-                                fraction * position_of_tile_in_tilemap[0] as f32,
-                                fraction * position_of_tile_in_tilemap[1] as f32,
-                                fraction,
-                                fraction,
-                            ))
-                            .dest([x as f32 * TILE_PIXEL_SIZE[0], y as f32 * TILE_PIXEL_SIZE[1]]),
-                    )?;
-                }
+                tile_map.draw(
+                    ctx,
+                    DrawParam::new()
+                        .src(Rect::new(
+                            fraction * position_of_tile_in_tilemap[0] as f32,
+                            fraction * position_of_tile_in_tilemap[1] as f32,
+                            fraction,
+                            fraction,
+                        ))
+                        .dest([x as f32 * TILE_PIXEL_SIZE[0], y as f32 * TILE_PIXEL_SIZE[1]]),
+                )?;
             }
         }
         let image = canvas.to_image(ctx)?;

@@ -26,7 +26,7 @@ pub enum MapConfig {
 pub struct WorldInitData {
     pub dimensions: [u32; 2],
     pub entities: Vec<Entity>,
-    pub water_grid: Grid<()>,
+    pub water_grid: Grid<bool>,
     pub tile_grid: Grid<TileId>,
 }
 
@@ -54,7 +54,7 @@ impl WorldInitData {
             for y in 0..dimensions[1] {
                 let water_cell = x % 4 < 2 && y % 3 < 2;
                 if water_cell && rng.gen_bool(0.4) {
-                    water_grid.set([x, y], Some(()));
+                    water_grid.set([x, y], true);
                 }
             }
         }
@@ -165,7 +165,7 @@ impl WorldInitData {
             let r = entity.cell_rect();
             for x in r.position[0]..r.position[0] + r.size[0] {
                 for y in r.position[1]..r.position[1] + r.size[1] {
-                    if water_grid.get(&[x, y]).is_some() {
+                    if water_grid.get(&[x, y]).unwrap() {
                         println!(
                             "WARN: Removing {:?} because it's occupying {:?} which is already covered by water",
                             entity,
@@ -209,7 +209,7 @@ impl WorldInitData {
                 let ch = rows[(y + 1) as usize].as_bytes()[(x + 1) as usize] as char;
                 match ch {
                     'W' => {
-                        water_grid.set([x as u32, y as u32], Some(()));
+                        water_grid.set([x as u32, y as u32], true);
                     }
                     '1' => {
                         entities.push(create_entity(EntityType::TechLab, [x, y], Team::Player));
@@ -235,7 +235,7 @@ impl WorldInitData {
         }
     }
 
-    pub fn save_to_file(water_grid: &Grid<()>, entities: &[Entity], filepath: &str) {
+    pub fn save_to_file(water_grid: &Grid<bool>, entities: &[Entity], filepath: &str) {
         println!("Saving map to {:?} ...", filepath);
         let mut file = OpenOptions::new().write(true).open(filepath).unwrap();
 
@@ -250,7 +250,7 @@ impl WorldInitData {
         for y in 0..h {
             content.push('X');
             for x in 0..w {
-                if water_grid.get(&[x, y]).is_some() {
+                if water_grid.get(&[x, y]).unwrap() {
                     content.push('W');
                 } else if let Some(entity) =
                     entities.iter().find(|entity| entity.position == [x, y])
@@ -284,51 +284,51 @@ impl WorldInitData {
     }
 }
 
-pub fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
+pub fn create_tile_grid(water_grid: &Grid<bool>) -> Grid<TileId> {
     let [w, h] = water_grid.dimensions;
     let mut tile_grid = Grid::new([w * 2, h * 2]);
     for x in 0..w {
         for y in 0..h {
-            if water_grid.get(&[x, y]).is_some() {
+            if water_grid.get(&[x, y]).unwrap() {
                 // Pick water tiles based on neighbouring cells,
 
                 let land_n = if y > 0 {
-                    water_grid.get(&[x, y - 1]).is_none()
+                    !water_grid.get(&[x, y - 1]).unwrap()
                 } else {
                     false
                 };
                 let land_ne = if x < w - 1 && y > 0 {
-                    water_grid.get(&[x + 1, y - 1]).is_none()
+                    !water_grid.get(&[x + 1, y - 1]).unwrap()
                 } else {
                     false
                 };
                 let land_e = if x < w - 1 {
-                    water_grid.get(&[x + 1, y]).is_none()
+                    !water_grid.get(&[x + 1, y]).unwrap()
                 } else {
                     false
                 };
                 let land_se = if x < w - 1 && y < h - 1 {
-                    water_grid.get(&[x + 1, y + 1]).is_none()
+                    !water_grid.get(&[x + 1, y + 1]).unwrap()
                 } else {
                     false
                 };
                 let land_s = if y < h - 1 {
-                    water_grid.get(&[x, y + 1]).is_none()
+                    !water_grid.get(&[x, y + 1]).unwrap()
                 } else {
                     false
                 };
                 let land_sw = if x > 0 && y < h - 1 {
-                    water_grid.get(&[x - 1, y + 1]).is_none()
+                    !water_grid.get(&[x - 1, y + 1]).unwrap()
                 } else {
                     false
                 };
                 let land_w = if x > 0 {
-                    water_grid.get(&[x - 1, y]).is_none()
+                    !water_grid.get(&[x - 1, y]).unwrap()
                 } else {
                     false
                 };
                 let land_nw = if x > 0 && y > 0 {
-                    water_grid.get(&[x - 1, y - 1]).is_none()
+                    !water_grid.get(&[x - 1, y - 1]).unwrap()
                 } else {
                     false
                 };
@@ -344,7 +344,7 @@ pub fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
                 } else {
                     TileId::WaterCenter
                 };
-                tile_grid.set([x * 2 + 1, y * 2], Some(topright));
+                tile_grid.set([x * 2 + 1, y * 2], topright);
 
                 let botright = if land_s && land_e {
                     TileId::WaterCornerSE
@@ -357,7 +357,7 @@ pub fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
                 } else {
                     TileId::WaterCenter
                 };
-                tile_grid.set([x * 2 + 1, y * 2 + 1], Some(botright));
+                tile_grid.set([x * 2 + 1, y * 2 + 1], botright);
 
                 let botleft = if land_s && land_w {
                     TileId::WaterCornerSW
@@ -370,7 +370,7 @@ pub fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
                 } else {
                     TileId::WaterCenter
                 };
-                tile_grid.set([x * 2, y * 2 + 1], Some(botleft));
+                tile_grid.set([x * 2, y * 2 + 1], botleft);
 
                 let topleft = if land_n && land_w {
                     TileId::WaterCornerNW
@@ -383,14 +383,14 @@ pub fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
                 } else {
                     TileId::WaterCenter
                 };
-                tile_grid.set([x * 2, y * 2], Some(topleft));
+                tile_grid.set([x * 2, y * 2], topleft);
             } else {
                 tile_grid.set_area(
                     CellRect {
                         position: [x * 2, y * 2],
                         size: [2, 2],
                     },
-                    Some(TileId::Ground),
+                    TileId::Ground,
                 );
             }
         }
@@ -400,6 +400,7 @@ pub fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TileId {
+    InvalidTile,
     Ground,
     WaterCenter,
     WaterEdgeNorth,
@@ -414,4 +415,10 @@ pub enum TileId {
     WaterConcaveSE,
     WaterConcaveSW,
     WaterConcaveNW,
+}
+
+impl Default for TileId {
+    fn default() -> Self {
+        TileId::InvalidTile
+    }
 }

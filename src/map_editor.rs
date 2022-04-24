@@ -61,7 +61,7 @@ pub fn run(filepath: String) -> GameResult {
 struct Editor {
     filepath: String,
     assets: Assets,
-    water_grid: Grid<()>,
+    water_grid: Grid<bool>,
     entities: Vec<Entity>,
     left_mouse_current_cell: Option<[u32; 2]>,
     right_mouse_current_cell: Option<[u32; 2]>,
@@ -151,15 +151,15 @@ impl EventHandler for Editor {
 
 impl Editor {
     fn add_water(&mut self, ctx: &mut Context, clicked_world_pos: [u32; 2]) {
-        if self.water_grid.get(&clicked_world_pos).is_none() {
-            self.water_grid.set(clicked_world_pos, Some(()));
+        if !self.water_grid.get(&clicked_world_pos).unwrap() {
+            self.water_grid.set(clicked_world_pos, true);
             self.update_background_tiles(ctx);
         }
     }
 
     fn remove_water(&mut self, ctx: &mut Context, clicked_world_pos: [u32; 2]) {
-        if self.water_grid.get(&clicked_world_pos).is_some() {
-            self.water_grid.set(clicked_world_pos, None);
+        if self.water_grid.get(&clicked_world_pos).unwrap() {
+            self.water_grid.set(clicked_world_pos, false);
             self.update_background_tiles(ctx);
         }
     }

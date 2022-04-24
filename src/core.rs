@@ -36,12 +36,12 @@ impl Core {
 
         let mut obstacle_grid = Grid::new(world_dimensions);
         for water_cell in water_cells {
-            obstacle_grid.set(water_cell, Some(ObstacleType::Water));
+            obstacle_grid.set(water_cell, ObstacleType::Water);
         }
         for entity in &entities {
             // TODO Store EntityId's instead, to get constant position->entity_id lookup?
             //      (although entity_id->entity is still not constant currently)
-            obstacle_grid.set_area(entity.cell_rect(), Some(ObstacleType::Entity(entity.team)));
+            obstacle_grid.set_area(entity.cell_rect(), ObstacleType::Entity(entity.team));
         }
         let entities = entities
             .into_iter()
@@ -67,15 +67,14 @@ impl Core {
                 unit.sub_cell_movement.update(dt, pos);
                 if !unit.sub_cell_movement.is_between_cells() {
                     if let Some(next_pos) = unit.movement_plan.peek() {
-                        let obstacle = self.obstacle_grid.get(next_pos);
-                        if obstacle.is_none() {
+                        if self.obstacle_grid.get(next_pos).unwrap() == ObstacleType::None {
                             let old_pos = pos;
                             let new_pos = unit.movement_plan.advance();
                             unit.move_to_adjacent_cell(old_pos, new_pos);
                             entity.position = new_pos;
-                            self.obstacle_grid.set(old_pos, None);
+                            self.obstacle_grid.set(old_pos, ObstacleType::None);
                             self.obstacle_grid
-                                .set(new_pos, Some(ObstacleType::Entity(entity.team)));
+                                .set(new_pos, ObstacleType::Entity(entity.team));
                         }
                     } else if entity.state == EntityState::Moving {
                         entity.state = EntityState::Idle;
@@ -326,7 +325,7 @@ impl Core {
                     Core::maybe_repay_construction_cost(&entity, &self.teams);
                 }
                 let cell_rect = entity.cell_rect();
-                self.obstacle_grid.set_area(cell_rect, None);
+                self.obstacle_grid.set_area(cell_rect, ObstacleType::None);
                 removed_entities.push(*entity_id);
                 false
             } else {
@@ -413,7 +412,11 @@ impl Core {
                 if [x, y] != worker.position {
                     // Don't check for collision on the cell that the builder stands on,
                     // since it will be removed when structure is added.
-                    if self.obstacle_grid.get(&[x, y]).is_some() {
+                    let is_occupied = self
+                        .obstacle_grid
+                        .get(&[x, y])
+                        .map_or(true, |obstacle| obstacle != ObstacleType::None);
+                    if is_occupied {
                         can_fit = false;
                         println!("Not enough space. Occupied cell: {:?}", [x, y]);
                     }
@@ -678,7 +681,11 @@ impl Core {
         );
         for x in left..right + 1 {
             for y in top..bot + 1 {
-                if self.obstacle_grid.get(&[x, y]).is_none() {
+                let is_free = self
+                    .obstacle_grid
+                    .get(&[x, y])
+                    .map_or(false, |obstacle| obstacle == ObstacleType::None);
+                if is_free {
                     let new_unit = data::create_entity(entity_type, [x, y], team);
                     self.add_entity(new_unit);
                     return Some([x, y]);
@@ -694,7 +701,7 @@ impl Core {
         self.entities
             .push((new_entity.id, RefCell::new(new_entity)));
         self.obstacle_grid
-            .set_area(rect, Some(ObstacleType::Entity(team)));
+            .set_area(rect, ObstacleType::Entity(team));
     }
 
     fn find_entity(&self, id: EntityId) -> Option<&RefCell<Entity>> {
@@ -808,6 +815,13 @@ pub struct UpdateOutcome {
 pub enum ObstacleType {
     Entity(Team),
     Water,
+    None,
+}
+
+impl Default for ObstacleType {
+    fn default() -> Self {
+        ObstacleType::None
+    }
 }
 
 #[derive(Debug, Copy, Clone)]

@@ -137,7 +137,7 @@ impl Game {
         let mut water_cells = vec![];
         for x in 0..world_dimensions[0] {
             for y in 0..world_dimensions[1] {
-                if water_grid.get(&[x, y]).is_some() {
+                if water_grid.get(&[x, y]).unwrap() {
                     water_cells.push([x, y]);
                 }
             }
