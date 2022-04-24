@@ -1,12 +1,13 @@
 use rand::Rng;
 
 use ggez::Context;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::Path;
 
 use crate::data::{self, create_entity, EntityType};
 use crate::entities::{Entity, Team};
 use crate::grid::{CellRect, Grid};
+use std::fs::OpenOptions;
 
 #[derive(Debug, PartialEq)]
 pub enum MapType {
@@ -31,12 +32,12 @@ pub struct WorldInitData {
 impl WorldInitData {
     pub fn load(ctx: &mut Context, config: MapConfig) -> Self {
         match config {
-            MapConfig::Type(map_type) => Self::load_from_type(map_type),
+            MapConfig::Type(map_type) => Self::create_from_type(map_type),
             MapConfig::FromFile(path) => Self::load_from_file(ctx, path.as_ref()),
         }
     }
 
-    pub fn load_from_type(map_type: MapType) -> Self {
+    pub fn create_from_type(map_type: MapType) -> Self {
         let dimensions = match map_type {
             MapType::Empty => [30, 20],
             MapType::Small => [30, 20],
@@ -50,10 +51,8 @@ impl WorldInitData {
         for x in 0..dimensions[0] {
             for y in 0..dimensions[1] {
                 let water_cell = x % 4 == 0 && (y % 3 < 2);
-                if water_cell {
-                    if rng.gen_bool(0.8) {
-                        water_grid.set([x, y], Some(()));
-                    }
+                if water_cell && rng.gen_bool(0.8) {
+                    water_grid.set([x, y], Some(()));
                 }
             }
         }
@@ -159,10 +158,14 @@ impl WorldInitData {
         }
     }
 
-    pub fn load_from_file(ctx: &mut Context, path: impl AsRef<Path>) -> Self {
+    fn load_from_file(ctx: &mut Context, path: impl AsRef<Path>) -> Self {
         let mut file = ggez::filesystem::open(ctx, path).unwrap();
         let mut map = String::new();
         file.read_to_string(&mut map).unwrap();
+        Self::load_from_file_contents(map)
+    }
+
+    pub fn load_from_file_contents(map: String) -> Self {
         let rows: Vec<&str> = map.lines().collect();
         let w = (rows[0].len() - 2) as u32;
         let h = (rows.len() - 2) as u32;
@@ -203,9 +206,57 @@ impl WorldInitData {
             tile_grid,
         }
     }
+
+    pub fn save_to_file(water_grid: &Grid<()>, entities: &[Entity], filepath: &str) {
+        println!("Saving map to {:?} ...", filepath);
+        let mut file = OpenOptions::new().write(true).open(filepath).unwrap();
+
+        let mut content = String::new();
+        let [w, h] = water_grid.dimensions;
+
+        for _ in 0..w + 2 {
+            content.push('X');
+        }
+        content.push('\n');
+
+        for y in 0..h {
+            content.push('X');
+            for x in 0..w {
+                if water_grid.get(&[x, y]).is_some() {
+                    content.push('W');
+                } else if let Some(entity) =
+                    entities.iter().find(|entity| entity.position == [x, y])
+                {
+                    match (entity.entity_type, entity.team) {
+                        (EntityType::TechLab, Team::Player) => {
+                            content.push('1');
+                        }
+                        (EntityType::TechLab, Team::Enemy) => {
+                            content.push('2');
+                        }
+                        (EntityType::FuelRift, Team::Neutral) => {
+                            content.push('R');
+                        }
+                        unhandled => panic!("Unhandled entity: {:?}", unhandled),
+                    }
+                } else {
+                    content.push(' ');
+                }
+            }
+            content.push_str("X\n");
+        }
+
+        for _ in 0..w + 2 {
+            content.push('X');
+        }
+        content.push('\n');
+
+        file.write_all(content.as_bytes()).unwrap();
+        println!("Saved map");
+    }
 }
 
-fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
+pub fn create_tile_grid(water_grid: &Grid<()>) -> Grid<TileId> {
     let [w, h] = water_grid.dimensions;
     let mut tile_grid = Grid::new([w * 2, h * 2]);
     for x in 0..w {

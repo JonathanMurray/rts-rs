@@ -3,6 +3,7 @@ extern crate rand;
 
 pub mod game;
 pub mod map;
+pub mod map_editor;
 
 mod assets;
 mod camera;

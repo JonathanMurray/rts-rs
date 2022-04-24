@@ -5,7 +5,6 @@ use ggez::graphics::{
 };
 use ggez::{graphics, Context, GameError, GameResult};
 
-use std::cell::Ref;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
@@ -27,6 +26,7 @@ pub struct Assets {
     construction_outlines: HashMap<[u32; 2], Mesh>,
     entity_animations: HashMap<(EntityType, Team), Animation>,
     movement_command_indicator: Mesh,
+    tile_map: Image,
     world_background: Image,
     world_size: [f32; 2],
 }
@@ -70,10 +70,21 @@ impl Assets {
             construction_outlines: Default::default(),
             entity_animations,
             movement_command_indicator,
+            tile_map,
             world_background,
             world_size,
         };
         Ok(assets)
+    }
+
+    pub fn update_background_tiles(
+        &mut self,
+        ctx: &mut Context,
+        tile_grid: &Grid<TileId>,
+    ) -> GameResult {
+        self.world_background =
+            Self::create_background_from_tile_map(ctx, &self.tile_map, tile_grid)?;
+        Ok(())
     }
 
     pub fn draw_selection(
@@ -251,7 +262,7 @@ impl Assets {
     pub fn draw_entity(
         &mut self,
         ctx: &mut Context,
-        entity: &Ref<Entity>,
+        entity: &Entity,
         screen_coords: [f32; 2],
     ) -> GameResult {
         let animation = self
