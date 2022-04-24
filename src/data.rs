@@ -240,12 +240,12 @@ impl HudAssets {
                 keycode: KeyCode::A,
             },
             Action::GatherResource => ActionHudConfig {
-                text: "Gather".to_owned(),
+                text: "Gather resource".to_owned(),
                 icon: self.gather_icon.clone(),
                 keycode: KeyCode::G,
             },
             Action::ReturnResource => ActionHudConfig {
-                text: "Return".to_owned(),
+                text: "Return resource".to_owned(),
                 icon: self.return_icon.clone(),
                 keycode: KeyCode::R,
             },

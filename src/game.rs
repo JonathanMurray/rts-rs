@@ -409,7 +409,7 @@ impl Game {
         } else {
             self.hud
                 .borrow_mut()
-                .set_error_message("Can't attack that target".to_owned());
+                .set_error_message("Invalid attack target".to_owned());
         }
     }
 
@@ -447,7 +447,7 @@ impl Game {
         } else {
             self.hud
                 .borrow_mut()
-                .set_error_message("Invalid target - select a resource".to_owned());
+                .set_error_message("Invalid resource target".to_owned());
         }
     }
 
