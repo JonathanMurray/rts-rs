@@ -306,7 +306,10 @@ fn state_matches_action(state: EntityState, action: Action) -> bool {
         Action::Stop => state == EntityState::Idle,
         Action::Move => state == EntityState::Moving,
         Action::Attack => {
-            matches!(state, EntityState::Attacking(_) | EntityState::MovingToAttackTarget(_))
+            matches!(
+                state,
+                EntityState::Attacking(_) | EntityState::MovingToAttackTarget(_)
+            )
         }
         Action::GatherResource => {
             matches!(

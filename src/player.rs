@@ -138,6 +138,20 @@ impl PlayerState {
         ])
     }
 
+    pub fn screen_to_world_clamped(&self, coordinates: [f32; 2]) -> [f32; 2] {
+        let x = f32::min(
+            f32::max(0.0, coordinates[0] - WORLD_VIEWPORT.x),
+            WORLD_VIEWPORT.w,
+        );
+        let y = f32::min(
+            f32::max(0.0, coordinates[1] - WORLD_VIEWPORT.y),
+            WORLD_VIEWPORT.h,
+        );
+
+        let camera_pos = self.camera.borrow().position_in_world;
+        [x + camera_pos[0], y + camera_pos[1]]
+    }
+
     pub fn world_to_screen(&self, world_pixel_position: [f32; 2]) -> [f32; 2] {
         let [x, y] = world_pixel_position;
         let camera_pos = self.camera.borrow().position_in_world;

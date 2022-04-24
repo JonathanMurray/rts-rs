@@ -769,50 +769,47 @@ impl EventHandler for Game {
             self.player_state.cursor_state()
         {
             self.set_player_cursor_state(ctx, CursorState::Default);
-            // TODO: select even if mouse is released outside of the world view port
-            if let Some(released_world_pixel_coords) = self.player_state.screen_to_world([x, y]) {
-                let selection_rect =
-                    Game::rect_from_points(start_world_pixel_coords, released_world_pixel_coords);
 
-                println!("SELECTION RECT: {:?}", selection_rect);
+            let released_world_pixel_coords = self.player_state.screen_to_world_clamped([x, y]);
+            let selection_rect =
+                Game::rect_from_points(start_world_pixel_coords, released_world_pixel_coords);
 
-                // TODO: prioritize units
-                if button == MouseButton::Left {
-                    // Only player-owned entities can be selected in groups.
-                    // Player-owned entities are prioritized when drag-selecting.
+            println!("SELECTION RECT: {:?}", selection_rect);
 
-                    let mut player_entities = vec![];
-                    let mut non_player_entity = None;
+            // TODO: prioritize units
+            if button == MouseButton::Left {
+                // Only player-owned entities can be selected in groups.
+                // Player-owned entities are prioritized when drag-selecting.
 
-                    for (id, entity) in self.core.entities() {
-                        let entity = entity.borrow();
-                        if entity.team == Team::Player {
-                            if entity.pixel_rect().overlaps(&selection_rect) {
-                                player_entities.push(*id);
-                                if player_entities.len() == MAX_NUM_SELECTED_ENTITIES {
-                                    break;
-                                }
+                let mut player_entities = vec![];
+                let mut non_player_entity = None;
+
+                for (id, entity) in self.core.entities() {
+                    let entity = entity.borrow();
+                    if entity.team == Team::Player {
+                        if entity.pixel_rect().overlaps(&selection_rect) {
+                            player_entities.push(*id);
+                            if player_entities.len() == MAX_NUM_SELECTED_ENTITIES {
+                                break;
                             }
-                        } else if non_player_entity.is_none()
-                            && entity.pixel_rect().overlaps(&selection_rect)
-                        {
-                            non_player_entity = Some(*id);
                         }
+                    } else if non_player_entity.is_none()
+                        && entity.pixel_rect().overlaps(&selection_rect)
+                    {
+                        non_player_entity = Some(*id);
                     }
-
-                    let new_selection = if !player_entities.is_empty() {
-                        player_entities
-                    } else if let Some(other) = non_player_entity {
-                        vec![other]
-                    } else {
-                        vec![]
-                    };
-
-                    println!("Selected {:?} by releasing mouse button", new_selection);
-                    self.set_selected_entities(new_selection);
                 }
-            } else {
-                println!("Didn't get any targets from the selection area")
+
+                let new_selection = if !player_entities.is_empty() {
+                    player_entities
+                } else if let Some(other) = non_player_entity {
+                    vec![other]
+                } else {
+                    vec![]
+                };
+
+                println!("Selected {:?} by releasing mouse button", new_selection);
+                self.set_selected_entities(new_selection);
             }
         }
 
