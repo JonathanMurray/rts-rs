@@ -107,7 +107,7 @@ impl Game {
             } else {
                 Team::Enemy2
             };
-            enemy_team_ais.push(TeamAi::new(Team::Enemy1, opponent, world_dimensions));
+            enemy_team_ais.push(TeamAi::new(Team::Enemy1, opponent));
         }
         if teams.contains(&Team::Enemy2) {
             let opponent = if teams.contains(&Team::Player) {
@@ -115,7 +115,7 @@ impl Game {
             } else {
                 Team::Enemy1
             };
-            enemy_team_ais.push(TeamAi::new(Team::Enemy2, opponent, world_dimensions));
+            enemy_team_ais.push(TeamAi::new(Team::Enemy2, opponent));
         }
 
         let font = Font::new(ctx, "/fonts/Merchant Copy.ttf")?;
@@ -285,11 +285,10 @@ impl Game {
         action: Action,
     ) {
         match action {
-            Action::Train(trained_unit_type, config) => {
+            Action::Train(trained_unit_type, _config) => {
                 self.player_issue_command(Command::Train(TrainCommand {
                     trainer: actor,
                     trained_unit_type,
-                    config,
                 }));
             }
             Action::Construct(structure_type, _) => {
@@ -524,7 +523,7 @@ impl EventHandler for Game {
         let dt = ggez::timer::delta(ctx);
 
         for ai in &mut self.enemy_team_ais {
-            let commands = ai.run(dt, self.core.entities(), &mut self.rng);
+            let commands = ai.run(dt, &self.core, &mut self.rng);
             if !commands.is_empty() {
                 println!("[{:?}] Issuing {} AI commands:", ai.team(), commands.len());
             }

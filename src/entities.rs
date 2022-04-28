@@ -459,8 +459,13 @@ impl TrainingComponent {
         })
     }
 
-    pub fn options(&self) -> impl Iterator<Item = (&EntityType, &TrainingConfig)> {
-        self.options.iter()
+    pub fn config(&self, entity_type: &EntityType) -> &TrainingConfig {
+        self.options.get(entity_type).unwrap_or_else(|| {
+            panic!(
+                "No config found for {:?}. Available options: {:?}",
+                entity_type, self.options
+            )
+        })
     }
 }
 

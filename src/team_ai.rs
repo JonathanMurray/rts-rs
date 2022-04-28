@@ -1,28 +1,28 @@
 use rand::rngs::ThreadRng;
 use rand::Rng;
-use std::cell::RefCell;
+use std::cell::{Ref, RefCell};
 use std::time::Duration;
 
 use crate::core::{
-    AttackCommand, Command, ConstructCommand, GatherResourceCommand, MoveCommand, TrainCommand,
+    AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, TrainCommand,
 };
 use crate::data::EntityType;
-use crate::entities::{Action, Entity, EntityId, Team};
+use crate::entities::{EntityState, Team};
+
+use std::cmp;
 
 pub struct TeamAi {
     team: Team,
     opponent: Team,
     timer_s: f32,
-    world_dimensions: [u32; 2],
 }
 
 impl TeamAi {
-    pub fn new(team: Team, opponent: Team, world_dimensions: [u32; 2]) -> Self {
+    pub fn new(team: Team, opponent: Team) -> Self {
         Self {
             team,
             opponent,
             timer_s: 0.0,
-            world_dimensions,
         }
     }
 
@@ -33,96 +33,216 @@ impl TeamAi {
     pub fn run<'a>(
         &mut self,
         dt: Duration,
-        entities: &'a [(EntityId, RefCell<Entity>)],
+        core: &'a Core,
         rng: &mut ThreadRng,
     ) -> Vec<Command<'a>> {
-        let mut commands = vec![];
         self.timer_s -= dt.as_secs_f32();
-
         if self.timer_s <= 0.0 {
             self.timer_s = 1.0;
+            self.act(core, rng)
+        } else {
+            vec![]
+        }
+    }
+
+    fn act<'a>(&mut self, core: &'a Core, rng: &mut ThreadRng) -> Vec<Command<'a>> {
+        let entities = core.entities();
+
+        let mut idle_workers = vec![];
+        let mut idle_bases = vec![];
+        let mut idle_military_buildings = vec![];
+        let mut idle_fighters = vec![];
+        let mut has_base = false;
+        let mut military_building_count = 0;
+        let mut worker_count = 0;
+
+        for (_id, entity) in entities {
+            let entity_ref = entity.borrow();
+            if entity_ref.team == self.team {
+                match (entity_ref.entity_type, entity_ref.state) {
+                    (EntityType::Engineer, state) => {
+                        worker_count += 1;
+                        if state == EntityState::Idle {
+                            idle_workers.push(entity);
+                        }
+                    }
+                    (EntityType::Enforcer, EntityState::Idle) => {
+                        idle_fighters.push(entity);
+                    }
+                    (EntityType::TechLab, state) => {
+                        has_base = true;
+                        if state == EntityState::Idle {
+                            idle_bases.push(entity);
+                        }
+                    }
+                    (EntityType::BattleAcademy, state) => {
+                        military_building_count += 1;
+                        if state == EntityState::Idle {
+                            idle_military_buildings.push(entity);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+        let mut commands = vec![];
+
+        if !has_base {
+            if let Some(worker) = idle_workers.pop() {
+                let worker = worker.borrow_mut();
+                let structure_size = core.structure_size(&EntityType::TechLab);
+                if let Some(pos) =
+                    find_free_position_for_structure(core, worker.position, *structure_size, rng)
+                {
+                    commands.push(Command::Construct(ConstructCommand {
+                        builder: worker,
+                        structure_position: pos,
+                        structure_type: EntityType::TechLab,
+                    }));
+                }
+            }
+        }
+
+        if military_building_count < 2 {
+            if let Some(worker) = idle_workers.pop() {
+                let worker = worker.borrow_mut();
+                let structure_size = core.structure_size(&EntityType::BattleAcademy);
+                if let Some(pos) =
+                    find_free_position_for_structure(core, worker.position, *structure_size, rng)
+                {
+                    commands.push(Command::Construct(ConstructCommand {
+                        builder: worker,
+                        structure_position: pos,
+                        structure_type: EntityType::BattleAcademy,
+                    }));
+                }
+            }
+        }
+
+        if !idle_workers.is_empty() {
+            if let Some(resource) =
+                entities
+                    .iter()
+                    .find_map(|(_id, e)| match RefCell::try_borrow(e) {
+                        Ok(e) if e.entity_type == EntityType::FuelRift => Some(e),
+                        _ => None,
+                    })
+            {
+                while let Some(worker) = idle_workers.pop() {
+                    commands.push(Command::GatherResource(GatherResourceCommand {
+                        gatherer: worker.borrow_mut(),
+                        resource: Ref::clone(&resource),
+                    }));
+                }
+            }
+        }
+
+        if worker_count < 3 {
+            for base in idle_bases {
+                commands.push(Command::Train(TrainCommand {
+                    trainer: base.borrow_mut(),
+                    trained_unit_type: EntityType::Engineer,
+                }));
+            }
+        }
+
+        for military_building in idle_military_buildings {
+            commands.push(Command::Train(TrainCommand {
+                trainer: military_building.borrow_mut(),
+                trained_unit_type: EntityType::Enforcer,
+            }));
+        }
+
+        if !idle_fighters.is_empty() {
+            let mut victims = vec![];
             for (_id, entity) in entities {
-                let friendly_entity = match RefCell::try_borrow_mut(entity) {
-                    Ok(e) if e.team == self.team => Some(e),
-                    _ => None,
-                };
-
-                if let Some(friendly_entity) = friendly_entity {
-                    if rng.gen_bool(0.2) {
-                        for action in friendly_entity.actions.iter().flatten() {
-                            if action == &Action::Attack && rng.gen_bool(0.8) {
-                                if let Some(opponent_entity) =
-                                    entities.iter().find_map(|(_id, e)| {
-                                        match RefCell::try_borrow(e) {
-                                            Ok(e) if e.team == self.opponent => Some(e),
-                                            _ => None,
-                                        }
-                                    })
-                                {
-                                    commands.push(Command::Attack(AttackCommand {
-                                        attacker: friendly_entity,
-                                        victim: opponent_entity,
-                                    }));
-                                    break;
-                                }
-                            }
-                            if let Action::Construct(structure_type, _config) = action {
-                                if rng.gen_bool(0.5) {
-                                    let structure_type = *structure_type;
-                                    let x: u32 = rng.gen_range(0..self.world_dimensions[0]);
-                                    let y: u32 = rng.gen_range(0..self.world_dimensions[1]);
-                                    commands.push(Command::Construct(ConstructCommand {
-                                        builder: friendly_entity,
-                                        structure_position: [x, y],
-                                        structure_type,
-                                    }));
-                                    break;
-                                }
-                            }
-
-                            if let Action::GatherResource = action {
-                                if rng.gen_bool(0.2) {
-                                    if let Some(resource) = entities.iter().find_map(|(_id, e)| {
-                                        match RefCell::try_borrow(e) {
-                                            Ok(e) if e.entity_type == EntityType::FuelRift => {
-                                                Some(e)
-                                            }
-                                            _ => None,
-                                        }
-                                    }) {
-                                        commands.push(Command::GatherResource(
-                                            GatherResourceCommand {
-                                                gatherer: friendly_entity,
-                                                resource,
-                                            },
-                                        ));
-                                        break;
-                                    }
-                                }
-                            }
-
-                            if action == &Action::Move && rng.gen_bool(0.3) {
-                                let x: u32 = rng.gen_range(0..self.world_dimensions[0]);
-                                let y: u32 = rng.gen_range(0..self.world_dimensions[1]);
-                                commands.push(Command::Move(MoveCommand {
-                                    unit: friendly_entity,
-                                    destination: [x, y],
-                                }));
-                                break;
-                            }
-                            if let &Action::Train(trained_unit_type, config) = action {
-                                commands.push(Command::Train(TrainCommand {
-                                    trainer: friendly_entity,
-                                    trained_unit_type,
-                                    config,
-                                }));
-                                break;
-                            }
+                if let Ok(entity) = entity.try_borrow() {
+                    if entity.team == self.opponent {
+                        victims.push(entity);
+                        if victims.len() == idle_fighters.len() {
+                            // Have enough victims, one for each attacker
+                            break;
                         }
                     }
                 }
             }
+
+            for fighter in idle_fighters {
+                if let Some(victim) = victims.pop() {
+                    commands.push(Command::Attack(AttackCommand {
+                        attacker: fighter.borrow_mut(),
+                        victim,
+                    }));
+                }
+            }
         }
+
         commands
     }
+}
+
+fn find_free_position_for_structure(
+    core: &Core,
+    worker_position: [u32; 2],
+    structure_size: [u32; 2],
+    rng: &mut ThreadRng,
+) -> Option<[u32; 2]> {
+    let mut x = worker_position[0] as i32;
+    let mut y = worker_position[1] as i32;
+
+    // randomize the structure placement a bit to make AI less deterministic
+    x = rng.gen_range(cmp::max(0, x - 2)..=x + 2);
+    y = rng.gen_range(cmp::max(0, y - 2)..=y + 2);
+
+    // Look for a free position by going in an outward spiral
+    // starting from the worker position. This is quite
+    // inefficient.
+
+    let mut spiral_distance = 1;
+    while spiral_distance < 15 {
+        // move right
+        for _ in 0..spiral_distance {
+            if x >= 0
+                && y >= 0
+                && core.can_structure_fit(worker_position, [x as u32, y as u32], structure_size)
+            {
+                return Some([x as u32, y as u32]);
+            }
+            x += 1;
+        }
+        // move up
+        for _ in 0..spiral_distance {
+            if x >= 0
+                && y >= 0
+                && core.can_structure_fit(worker_position, [x as u32, y as u32], structure_size)
+            {
+                return Some([x as u32, y as u32]);
+            }
+            y -= 1;
+        }
+        spiral_distance += 1;
+        // move left
+        for _ in 0..spiral_distance {
+            if x >= 0
+                && y >= 0
+                && core.can_structure_fit(worker_position, [x as u32, y as u32], structure_size)
+            {
+                return Some([x as u32, y as u32]);
+            }
+            x -= 1;
+        }
+        // move down
+        for _ in 0..spiral_distance {
+            if x >= 0
+                && y >= 0
+                && core.can_structure_fit(worker_position, [x as u32, y as u32], structure_size)
+            {
+                return Some([x as u32, y as u32]);
+            }
+            y += 1;
+        }
+        spiral_distance += 1;
+    }
+    None
 }

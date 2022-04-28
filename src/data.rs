@@ -43,8 +43,8 @@ pub fn structure_sizes() -> HashMap<EntityType, [u32; 2]> {
 fn entity_config(entity_type: EntityType) -> EntityConfig {
     match entity_type {
         EntityType::Enforcer => EntityConfig {
-            max_health: Some(3),
-            category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(600)),
+            max_health: Some(10),
+            category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(700)),
             actions: [
                 Some(Action::Move),
                 Some(Action::Stop),
@@ -65,28 +65,28 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 Some(Action::Construct(
                     EntityType::BattleAcademy,
                     ConstructionConfig {
-                        construction_time: Duration::from_secs_f32(10.0),
-                        cost: 2,
+                        construction_time: Duration::from_secs_f32(12.0),
+                        cost: 4,
                     },
                 )),
                 Some(Action::Construct(
                     EntityType::TechLab,
                     ConstructionConfig {
-                        construction_time: Duration::from_secs_f32(5.0),
-                        cost: 1,
+                        construction_time: Duration::from_secs_f32(15.0),
+                        cost: 4,
                     },
                 )),
             ],
         },
         EntityType::BattleAcademy => EntityConfig {
-            max_health: Some(3),
+            max_health: Some(20),
             category: CategoryConfig::StructureSize([3, 3]),
             actions: [
                 Some(Action::Train(
                     EntityType::Enforcer,
                     TrainingConfig {
-                        duration: Duration::from_secs(7),
-                        cost: 1,
+                        duration: Duration::from_secs(12),
+                        cost: 2,
                     },
                 )),
                 None,
@@ -97,13 +97,13 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             ],
         },
         EntityType::TechLab => EntityConfig {
-            max_health: Some(5),
+            max_health: Some(30),
             category: CategoryConfig::StructureSize([3, 3]),
             actions: [
                 Some(Action::Train(
                     EntityType::Engineer,
                     TrainingConfig {
-                        duration: Duration::from_secs(4),
+                        duration: Duration::from_secs(8),
                         cost: 1,
                     },
                 )),
@@ -116,7 +116,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
         },
         EntityType::FuelRift => EntityConfig {
             max_health: None,
-            category: CategoryConfig::ResourceCapacity(10),
+            category: CategoryConfig::ResourceCapacity(30),
             actions: [None; NUM_ENTITY_ACTIONS],
         },
     }

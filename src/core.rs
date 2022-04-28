@@ -5,8 +5,8 @@ use std::time::Duration;
 
 use crate::data::{self, EntityType};
 use crate::entities::{
-    Entity, EntityCategory, EntityId, EntityState, GatheringProgress, Team, TrainingConfig,
-    TrainingPerformStatus, TrainingUpdateStatus,
+    Entity, EntityCategory, EntityId, EntityState, GatheringProgress, Team, TrainingPerformStatus,
+    TrainingUpdateStatus,
 };
 use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
@@ -30,7 +30,7 @@ impl Core {
         let mut teams: HashMap<Team, RefCell<TeamState>> = HashMap::new();
         for entity in &entities {
             if let Entry::Vacant(entry) = teams.entry(entity.team) {
-                entry.insert(RefCell::new(TeamState { resources: 3 }));
+                entry.insert(RefCell::new(TeamState { resources: 15 }));
             }
         }
 
@@ -140,6 +140,7 @@ impl Core {
                         let mut victim = victim.borrow_mut();
                         if is_unit_within_melee_range_of(attacker.position, victim.cell_rect()) {
                             let health = victim.health.as_mut().expect("victim without health");
+                            // TODO get damage amount from unit config
                             let damage_amount = 1;
                             health.receive_damage(damage_amount);
                             println!(
@@ -279,20 +280,33 @@ impl Core {
                 let has_arrived = entity.unit_mut().movement_plan.peek().is_none()
                     && !entity.unit_mut().sub_cell_movement.is_between_cells();
                 if has_arrived {
-                    if self.can_structure_fit(&entity, structure_position, structure_type) {
+                    let structure_size = *self.structure_sizes.get(&structure_type).unwrap();
+                    if self.can_structure_fit(entity.position, structure_position, structure_size) {
                         let constructions_options =
                             entity.unit().construction_options.as_ref().unwrap();
                         let construction_time = constructions_options
                             .get(&structure_type)
                             .unwrap()
                             .construction_time;
+
+                        // Mark worker for removal and free occupied grid cell
                         builders_to_remove.push(*entity_id);
+                        self.obstacle_grid
+                            .set_area(entity.cell_rect(), ObstacleType::None);
+
+                        // Plan for structure creation and claim occupied grid cells
                         structures_to_add.push((
                             entity.team,
                             structure_position,
                             structure_type,
                             construction_time,
                         ));
+                        let structure_rect = CellRect {
+                            position: structure_position,
+                            size: structure_size,
+                        };
+                        self.obstacle_grid
+                            .set_area(structure_rect, ObstacleType::Entity(entity.team));
                     } else {
                         println!("There's not enough space for the structure, so builder goes back to idling");
                         let construction_options =
@@ -318,14 +332,19 @@ impl Core {
                 .as_ref()
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
+            if is_dead {
+                Core::maybe_repay_construction_cost(&entity, &self.teams);
+            }
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
             let is_used_up_resource = used_up_resources.contains(entity_id);
-            if is_dead || is_transforming_into_structure || is_used_up_resource {
-                if is_dead {
-                    Core::maybe_repay_construction_cost(&entity, &self.teams);
-                }
+
+            // worker transforming into structure has already cleared its grid cell
+            if is_dead || is_used_up_resource {
                 let cell_rect = entity.cell_rect();
                 self.obstacle_grid.set_area(cell_rect, ObstacleType::None);
+            }
+
+            if is_dead || is_transforming_into_structure || is_used_up_resource {
                 removed_entities.push(*entity_id);
                 false
             } else {
@@ -336,13 +355,12 @@ impl Core {
         //-------------------------------
         //     START CONSTRUCTION
         //-------------------------------
-        // Now that the builder has been removed, and no longer occupies a cell, the structure can
-        // be placed.
         for (team, position, structure_type, construction_time) in structures_to_add {
             let mut new_structure = data::create_entity(structure_type, position, team);
             new_structure.state =
                 EntityState::UnderConstruction(construction_time, construction_time);
-            self.add_entity(new_structure);
+            self.entities
+                .push((new_structure.id, RefCell::new(new_structure)));
         }
 
         //-------------------------------
@@ -395,21 +413,16 @@ impl Core {
         }
     }
 
-    fn can_structure_fit(
+    pub fn can_structure_fit(
         &self,
-        worker: &Entity,
+        worker_position: [u32; 2],
         structure_position: [u32; 2],
-        structure_type: EntityType,
+        structure_size: [u32; 2],
     ) -> bool {
-        let size = self.structure_sizes.get(&structure_type).unwrap();
         let mut can_fit = true;
-        println!(
-            "Check if structure can fit. Worker pos: {:?}, Structure pos: {:?}, Structure size: {:?}",
-            worker.position, structure_position, size
-        );
-        for x in structure_position[0]..structure_position[0] + size[0] {
-            for y in structure_position[1]..structure_position[1] + size[1] {
-                if [x, y] != worker.position {
+        for x in structure_position[0]..structure_position[0] + structure_size[0] {
+            for y in structure_position[1]..structure_position[1] + structure_size[1] {
+                if [x, y] != worker_position {
                     // Don't check for collision on the cell that the builder stands on,
                     // since it will be removed when structure is added.
                     let is_occupied = self
@@ -446,7 +459,6 @@ impl Core {
             Command::Train(TrainCommand {
                 mut trainer,
                 trained_unit_type,
-                config,
             }) => {
                 assert_eq!(trainer.team, issuing_team);
                 let mut team_state = self.teams.get(&issuing_team).unwrap().borrow_mut();
@@ -454,12 +466,15 @@ impl Core {
                     .training
                     .as_mut()
                     .expect("Training command was issued for entity that can't train");
-                if team_state.resources >= config.cost {
+
+                let cost = training.config(&trained_unit_type).cost;
+
+                if team_state.resources >= cost {
                     if let TrainingPerformStatus::NewTrainingStarted =
                         training.try_start(trained_unit_type)
                     {
                         trainer.state = EntityState::TrainingUnit(trained_unit_type);
-                        team_state.resources -= config.cost;
+                        team_state.resources -= cost;
                     }
                 } else {
                     return Some(CommandError::NotEnoughResources);
@@ -486,7 +501,8 @@ impl Core {
                     return Some(CommandError::NotEnoughResources);
                 }
 
-                if !self.can_structure_fit(&builder, structure_position, structure_type) {
+                let structure_size = self.structure_sizes.get(&structure_type).unwrap();
+                if !self.can_structure_fit(builder.position, structure_position, *structure_size) {
                     return Some(CommandError::NotEnoughSpaceForStructure);
                 }
 
@@ -687,21 +703,16 @@ impl Core {
                     .map_or(false, |obstacle| obstacle == ObstacleType::None);
                 if is_free {
                     let new_unit = data::create_entity(entity_type, [x, y], team);
-                    self.add_entity(new_unit);
+                    let rect = new_unit.cell_rect();
+                    let team = new_unit.team;
+                    self.entities.push((new_unit.id, RefCell::new(new_unit)));
+                    self.obstacle_grid
+                        .set_area(rect, ObstacleType::Entity(team));
                     return Some([x, y]);
                 }
             }
         }
         None
-    }
-
-    fn add_entity(&mut self, new_entity: Entity) {
-        let rect = new_entity.cell_rect();
-        let team = new_entity.team;
-        self.entities
-            .push((new_entity.id, RefCell::new(new_entity)));
-        self.obstacle_grid
-            .set_area(rect, ObstacleType::Entity(team));
     }
 
     fn find_entity(&self, id: EntityId) -> Option<&RefCell<Entity>> {
@@ -763,7 +774,6 @@ impl<'a> Command<'a> {
 pub struct TrainCommand<'a> {
     pub trainer: RefMut<'a, Entity>,
     pub trained_unit_type: EntityType,
-    pub config: TrainingConfig,
 }
 
 #[derive(Debug)]

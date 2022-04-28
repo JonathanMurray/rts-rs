@@ -44,17 +44,17 @@ impl WorldInitData {
             MapType::Small => [30, 20],
             MapType::Medium => [30, 20],
             MapType::LoadTest => [100, 100],
-            MapType::Spectator => [30, 20],
+            MapType::Spectator => [25, 15],
         };
 
         let mut rng = rand::thread_rng();
 
-        let mut water_grid = Grid::new(dimensions);
+        let water_grid = Grid::new(dimensions);
         for x in 0..dimensions[0] {
             for y in 0..dimensions[1] {
                 let water_cell = x % 4 < 2 && y % 3 < 2;
                 if water_cell && rng.gen_bool(0.4) {
-                    water_grid.set([x, y], true);
+                    //water_grid.set([x, y], true);
                 }
             }
         }
@@ -150,12 +150,12 @@ impl WorldInitData {
             MapType::Spectator => {
                 entities.push(data::create_entity(
                     EntityType::Engineer,
-                    [5, 2],
+                    [3, 8],
                     Team::Enemy1,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
-                    [5, 4],
+                    [11, 4],
                     Team::Enemy2,
                 ));
             }
