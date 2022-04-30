@@ -25,6 +25,7 @@ use crate::player::{CursorState, EntityHighlight, HighlightType, PlayerState};
 use crate::team_ai::TeamAi;
 use crate::text::SharpFont;
 use std::collections::HashSet;
+use std::ops::Mul;
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -335,7 +336,6 @@ impl Game {
                 .map(|error| match error {
                     CommandError::NotEnoughResources => "Not enough resources".to_owned(),
                     CommandError::NoPathFound => "Can't go there".to_owned(),
-                    CommandError::AlreadyCarryingResource => "Already carrying fuel".to_owned(),
                     CommandError::NotCarryingResource => {
                         "Not carrying any fuel to return".to_owned()
                     }
@@ -727,8 +727,7 @@ impl EventHandler for Game {
         let player_resources = self
             .core
             .team_state(&Team::Player)
-            .map(|team_state| team_state.borrow().resources)
-            .unwrap_or(0);
+            .map(|team_state| team_state.borrow().resources);
         self.hud.borrow_mut().draw(
             ctx,
             player_resources,
@@ -863,6 +862,14 @@ impl EventHandler for Game {
     ) {
         match keycode {
             KeyCode::Escape => ggez::event::quit(ctx),
+            KeyCode::Key0 => {
+                if let Some(selected) = self.selected_entities().next() {
+                    // Dump selected entity for debugging
+                    println!("\n--------------------------------");
+                    println!("{:?}", selected.borrow());
+                    println!("--------------------------------\n");
+                }
+            }
             _ => {
                 let mut hud = self.hud.borrow_mut();
                 if let Some(player_input) = hud.on_key_down(keycode) {

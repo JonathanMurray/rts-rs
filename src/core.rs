@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use crate::data::{self, EntityType};
 use crate::entities::{
-    Entity, EntityCategory, EntityId, EntityState, GatheringProgress, Team, TrainingPerformStatus,
-    TrainingUpdateStatus,
+    Direction, Entity, EntityCategory, EntityId, EntityState, GatheringProgress, Team,
+    TrainingPerformStatus, TrainingUpdateStatus,
 };
 use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
@@ -117,8 +117,14 @@ impl Core {
                 let mut attacker = entity;
                 if let Some(victim) = self.find_entity(victim_id) {
                     let victim = victim.borrow_mut();
-                    if is_unit_within_melee_range_of(attacker.position, victim.cell_rect()) {
+                    if let Some(direction) =
+                        unit_melee_direction(attacker.position, victim.cell_rect())
+                    {
                         attacker.state = EntityState::Attacking(victim_id);
+                        let unit = attacker.unit_mut();
+                        if !unit.sub_cell_movement.is_between_cells() {
+                            attacker.unit_mut().direction = direction;
+                        }
                     } else if attacker.unit_mut().movement_plan.peek().is_none() {
                         if let Some(plan) = pathfind::find_path(
                             attacker.position,
@@ -158,7 +164,9 @@ impl Core {
                 if combat.is_attack_ready() {
                     if let Some(victim) = self.find_entity(victim_id) {
                         let mut victim = victim.borrow_mut();
-                        if is_unit_within_melee_range_of(attacker.position, victim.cell_rect()) {
+                        if let Some(direction) =
+                            unit_melee_direction(attacker.position, victim.cell_rect())
+                        {
                             let health = victim.health.as_mut().expect("victim without health");
                             // TODO get damage amount from unit config
                             let damage_amount = 1;
@@ -167,12 +175,11 @@ impl Core {
                                 "{:?} --[{} dmg]--> {:?}",
                                 attacker.id, damage_amount, victim_id
                             );
-                            attacker
-                                .unit_mut()
-                                .combat
-                                .as_mut()
-                                .unwrap()
-                                .start_cooldown();
+                            let unit = attacker.unit_mut();
+                            if !unit.sub_cell_movement.is_between_cells() {
+                                unit.direction = direction;
+                            }
+                            unit.combat.as_mut().unwrap().start_cooldown();
                         } else {
                             // Attacked target is not in range
                             attacker.state = EntityState::MovingToAttackTarget(victim_id);
@@ -203,9 +210,13 @@ impl Core {
                 if !gatherer.unit_mut().sub_cell_movement.is_between_cells() {
                     if let Some(resource) = self.find_entity(resource_id) {
                         let resource = resource.borrow();
-                        if is_unit_within_melee_range_of(gatherer.position, resource.cell_rect()) {
+                        if let Some(direction) =
+                            unit_melee_direction(gatherer.position, resource.cell_rect())
+                        {
                             gatherer.state = EntityState::GatheringResource(resource_id);
-                            let gathering = gatherer.unit_mut().gathering.as_mut().unwrap();
+                            let unit = gatherer.unit_mut();
+                            unit.direction = direction;
+                            let gathering = unit.gathering.as_mut().unwrap();
                             gathering.start_gathering();
                         }
                     } else {
@@ -256,13 +267,18 @@ impl Core {
                 if !returner.unit_mut().sub_cell_movement.is_between_cells() {
                     if let Some(structure) = self.find_entity(structure_id) {
                         let structure = structure.borrow();
-                        if is_unit_within_melee_range_of(returner.position, structure.cell_rect()) {
+                        if let Some(direction) =
+                            unit_melee_direction(returner.position, structure.cell_rect())
+                        {
                             self.team_state_unchecked(&returner.team)
                                 .borrow_mut()
                                 .resources += 1;
-                            // Unit goes back out to gather more
-                            let gathering = returner.unit_mut().gathering.as_mut().unwrap();
+
+                            let unit = returner.unit_mut();
+                            unit.direction = direction;
+                            let gathering = unit.gathering.as_mut().unwrap();
                             let resource_id = gathering.drop_resource();
+                            // Unit goes back out to gather more
                             if let Some(resource) = self.find_entity(resource_id) {
                                 if let Some(plan) = pathfind::find_path(
                                     returner.position,
@@ -602,10 +618,9 @@ impl Core {
                     .unwrap()
                     .is_carrying();
                 if is_carrying_resource {
-                    // TODO improve UI so that no player input leads to this situation
-                    return Some(CommandError::AlreadyCarryingResource);
-                }
-                if let Some(plan) = pathfind::find_path(
+                    println!("Unit is already carrying resources, reinterpreting gather command as return command.");
+                    self.unit_return_resource(gatherer, None);
+                } else if let Some(plan) = pathfind::find_path(
                     gatherer.position,
                     Destination::AdjacentToEntity(resource.cell_rect()),
                     &self.obstacle_grid,
@@ -665,6 +680,8 @@ impl Core {
             ) {
                 gatherer.state = EntityState::ReturningResource(structure.id);
                 gatherer.unit_mut().movement_plan.set(plan);
+            } else {
+                gatherer.state = EntityState::Idle;
             }
         } else {
             gatherer.state = EntityState::Idle;
@@ -750,16 +767,28 @@ impl Core {
     }
 }
 
-fn is_unit_within_melee_range_of(unit_position: [u32; 2], rect: CellRect) -> bool {
-    let mut is_attacker_within_range = false;
+fn unit_melee_direction(unit_position: [u32; 2], rect: CellRect) -> Option<Direction> {
     for x in rect.position[0]..rect.position[0] + rect.size[0] {
         for y in rect.position[1]..rect.position[1] + rect.size[1] {
             if square_distance(unit_position, [x, y]) <= 2 {
-                is_attacker_within_range = true;
+                let unit_x = unit_position[0] as i32;
+                let unit_y = unit_position[1] as i32;
+
+                match [x as i32 - unit_x, y as i32 - unit_y] {
+                    [0, -1] => return Some(Direction::North),
+                    [1, -1] => return Some(Direction::NorthEast),
+                    [1, 0] => return Some(Direction::East),
+                    [1, 1] => return Some(Direction::SouthEast),
+                    [0, 1] => return Some(Direction::South),
+                    [-1, 1] => return Some(Direction::SouthWest),
+                    [-1, 0] => return Some(Direction::West),
+                    [-1, -1] => return Some(Direction::NorthWest),
+                    _ => {}
+                }
             }
         }
     }
-    is_attacker_within_range
+    None
 }
 
 fn square_distance(a: [u32; 2], b: [u32; 2]) -> u32 {
@@ -859,7 +888,6 @@ impl Default for ObstacleType {
 pub enum CommandError {
     NotEnoughResources,
     NoPathFound,
-    AlreadyCarryingResource,
     NotCarryingResource,
     NotEnoughSpaceForStructure,
 }

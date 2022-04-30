@@ -100,7 +100,7 @@ impl HudGraphics {
     pub fn draw<'a>(
         &mut self,
         ctx: &mut Context,
-        player_resources: u32,
+        player_resources: Option<u32>,
         selected_entities: Vec<Ref<'a, Entity>>,
         player_state: &PlayerState,
         grid: &Grid<ObstacleType>,
@@ -109,9 +109,11 @@ impl HudGraphics {
 
         let cursor_state = player_state.cursor_state();
 
-        self.font
-            .text(15.0, format!("Fuel: {}", player_resources))
-            .draw(ctx, self.resources_position)?;
+        if let Some(player_resources) = player_resources {
+            self.font
+                .text(15.0, format!("Fuel: {}", player_resources))
+                .draw(ctx, self.resources_position)?;
+        }
 
         if selected_entities.len() > 1 {
             let mut portraits = [None; MAX_NUM_SELECTED_ENTITIES];
