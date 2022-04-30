@@ -297,31 +297,46 @@ impl UnitComponent {
 
 #[derive(Debug)]
 pub struct MovementPlan {
-    movement_plan: Vec<[u32; 2]>,
+    cell_positions: Vec<[u32; 2]>,
+    blocked_counter: u32,
 }
 
 impl MovementPlan {
     #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         Self {
-            movement_plan: Default::default(),
+            cell_positions: Default::default(),
+            blocked_counter: 0,
         }
     }
 
     pub fn set(&mut self, movement_plan: Vec<[u32; 2]>) {
-        self.movement_plan = movement_plan;
+        self.blocked_counter = 0;
+        self.cell_positions = movement_plan;
     }
 
-    pub fn peek(&self) -> Option<&[u32; 2]> {
-        self.movement_plan.last()
+    pub fn peek(&self) -> Option<[u32; 2]> {
+        self.cell_positions.last().copied()
     }
 
     pub fn advance(&mut self) -> [u32; 2] {
-        self.movement_plan.pop().expect("Can't advance empty path")
+        self.blocked_counter = 0;
+        self.cell_positions.pop().expect("Can't advance empty path")
+    }
+
+    pub fn destination(&self) -> [u32; 2] {
+        self.cell_positions[0]
     }
 
     pub fn clear(&mut self) {
-        self.movement_plan.clear();
+        self.blocked_counter = 0;
+        self.cell_positions.clear();
+    }
+
+    pub fn on_movement_blocked(&mut self) -> bool {
+        const MAX_ALLOWED_BLOCKS: u32 = 10;
+        self.blocked_counter += 1;
+        self.blocked_counter > MAX_ALLOWED_BLOCKS
     }
 }
 

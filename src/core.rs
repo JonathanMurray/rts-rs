@@ -1,6 +1,8 @@
 use std::cell::{Ref, RefCell, RefMut};
 use std::cmp::min;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::time::Duration;
 
 use crate::data::{self, EntityType};
@@ -10,9 +12,6 @@ use crate::entities::{
 };
 use crate::grid::{CellRect, Grid};
 use crate::pathfind::{self, Destination};
-use std::borrow::BorrowMut;
-use std::collections::hash_map::Entry;
-use std::ops::Deref;
 
 pub struct Core {
     teams: HashMap<Team, RefCell<TeamState>>,
@@ -67,7 +66,7 @@ impl Core {
                 unit.sub_cell_movement.update(dt, pos);
                 if !unit.sub_cell_movement.is_between_cells() {
                     if let Some(next_pos) = unit.movement_plan.peek() {
-                        if self.obstacle_grid.get(next_pos).unwrap() == ObstacleType::None {
+                        if self.obstacle_grid.get(&next_pos).unwrap() == ObstacleType::None {
                             let old_pos = pos;
                             let new_pos = unit.movement_plan.advance();
                             unit.move_to_adjacent_cell(old_pos, new_pos);
@@ -75,8 +74,28 @@ impl Core {
                             self.obstacle_grid.set(old_pos, ObstacleType::None);
                             self.obstacle_grid
                                 .set(new_pos, ObstacleType::Entity(entity.team));
+                        } else {
+                            let blocked_for_too_long = unit.movement_plan.on_movement_blocked();
+                            if blocked_for_too_long {
+                                let destination = unit.movement_plan.destination();
+                                if let Some(plan) = pathfind::find_path(
+                                    pos,
+                                    Destination::Point(destination),
+                                    &self.obstacle_grid,
+                                ) {
+                                    println!("Blocked unit found new path");
+                                    unit.movement_plan.set(plan);
+                                } else {
+                                    println!(
+                                        "Blocked unit couldn't find new path. Back to idling."
+                                    );
+                                    unit.movement_plan.clear();
+                                    entity.state = EntityState::Idle;
+                                }
+                            }
                         }
                     } else if entity.state == EntityState::Moving {
+                        // Unit reached its destination
                         entity.state = EntityState::Idle;
                     }
                 }
@@ -110,6 +129,7 @@ impl Core {
                         }
                     }
                 } else {
+                    // Attacked target no longer exists
                     attacker.state = EntityState::Idle;
                     attacker.unit_mut().movement_plan.clear();
                 }
@@ -154,6 +174,7 @@ impl Core {
                                 .unwrap()
                                 .start_cooldown();
                         } else {
+                            // Attacked target is not in range
                             attacker.state = EntityState::MovingToAttackTarget(victim_id);
                             if let Some(plan) = pathfind::find_path(
                                 attacker.position,
@@ -164,6 +185,7 @@ impl Core {
                             }
                         }
                     } else {
+                        // Attacked target no longer exists
                         attacker.state = EntityState::Idle;
                         attacker.unit_mut().movement_plan.clear();
                     }
@@ -277,6 +299,7 @@ impl Core {
             if let EntityState::MovingToConstruction(structure_type, structure_position) =
                 entity.state
             {
+                // TODO should movement_plan and sub_cell_movement be turned into one single thing?
                 let has_arrived = entity.unit_mut().movement_plan.peek().is_none()
                     && !entity.unit_mut().sub_cell_movement.is_between_cells();
                 if has_arrived {
@@ -431,7 +454,6 @@ impl Core {
                         .map_or(true, |obstacle| obstacle != ObstacleType::None);
                     if is_occupied {
                         can_fit = false;
-                        println!("Not enough space. Occupied cell: {:?}", [x, y]);
                     }
                 }
             }
@@ -506,9 +528,6 @@ impl Core {
                     return Some(CommandError::NotEnoughSpaceForStructure);
                 }
 
-                team_state.resources -= cost;
-                builder.state =
-                    EntityState::MovingToConstruction(structure_type, structure_position);
                 let structure_rect = CellRect {
                     position: structure_position,
                     size: *self.structure_sizes.get(&structure_type).unwrap(),
@@ -518,7 +537,12 @@ impl Core {
                     Destination::AdjacentToEntity(structure_rect),
                     &self.obstacle_grid,
                 ) {
+                    team_state.resources -= cost;
                     builder.unit_mut().movement_plan.set(plan);
+                    builder.state =
+                        EntityState::MovingToConstruction(structure_type, structure_position);
+                } else {
+                    return Some(CommandError::NoPathFound);
                 }
             }
 
@@ -527,9 +551,7 @@ impl Core {
             }) => {
                 assert_eq!(stopper.team, issuing_team);
                 stopper.state = EntityState::Idle;
-                if let EntityCategory::Unit(unit) = stopper.category.borrow_mut() {
-                    unit.movement_plan.clear();
-                }
+                stopper.unit_mut().movement_plan.clear();
             }
 
             Command::Move(MoveCommand {
@@ -555,12 +577,12 @@ impl Core {
             }) => {
                 assert_eq!(attacker.team, issuing_team);
                 assert_ne!(victim.team, issuing_team);
-                attacker.state = EntityState::Attacking(victim.id);
                 if let Some(plan) = pathfind::find_path(
                     attacker.position,
                     Destination::AdjacentToEntity(victim.cell_rect()),
                     &self.obstacle_grid,
                 ) {
+                    attacker.state = EntityState::Attacking(victim.id);
                     attacker.unit_mut().movement_plan.set(plan);
                 } else {
                     return Some(CommandError::NoPathFound);
@@ -583,12 +605,12 @@ impl Core {
                     // TODO improve UI so that no player input leads to this situation
                     return Some(CommandError::AlreadyCarryingResource);
                 }
-                gatherer.state = EntityState::MovingToResource(resource.id);
                 if let Some(plan) = pathfind::find_path(
                     gatherer.position,
                     Destination::AdjacentToEntity(resource.cell_rect()),
                     &self.obstacle_grid,
                 ) {
+                    gatherer.state = EntityState::MovingToResource(resource.id);
                     gatherer.unit_mut().movement_plan.set(plan);
                 } else {
                     return Some(CommandError::NoPathFound);
@@ -636,13 +658,12 @@ impl Core {
         });
 
         if let Some(structure) = structure {
-            gatherer.state = EntityState::ReturningResource(structure.id);
-
             if let Some(plan) = pathfind::find_path(
                 gatherer.position,
                 Destination::AdjacentToEntity(structure.cell_rect()),
                 &self.obstacle_grid,
             ) {
+                gatherer.state = EntityState::ReturningResource(structure.id);
                 gatherer.unit_mut().movement_plan.set(plan);
             }
         } else {

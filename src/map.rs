@@ -65,12 +65,12 @@ impl WorldInitData {
         if map_type != MapType::Spectator {
             entities.push(data::create_entity(
                 EntityType::Engineer,
-                [6, 2],
+                [5, 2],
                 Team::Player,
             ));
             entities.push(data::create_entity(
                 EntityType::Enforcer,
-                [8, 2],
+                [8, 3],
                 Team::Player,
             ));
             entities.push(data::create_entity(
@@ -88,18 +88,7 @@ impl WorldInitData {
 
         match map_type {
             MapType::Empty => {}
-            MapType::Small => {
-                entities.push(data::create_entity(
-                    EntityType::Enforcer,
-                    [7, 7],
-                    Team::Enemy1,
-                ));
-                entities.push(data::create_entity(
-                    EntityType::TechLab,
-                    [1, 2],
-                    Team::Enemy1,
-                ));
-            }
+            MapType::Small => {}
             MapType::Medium => {
                 entities.push(data::create_entity(
                     EntityType::Engineer,
