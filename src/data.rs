@@ -6,8 +6,8 @@ use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
 use crate::entities::{
-    Action, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity, EntityCategory,
-    EntityConfig, EntityState, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
+    Action, ActionConfig, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity,
+    EntityCategory, EntityConfig, EntityState, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
 };
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
@@ -44,11 +44,11 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
     match entity_type {
         EntityType::Enforcer => EntityConfig {
             max_health: Some(10),
-            category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(700)),
+            category: CategoryConfig::Unit,
             actions: [
-                Some(Action::Move),
-                Some(Action::Stop),
-                Some(Action::Attack),
+                Some(ActionConfig::Move(Duration::from_millis(700))),
+                Some(ActionConfig::Stop),
+                Some(ActionConfig::Attack),
                 None,
                 None,
                 None,
@@ -56,20 +56,20 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
         },
         EntityType::Engineer => EntityConfig {
             max_health: Some(5),
-            category: CategoryConfig::UnitMovementCooldown(Duration::from_millis(900)),
+            category: CategoryConfig::Unit,
             actions: [
-                Some(Action::Move),
-                Some(Action::Stop),
-                Some(Action::GatherResource),
-                Some(Action::ReturnResource),
-                Some(Action::Construct(
+                Some(ActionConfig::Move(Duration::from_millis(900))),
+                Some(ActionConfig::Stop),
+                Some(ActionConfig::GatherResource),
+                Some(ActionConfig::ReturnResource),
+                Some(ActionConfig::Construct(
                     EntityType::BattleAcademy,
                     ConstructionConfig {
                         construction_time: Duration::from_secs_f32(12.0),
                         cost: 4,
                     },
                 )),
-                Some(Action::Construct(
+                Some(ActionConfig::Construct(
                     EntityType::TechLab,
                     ConstructionConfig {
                         construction_time: Duration::from_secs_f32(15.0),
@@ -82,7 +82,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             max_health: Some(20),
             category: CategoryConfig::StructureSize([3, 3]),
             actions: [
-                Some(Action::Train(
+                Some(ActionConfig::Train(
                     EntityType::Enforcer,
                     TrainingConfig {
                         duration: Duration::from_secs(12),
@@ -100,7 +100,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             max_health: Some(30),
             category: CategoryConfig::StructureSize([3, 3]),
             actions: [
-                Some(Action::Train(
+                Some(ActionConfig::Train(
                     EntityType::Engineer,
                     TrainingConfig {
                         duration: Duration::from_secs(8),

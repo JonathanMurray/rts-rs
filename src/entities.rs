@@ -71,11 +71,22 @@ pub enum EntityCategory {
 pub struct EntityConfig {
     pub max_health: Option<u32>,
     pub category: CategoryConfig,
-    pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
+    pub actions: [Option<ActionConfig>; NUM_ENTITY_ACTIONS],
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub enum ActionConfig {
+    Train(EntityType, TrainingConfig),
+    Construct(EntityType, ConstructionConfig),
+    Stop,
+    Move(Duration),
+    Attack,
+    GatherResource,
+    ReturnResource,
 }
 
 pub enum CategoryConfig {
-    UnitMovementCooldown(Duration),
+    Unit,
     StructureSize([u32; 2]),
     ResourceCapacity(u32),
 }
@@ -95,27 +106,42 @@ impl Entity {
         let mut construction_options: HashMap<EntityType, ConstructionConfig> = Default::default();
         let mut can_fight = false;
         let mut can_gather = false;
-        for action in config.actions.into_iter().flatten() {
-            match action {
-                Action::Train(unit_type, config) => {
+        let mut movement_cooldown = None;
+        let mut actions = [None; NUM_ENTITY_ACTIONS];
+        for (i, action) in config.actions.into_iter().enumerate() {
+            actions[i] = action.map(|action| match action {
+                ActionConfig::Train(unit_type, config) => {
                     training_options.insert(unit_type, config);
+                    Action::Train(unit_type, config)
                 }
-                Action::Construct(structure_type, config) => {
+                ActionConfig::Construct(structure_type, config) => {
                     construction_options.insert(structure_type, config);
+                    Action::Construct(structure_type, config)
                 }
-                Action::Attack => can_fight = true,
-                Action::GatherResource => can_gather = true,
-
-                _ => {}
-            }
+                ActionConfig::Attack => {
+                    can_fight = true;
+                    Action::Attack
+                }
+                ActionConfig::GatherResource => {
+                    can_gather = true;
+                    Action::GatherResource
+                }
+                ActionConfig::Move(cooldown) => {
+                    movement_cooldown = Some(cooldown);
+                    Action::Move
+                }
+                ActionConfig::Stop => Action::Stop,
+                ActionConfig::ReturnResource => Action::ReturnResource,
+            });
         }
         let training =
             (!training_options.is_empty()).then(|| TrainingComponent::new(training_options));
         let construction_options = (!construction_options.is_empty()).then(|| construction_options);
         let category = match config.category {
-            CategoryConfig::UnitMovementCooldown(cooldown) => {
+            CategoryConfig::Unit => {
                 let combat = can_fight.then(Combat::new);
                 let gathering = can_gather.then(Gathering::new);
+                let cooldown = movement_cooldown.expect("Unit must have movement");
                 EntityCategory::Unit(UnitComponent::new(
                     position,
                     cooldown,
@@ -140,7 +166,7 @@ impl Entity {
             animation,
             health,
             training,
-            actions: config.actions,
+            actions,
             state: EntityState::Idle,
         }
     }

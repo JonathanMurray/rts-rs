@@ -25,7 +25,6 @@ use crate::player::{CursorState, EntityHighlight, HighlightType, PlayerState};
 use crate::team_ai::TeamAi;
 use crate::text::SharpFont;
 use std::collections::HashSet;
-use std::ops::Mul;
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
