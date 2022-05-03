@@ -7,7 +7,7 @@ use super::HUD_BORDER_COLOR;
 use crate::core::ObstacleType;
 use crate::entities::Team;
 use crate::game::{CELL_PIXEL_SIZE, COLOR_BG, WORLD_VIEWPORT};
-use crate::grid::Grid;
+use crate::grid::ObstacleGrid;
 use crate::images;
 
 pub struct Minimap {
@@ -105,7 +105,7 @@ impl Minimap {
         &mut self,
         ctx: &mut Context,
         camera_position_in_world: [f32; 2],
-        grid: &Grid<ObstacleType>,
+        grid: &ObstacleGrid,
     ) -> GameResult {
         self.bg.draw(ctx, DrawParam::default())?;
         self.draw_entity_markers(ctx, grid)?;
@@ -122,8 +122,8 @@ impl Minimap {
         Ok(())
     }
 
-    fn draw_entity_markers(&mut self, ctx: &mut Context, grid: &Grid<ObstacleType>) -> GameResult {
-        let [w, h] = grid.dimensions;
+    fn draw_entity_markers(&mut self, ctx: &mut Context, grid: &ObstacleGrid) -> GameResult {
+        let [w, h] = grid.dimensions();
         for x in 0..w {
             for y in 0..h {
                 let sprite_batch = match grid.get(&[x, y]).unwrap() {

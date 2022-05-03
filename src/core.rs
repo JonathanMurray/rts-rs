@@ -10,13 +10,13 @@ use crate::entities::{
     Direction, Entity, EntityCategory, EntityId, EntityState, GatheringProgress, Team,
     TrainingPerformStatus, TrainingUpdateStatus,
 };
-use crate::grid::{CellRect, Grid};
+use crate::grid::{CellRect, ObstacleGrid};
 use crate::pathfind::{self, Destination};
 
 pub struct Core {
     teams: HashMap<Team, RefCell<TeamState>>,
     entities: Vec<(EntityId, RefCell<Entity>)>,
-    obstacle_grid: Grid<ObstacleType>,
+    obstacle_grid: ObstacleGrid,
     structure_sizes: HashMap<EntityType, [u32; 2]>,
 }
 
@@ -33,7 +33,7 @@ impl Core {
             }
         }
 
-        let mut obstacle_grid = Grid::new(world_dimensions);
+        let mut obstacle_grid = ObstacleGrid::new(world_dimensions);
         for water_cell in water_cells {
             obstacle_grid.set(water_cell, ObstacleType::Water);
         }
@@ -167,19 +167,23 @@ impl Core {
                         if let Some(direction) =
                             unit_melee_direction(attacker.position, victim.cell_rect())
                         {
-                            let health = victim.health.as_mut().expect("victim without health");
-                            // TODO get damage amount from unit config
-                            let damage_amount = 1;
-                            health.receive_damage(damage_amount);
+                            let victim_health =
+                                victim.health.as_mut().expect("victim without health");
+                            let attacker_id = attacker.id;
+                            //TODO
+                            let attacker_unit = attacker.unit_mut();
+                            let damage_amount =
+                                attacker_unit.combat.as_mut().unwrap().damage_amount();
+                            victim_health.receive_damage(damage_amount);
                             println!(
                                 "{:?} --[{} dmg]--> {:?}",
-                                attacker.id, damage_amount, victim_id
+                                attacker_id, damage_amount, victim_id
                             );
-                            let unit = attacker.unit_mut();
-                            if !unit.sub_cell_movement.is_between_cells() {
-                                unit.direction = direction;
+
+                            if !attacker_unit.sub_cell_movement.is_between_cells() {
+                                attacker_unit.direction = direction;
                             }
-                            unit.combat.as_mut().unwrap().start_cooldown();
+                            attacker_unit.combat.as_mut().unwrap().start_cooldown();
                         } else {
                             // Attacked target is not in range
                             attacker.state = EntityState::MovingToAttackTarget(victim_id);
@@ -704,7 +708,7 @@ impl Core {
     }
 
     pub fn dimensions(&self) -> [u32; 2] {
-        self.obstacle_grid.dimensions
+        self.obstacle_grid.dimensions()
     }
 
     pub fn structure_size(&self, structure_type: &EntityType) -> &[u32; 2] {
@@ -713,7 +717,7 @@ impl Core {
             .expect("Unknown structure type")
     }
 
-    pub fn obstacle_grid(&self) -> &Grid<ObstacleType> {
+    pub fn obstacle_grid(&self) -> &ObstacleGrid {
         &self.obstacle_grid
     }
 
@@ -727,11 +731,11 @@ impl Core {
         let top = source_rect.position[1].saturating_sub(1);
         let right = min(
             source_rect.position[0] + source_rect.size[0],
-            self.obstacle_grid.dimensions[0] - 1,
+            self.obstacle_grid.dimensions()[0] - 1,
         );
         let bot = min(
             source_rect.position[1] + source_rect.size[1],
-            self.obstacle_grid.dimensions[1] - 1,
+            self.obstacle_grid.dimensions()[1] - 1,
         );
         for x in left..right + 1 {
             for y in top..bot + 1 {

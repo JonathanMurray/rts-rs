@@ -48,7 +48,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             actions: [
                 Some(ActionConfig::Move(Duration::from_millis(700))),
                 Some(ActionConfig::Stop),
-                Some(ActionConfig::Attack),
+                Some(ActionConfig::Attack(2)),
                 None,
                 None,
                 None,

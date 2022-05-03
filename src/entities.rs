@@ -80,7 +80,7 @@ pub enum ActionConfig {
     Construct(EntityType, ConstructionConfig),
     Stop,
     Move(Duration),
-    Attack,
+    Attack(u32),
     GatherResource,
     ReturnResource,
 }
@@ -104,7 +104,7 @@ impl Entity {
         let health = config.max_health.map(HealthComponent::new);
         let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
         let mut construction_options: HashMap<EntityType, ConstructionConfig> = Default::default();
-        let mut can_fight = false;
+        let mut attack_damage = None;
         let mut can_gather = false;
         let mut movement_cooldown = None;
         let mut actions = [None; NUM_ENTITY_ACTIONS];
@@ -118,8 +118,8 @@ impl Entity {
                     construction_options.insert(structure_type, config);
                     Action::Construct(structure_type, config)
                 }
-                ActionConfig::Attack => {
-                    can_fight = true;
+                ActionConfig::Attack(damage) => {
+                    attack_damage = Some(damage);
                     Action::Attack
                 }
                 ActionConfig::GatherResource => {
@@ -139,7 +139,7 @@ impl Entity {
         let construction_options = (!construction_options.is_empty()).then(|| construction_options);
         let category = match config.category {
             CategoryConfig::Unit => {
-                let combat = can_fight.then(Combat::new);
+                let combat = attack_damage.map(Combat::new);
                 let gathering = can_gather.then(Gathering::new);
                 let cooldown = movement_cooldown.expect("Unit must have movement");
                 EntityCategory::Unit(UnitComponent::new(
@@ -526,12 +526,14 @@ pub enum TrainingPerformStatus {
 #[derive(Debug)]
 pub struct Combat {
     cooldown: Duration,
+    damage: u32,
 }
 
 impl Combat {
-    fn new() -> Self {
+    fn new(damage: u32) -> Self {
         Self {
             cooldown: Duration::ZERO,
+            damage,
         }
     }
 
@@ -546,6 +548,10 @@ impl Combat {
     pub fn start_cooldown(&mut self) {
         // note: might be good to keep this in sync with attack animation
         self.cooldown = Duration::from_millis(1000);
+    }
+
+    pub fn damage_amount(&self) -> u32 {
+        self.damage
     }
 }
 

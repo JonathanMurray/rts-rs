@@ -3,12 +3,12 @@ use std::collections::binary_heap::BinaryHeap;
 use std::collections::HashMap;
 
 use crate::core::ObstacleType;
-use crate::grid::{CellRect, Grid};
+use crate::grid::{CellRect, ObstacleGrid};
 
 pub fn find_path(
     start: [u32; 2],
     destination: Destination,
-    grid: &Grid<ObstacleType>,
+    grid: &ObstacleGrid,
 ) -> Option<Vec<[u32; 2]>> {
     let center = destination.center();
     let rect = destination.rect();
@@ -43,8 +43,8 @@ fn naive_path(start: [u32; 2], goal: [u32; 2]) -> Vec<[u32; 2]> {
     plan
 }
 
-fn a_star(start: [u32; 2], destination: Rect, grid: &Grid<ObstacleType>) -> Option<Vec<[u32; 2]>> {
-    let [w, h] = grid.dimensions;
+fn a_star(start: [u32; 2], destination: Rect, grid: &ObstacleGrid) -> Option<Vec<[u32; 2]>> {
+    let [w, h] = grid.dimensions();
 
     let mut open_set = BinaryHeap::new();
     //println!("open_set={:?}", open_set);
@@ -254,7 +254,7 @@ mod test {
 
     #[test]
     fn trivial_straight_line_path() {
-        let grid = Grid::new([10, 10]);
+        let grid = ObstacleGrid::new([10, 10]);
         let path = find_path([0, 0], Destination::Point([2, 0]), &grid);
         let expected = vec![[2, 0], [1, 0]];
         assert_eq!(path, Some(expected));
@@ -262,7 +262,7 @@ mod test {
 
     #[test]
     fn diagonal_line_path() {
-        let grid = Grid::new([10, 10]);
+        let grid = ObstacleGrid::new([10, 10]);
         let path = find_path([0, 0], Destination::Point([2, 2]), &grid);
         let expected = vec![[2, 2], [1, 1]];
         assert_eq!(path, Some(expected));
@@ -270,7 +270,7 @@ mod test {
 
     #[test]
     fn path_going_around_obstacle() {
-        let mut grid = Grid::new([10, 10]);
+        let mut grid = ObstacleGrid::new([10, 10]);
         grid.set([1, 0], ObstacleType::Entity(Team::Enemy1));
         let path = find_path([0, 0], Destination::Point([2, 0]), &grid);
         let expected = vec![[2, 0], [1, 1]];
@@ -279,7 +279,7 @@ mod test {
 
     #[test]
     fn impossible_path() {
-        let mut grid = Grid::new([10, 2]);
+        let mut grid = ObstacleGrid::new([10, 2]);
         grid.set([2, 0], ObstacleType::Entity(Team::Enemy1));
         grid.set([2, 1], ObstacleType::Entity(Team::Enemy1));
         let path = find_path([0, 0], Destination::Point([4, 0]), &grid);
@@ -288,7 +288,7 @@ mod test {
 
     #[test]
     fn zigzag_path() {
-        let mut grid = Grid::new([10, 4]);
+        let mut grid = ObstacleGrid::new([10, 4]);
         grid.set([2, 0], ObstacleType::Entity(Team::Enemy1));
         grid.set([2, 1], ObstacleType::Entity(Team::Enemy1));
         grid.set([2, 2], ObstacleType::Entity(Team::Enemy1));
@@ -314,7 +314,7 @@ mod test {
 
     #[test]
     fn to_structure_path() {
-        let mut grid = Grid::new([10, 10]);
+        let mut grid = ObstacleGrid::new([10, 10]);
         let structure_cell_rect = CellRect {
             position: [7, 3],
             size: [3, 2],
@@ -338,9 +338,9 @@ mod test {
         assert_eq!(path, expected);
     }
 
-    fn visualize_path(grid: &Grid<ObstacleType>, start: [u32; 2], path: &[[u32; 2]]) {
-        let w = grid.dimensions[0];
-        let h = grid.dimensions[1];
+    fn visualize_path(grid: &ObstacleGrid, start: [u32; 2], path: &[[u32; 2]]) {
+        let w = grid.dimensions()[0];
+        let h = grid.dimensions()[1];
         print!("+");
         for _ in 0..w {
             print!("-");

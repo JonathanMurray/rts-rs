@@ -19,11 +19,10 @@ use self::button::Button;
 use self::entity_header::{EntityHeader, EntityHeaderContent};
 use self::group_header::GroupHeader;
 use self::minimap::Minimap;
-use crate::core::ObstacleType;
 use crate::data::{EntityType, HudAssets};
 use crate::entities::{Action, Entity, EntityCategory, EntityState, Team, NUM_ENTITY_ACTIONS};
 use crate::game::MAX_NUM_SELECTED_ENTITIES;
-use crate::grid::Grid;
+use crate::grid::ObstacleGrid;
 use crate::player::{CursorState, PlayerState};
 use crate::text::{SharpFont, SharpText};
 
@@ -103,7 +102,7 @@ impl HudGraphics {
         player_resources: Option<u32>,
         selected_entities: Vec<Ref<'a, Entity>>,
         player_state: &PlayerState,
-        grid: &Grid<ObstacleType>,
+        grid: &ObstacleGrid,
     ) -> GameResult {
         assert_eq!(selected_entities.len(), self.num_selected_entities);
 

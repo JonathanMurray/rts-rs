@@ -59,8 +59,8 @@ impl Assets {
         let world_background = Self::create_background_from_tile_map(ctx, &tile_map, tile_grid)?;
 
         let world_size = [
-            tile_grid.dimensions[0] as f32 * TILE_PIXEL_SIZE[0],
-            tile_grid.dimensions[1] as f32 * TILE_PIXEL_SIZE[1],
+            tile_grid.dimensions()[0] as f32 * TILE_PIXEL_SIZE[0],
+            tile_grid.dimensions()[1] as f32 * TILE_PIXEL_SIZE[1],
         ];
 
         let assets = Assets {
@@ -174,8 +174,8 @@ impl Assets {
         tile_map: &Image,
         tile_grid: &Grid<TileId>,
     ) -> GameResult<Image> {
-        let width = tile_grid.dimensions[0] as f32 * TILE_PIXEL_SIZE[0];
-        let height = tile_grid.dimensions[1] as f32 * TILE_PIXEL_SIZE[1];
+        let width = tile_grid.dimensions()[0] as f32 * TILE_PIXEL_SIZE[0];
+        let height = tile_grid.dimensions()[1] as f32 * TILE_PIXEL_SIZE[1];
         let color_format = graphics::get_window_color_format(ctx);
         let canvas = Canvas::new(
             ctx,
@@ -190,8 +190,8 @@ impl Assets {
         let original_screen_coordinates = graphics::screen_coordinates(ctx);
         graphics::set_screen_coordinates(ctx, Rect::new(0.0, 0.0, width, height))?;
 
-        for x in 0..tile_grid.dimensions[0] {
-            for y in 0..tile_grid.dimensions[1] {
+        for x in 0..tile_grid.dimensions()[0] {
+            for y in 0..tile_grid.dimensions()[1] {
                 let tile = tile_grid.get(&[x, y]).unwrap();
                 // One tile takes up a fraction of the entire tile-map
                 // ggez requires us to specify the src of the tile-map in "relative" terms

@@ -65,7 +65,7 @@ impl WorldInitData {
         if map_type != MapType::Spectator {
             entities.push(data::create_entity(
                 EntityType::Engineer,
-                [5, 2],
+                [5, 1],
                 Team::Player,
             ));
             entities.push(data::create_entity(
@@ -229,7 +229,7 @@ impl WorldInitData {
         let mut file = OpenOptions::new().write(true).open(filepath).unwrap();
 
         let mut content = String::new();
-        let [w, h] = water_grid.dimensions;
+        let [w, h] = water_grid.dimensions();
 
         for _ in 0..w + 2 {
             content.push('X');
@@ -274,7 +274,7 @@ impl WorldInitData {
 }
 
 pub fn create_tile_grid(water_grid: &Grid<bool>) -> Grid<TileId> {
-    let [w, h] = water_grid.dimensions;
+    let [w, h] = water_grid.dimensions();
     let mut tile_grid = Grid::new([w * 2, h * 2]);
     for x in 0..w {
         for y in 0..h {
