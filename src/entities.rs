@@ -19,7 +19,7 @@ pub struct EntityId(usize);
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EntityState {
     Idle,
-    TrainingUnit(EntityType),
+    DoingActivity(ActivityTarget),
     MovingToConstruction(EntityType, [u32; 2]),
     Moving,
     MovingToAttackTarget(EntityId),
@@ -51,8 +51,8 @@ pub struct Entity {
     pub team: Team,
     pub animation: AnimationState,
     pub health: Option<HealthComponent>,
-    pub training: Option<TrainingComponent>,
-    pub actions: [Option<Action>; NUM_ENTITY_ACTIONS],
+    pub activity: Option<ActivityComponent>,
+    pub action_slots: [Option<ActionSlot>; NUM_ENTITY_ACTIONS],
     pub state: EntityState,
 }
 
@@ -76,7 +76,7 @@ pub struct EntityConfig {
 
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum ActionConfig {
-    Train(EntityType, TrainingConfig),
+    StartActivity(ActivityTarget, ActivityConfig),
     Construct(EntityType, ConstructionConfig),
     Stop,
     Move(Duration),
@@ -102,40 +102,42 @@ impl Entity {
         let id = EntityId(NEXT_ENTITY_ID.fetch_add(1, atomic::Ordering::Relaxed));
 
         let health = config.max_health.map(HealthComponent::new);
-        let mut training_options: HashMap<EntityType, TrainingConfig> = Default::default();
+        let mut activity_options: HashMap<ActivityTarget, ActivityConfig> = Default::default();
         let mut construction_options: HashMap<EntityType, ConstructionConfig> = Default::default();
         let mut attack_damage = None;
         let mut can_gather = false;
         let mut movement_cooldown = None;
-        let mut actions = [None; NUM_ENTITY_ACTIONS];
+        let mut action_slots = [None; NUM_ENTITY_ACTIONS];
         for (i, action) in config.actions.into_iter().enumerate() {
-            actions[i] = action.map(|action| match action {
-                ActionConfig::Train(unit_type, config) => {
-                    training_options.insert(unit_type, config);
-                    Action::Train(unit_type, config)
-                }
-                ActionConfig::Construct(structure_type, config) => {
-                    construction_options.insert(structure_type, config);
-                    Action::Construct(structure_type, config)
-                }
-                ActionConfig::Attack(damage) => {
-                    attack_damage = Some(damage);
-                    Action::Attack
-                }
-                ActionConfig::GatherResource => {
-                    can_gather = true;
-                    Action::GatherResource
-                }
-                ActionConfig::Move(cooldown) => {
-                    movement_cooldown = Some(cooldown);
-                    Action::Move
-                }
-                ActionConfig::Stop => Action::Stop,
-                ActionConfig::ReturnResource => Action::ReturnResource,
-            });
+            action_slots[i] = action
+                .map(|action| match action {
+                    ActionConfig::StartActivity(target, config) => {
+                        activity_options.insert(target, config);
+                        Action::StartActivity(target, config)
+                    }
+                    ActionConfig::Construct(structure_type, config) => {
+                        construction_options.insert(structure_type, config);
+                        Action::Construct(structure_type, config)
+                    }
+                    ActionConfig::Attack(damage) => {
+                        attack_damage = Some(damage);
+                        Action::Attack
+                    }
+                    ActionConfig::GatherResource => {
+                        can_gather = true;
+                        Action::GatherResource
+                    }
+                    ActionConfig::Move(cooldown) => {
+                        movement_cooldown = Some(cooldown);
+                        Action::Move
+                    }
+                    ActionConfig::Stop => Action::Stop,
+                    ActionConfig::ReturnResource => Action::ReturnResource,
+                })
+                .map(ActionSlot::new);
         }
-        let training =
-            (!training_options.is_empty()).then(|| TrainingComponent::new(training_options));
+        let activity =
+            (!activity_options.is_empty()).then(|| ActivityComponent::new(activity_options));
         let construction_options = (!construction_options.is_empty()).then(|| construction_options);
         let category = match config.category {
             CategoryConfig::Unit => {
@@ -165,8 +167,8 @@ impl Entity {
             team,
             animation,
             health,
-            training,
-            actions,
+            activity,
+            action_slots,
             state: EntityState::Idle,
         }
     }
@@ -238,6 +240,13 @@ impl Entity {
             EntityCategory::Unit(unit) => unit.direction,
             EntityCategory::Structure { .. } | EntityCategory::Resource { .. } => Direction::South,
         }
+    }
+
+    pub fn has_enabled_action(&self, action: Action) -> bool {
+        self.action_slots
+            .iter()
+            .flatten()
+            .any(|action_slot| action_slot.action == action && action_slot.enabled)
     }
 }
 
@@ -441,24 +450,30 @@ enum MovementDirection {
 }
 
 #[derive(Debug)]
-pub struct TrainingComponent {
-    ongoing: Option<OngoingTraining>,
-    options: HashMap<EntityType, TrainingConfig>,
+pub struct ActivityComponent {
+    ongoing: Option<OngoingActivity>,
+    options: HashMap<ActivityTarget, ActivityConfig>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct TrainingConfig {
+pub struct ActivityConfig {
     pub duration: Duration,
     pub cost: u32,
 }
 
 #[derive(Debug)]
-struct OngoingTraining {
+struct OngoingActivity {
     remaining: Duration,
 }
 
-impl TrainingComponent {
-    fn new(options: HashMap<EntityType, TrainingConfig>) -> Self {
+#[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
+pub enum ActivityTarget {
+    Train(EntityType),
+    Research,
+}
+
+impl ActivityComponent {
+    fn new(options: HashMap<ActivityTarget, ActivityConfig>) -> Self {
         Self {
             ongoing: None,
             options,
@@ -466,60 +481,60 @@ impl TrainingComponent {
     }
 
     #[must_use]
-    pub fn try_start(&mut self, trained_entity_type: EntityType) -> TrainingPerformStatus {
+    pub fn try_start(&mut self, target: ActivityTarget) -> ActivityStatus {
         if self.ongoing.is_some() {
-            TrainingPerformStatus::AlreadyOngoing
+            ActivityStatus::AlreadyOngoing
         } else {
-            self.ongoing = Some(OngoingTraining {
-                remaining: self.options.get(&trained_entity_type).unwrap().duration,
+            self.ongoing = Some(OngoingActivity {
+                remaining: self.options.get(&target).unwrap().duration,
             });
-            TrainingPerformStatus::NewTrainingStarted
+            ActivityStatus::NewActivityStarted
         }
     }
 
-    pub fn update(&mut self, dt: Duration) -> TrainingUpdateStatus {
+    pub fn update(&mut self, dt: Duration) -> ActivityUpdateStatus {
         match self.ongoing.take() {
             Some(mut ongoing) => {
                 ongoing.remaining = ongoing.remaining.saturating_sub(dt);
                 if ongoing.remaining.is_zero() {
-                    println!("Training done!");
-                    TrainingUpdateStatus::Done
+                    println!("Activity done!");
+                    ActivityUpdateStatus::Done
                 } else {
                     self.ongoing = Some(ongoing);
-                    TrainingUpdateStatus::Ongoing
+                    ActivityUpdateStatus::Ongoing
                 }
             }
-            None => TrainingUpdateStatus::NothingOngoing,
+            None => ActivityUpdateStatus::NothingOngoing,
         }
     }
 
-    pub fn progress(&self, trained_entity_type: EntityType) -> Option<f32> {
+    pub fn progress(&self, target: ActivityTarget) -> Option<f32> {
         self.ongoing.as_ref().map(|ongoing_training| {
-            let total = self.options.get(&trained_entity_type).unwrap().duration;
+            let total = self.options.get(&target).unwrap().duration;
             1.0 - ongoing_training.remaining.as_secs_f32() / total.as_secs_f32()
         })
     }
 
-    pub fn config(&self, entity_type: &EntityType) -> &TrainingConfig {
-        self.options.get(entity_type).unwrap_or_else(|| {
+    pub fn config(&self, target: &ActivityTarget) -> &ActivityConfig {
+        self.options.get(target).unwrap_or_else(|| {
             panic!(
                 "No config found for {:?}. Available options: {:?}",
-                entity_type, self.options
+                target, self.options
             )
         })
     }
 }
 
 #[derive(PartialEq)]
-pub enum TrainingUpdateStatus {
+pub enum ActivityUpdateStatus {
     NothingOngoing,
     Ongoing,
     Done,
 }
 
 #[derive(PartialEq)]
-pub enum TrainingPerformStatus {
-    NewTrainingStarted,
+pub enum ActivityStatus {
+    NewActivityStarted,
     AlreadyOngoing,
 }
 
@@ -615,8 +630,26 @@ pub struct ConstructionConfig {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
+pub struct ActionSlot {
+    pub action: Action,
+    // An action can be disabled on an entity but then be
+    // re-enabled later (e.g. if research is in progress but
+    // gets interrupted)
+    pub enabled: bool,
+}
+
+impl ActionSlot {
+    fn new(action: Action) -> Self {
+        Self {
+            action,
+            enabled: true,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Action {
-    Train(EntityType, TrainingConfig),
+    StartActivity(ActivityTarget, ActivityConfig),
     Construct(EntityType, ConstructionConfig),
     Stop,
     Move,

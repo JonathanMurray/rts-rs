@@ -20,7 +20,9 @@ use self::entity_header::{EntityHeader, EntityHeaderContent};
 use self::group_header::GroupHeader;
 use self::minimap::Minimap;
 use crate::data::{EntityType, HudAssets};
-use crate::entities::{Action, Entity, EntityCategory, EntityState, Team, NUM_ENTITY_ACTIONS};
+use crate::entities::{
+    Action, ActivityTarget, Entity, EntityCategory, EntityState, Team, NUM_ENTITY_ACTIONS,
+};
 use crate::game::MAX_NUM_SELECTED_ENTITIES;
 use crate::grid::ObstacleGrid;
 use crate::player::{CursorState, PlayerState};
@@ -135,11 +137,14 @@ impl HudGraphics {
                         }
                     }
                 }
-                if let EntityState::TrainingUnit(trained_entity_type) = entity.state {
-                    //entity_status_text = Some(format!("[training {:?}]", trained_entity_type));
-                    let training = entity.training.as_ref().unwrap();
-                    let training_progress = training.progress(trained_entity_type).unwrap();
-                    progress = Some((training_progress, "% Training".to_owned()));
+                if let EntityState::DoingActivity(target) = entity.state {
+                    let activity = entity.activity.as_ref().unwrap();
+                    let activity_progress = activity.progress(target).unwrap();
+                    let text = match target {
+                        ActivityTarget::Train(..) => "% Training".to_owned(),
+                        ActivityTarget::Research => "% Research".to_owned(),
+                    };
+                    progress = Some((activity_progress, text));
                 }
             }
             if entity.entity_type == EntityType::FuelRift {
@@ -294,8 +299,8 @@ impl HudGraphics {
 
 fn state_matches_action(state: EntityState, action: Action) -> bool {
     match action {
-        Action::Train(trained_entity_type, _) => {
-            state == EntityState::TrainingUnit(trained_entity_type)
+        Action::StartActivity(activity_target, _config) => {
+            state == EntityState::DoingActivity(activity_target)
         }
         Action::Construct(structure_type, _) => {
             if let EntityState::MovingToConstruction(constructing_type, _) = state {
@@ -409,15 +414,8 @@ impl Tooltip {
                 TooltipText::Action(Action::ReturnResource) => {
                     self.text_return.draw(ctx, self.position)?
                 }
-                TooltipText::Action(Action::Train(trained_entity_type, training_config)) => {
-                    let config = assets.action(Action::Train(trained_entity_type, training_config));
-                    self.font
-                        .text(TOOLTIP_FONT_SIZE, &config.text)
-                        .draw(ctx, self.position)?;
-                }
-                TooltipText::Action(Action::Construct(structure_type, construction_config)) => {
-                    let config =
-                        assets.action(Action::Construct(structure_type, construction_config));
+                TooltipText::Action(action) => {
+                    let config = assets.action(action);
                     self.font
                         .text(TOOLTIP_FONT_SIZE, &config.text)
                         .draw(ctx, self.position)?;

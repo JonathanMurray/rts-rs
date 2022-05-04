@@ -8,12 +8,13 @@ use ggez::{graphics, Context, ContextBuilder, GameError, GameResult};
 
 use rand::rngs::ThreadRng;
 use std::cell::{Ref, RefCell, RefMut};
+use std::collections::HashSet;
 
 use crate::assets::Assets;
 use crate::camera::Camera;
 use crate::core::{
     AttackCommand, Command, CommandError, ConstructCommand, Core, GatherResourceCommand,
-    MoveCommand, ReturnResourceCommand, StopCommand, TrainCommand, UpdateOutcome,
+    MoveCommand, ReturnResourceCommand, StartActivityCommand, StopCommand, UpdateOutcome,
 };
 use crate::data::EntityType;
 use crate::entities::{
@@ -24,7 +25,6 @@ use crate::map::{MapConfig, WorldInitData};
 use crate::player::{CursorState, EntityHighlight, HighlightType, PlayerState};
 use crate::team_ai::TeamAi;
 use crate::text::SharpFont;
-use std::collections::HashSet;
 
 pub const COLOR_FG: Color = Color::new(0.3, 0.3, 0.4, 1.0);
 pub const COLOR_BG: Color = Color::new(0.2, 0.2, 0.3, 1.0);
@@ -225,18 +225,26 @@ impl Game {
 
     fn set_selected_entities(&mut self, entity_ids: Vec<EntityId>) {
         self.player_state.selected_entity_ids = entity_ids;
-        self.update_hud_with_new_selection();
+        self.update_hud_for_selection();
     }
 
-    fn update_hud_with_new_selection(&mut self) {
+    fn update_hud_for_selection(&self) {
         let mut actions = [None; NUM_ENTITY_ACTIONS];
 
         let mut player_entities = self.selected_player_entities();
         if let Some(first) = player_entities.next() {
             let first = first.borrow();
+            // TODO standardize how this sort of thing should work.
+            //      There are many situations where certain actions shouldn't be shown:
+            //      building under construction, research already complete / in progress,
+            //      having a cursor action tied to some selected action (?), etc.
             let is_under_construction = matches!(first.state, EntityState::UnderConstruction(..));
             if !is_under_construction {
-                actions = first.actions;
+                for (i, action_slot) in first.action_slots.iter().enumerate() {
+                    actions[i] = action_slot
+                        .filter(|slot| slot.enabled)
+                        .map(|slot| slot.action);
+                }
             }
         }
 
@@ -245,8 +253,8 @@ impl Game {
 
             let is_under_construction =
                 matches!(additional.state, EntityState::UnderConstruction(..));
-            for (i, action) in additional.actions.iter().enumerate() {
-                if is_under_construction || actions[i] != *action {
+            for (i, action_slot) in additional.action_slots.iter().enumerate() {
+                if is_under_construction || actions[i] != action_slot.map(|slot| slot.action) {
                     // Since not all selected entities have this action, it should not
                     // be shown in HUD.
                     actions[i] = None;
@@ -263,9 +271,9 @@ impl Game {
         match player_input {
             PlayerInput::UseEntityAction(action) => {
                 for entity in self.selected_player_entities() {
-                    let mut_entity = entity.borrow_mut();
-                    if mut_entity.actions.contains(&Some(action)) {
-                        self.handle_player_use_entity_action(ctx, mut_entity, action);
+                    let entity = entity.borrow_mut();
+                    if entity.has_enabled_action(action) {
+                        self.handle_player_use_entity_action(ctx, entity, action);
                     }
                 }
             }
@@ -285,10 +293,10 @@ impl Game {
         action: Action,
     ) {
         match action {
-            Action::Train(trained_unit_type, _config) => {
-                self.player_issue_command(Command::Train(TrainCommand {
-                    trainer: actor,
-                    trained_unit_type,
+            Action::StartActivity(target, _config) => {
+                self.player_issue_command(Command::StartActivity(StartActivityCommand {
+                    structure: actor,
+                    target,
                 }));
             }
             Action::Construct(structure_type, _) => {
@@ -329,10 +337,15 @@ impl Game {
     }
 
     fn player_issue_command(&self, command: Command) {
-        let error_message =
-            self.core
-                .issue_command(command, Team::Player)
-                .map(|error| match error {
+        match self.core.issue_command(command, Team::Player) {
+            Ok(success) => {
+                if success.did_research_state_change {
+                    println!("Research state changed after issuing command. Updating HUD.");
+                    self.update_hud_for_selection();
+                }
+            }
+            Err(error) => {
+                let message = match error {
                     CommandError::NotEnoughResources => "Not enough resources".to_owned(),
                     CommandError::NoPathFound => "Can't go there".to_owned(),
                     CommandError::NotCarryingResource => {
@@ -341,9 +354,10 @@ impl Game {
                     CommandError::NotEnoughSpaceForStructure => {
                         "Not enough space for structure".to_owned()
                     }
-                });
-        if let Some(message) = error_message {
-            self.hud.borrow_mut().set_error_message(message);
+                    CommandError::EntityIsBusy => "Can't do that right now".to_owned(),
+                };
+                self.hud.borrow_mut().set_error_message(message);
+            }
         }
     }
 
@@ -360,7 +374,7 @@ impl Game {
                             continue;
                         }
                     }
-                    if entity_ref.actions.contains(&Some(Action::GatherResource)) {
+                    if entity_ref.has_enabled_action(Action::GatherResource) {
                         if let Some(resource) = self.resource_at_position(world_pixel_coords) {
                             drop(entity_ref);
                             self._player_issue_gather_resource(
@@ -522,26 +536,23 @@ impl EventHandler for Game {
         let dt = ggez::timer::delta(ctx);
 
         for ai in &mut self.enemy_team_ais {
-            let commands = ai.run(dt, &self.core, &mut self.rng);
-            if !commands.is_empty() {
-                println!("[{:?}] Issuing {} AI commands:", ai.team(), commands.len());
-            }
-            for command in commands {
-                //println!("  {:?}", command);
-                self.core.issue_command(command, ai.team());
+            if let Some(command) = ai.run(dt, &self.core, &mut self.rng) {
+                println!("[{:?}] Issuing AI command", ai.team());
+                let _ = self.core.issue_command(command, ai.team());
             }
         }
 
         let UpdateOutcome {
             removed_entities,
             finished_structures,
+            did_research_state_change,
         } = self.core.update(dt);
 
         let num_selected_before = self.player_state.selected_entity_ids.len();
         self.player_state
             .selected_entity_ids
             .retain(|entity_id| !removed_entities.contains(entity_id));
-        let mut should_update_hud = false;
+        let mut should_update_hud = did_research_state_change;
         if num_selected_before != self.player_state.selected_entity_ids.len() {
             // TODO: what if you still have some selected entity, but it doesn't
             //       have any action corresponding to the cursor state?
@@ -555,7 +566,7 @@ impl EventHandler for Game {
             }
         }
         if should_update_hud {
-            self.update_hud_with_new_selection();
+            self.update_hud_for_selection();
         }
 
         self.player_state.update(ctx, dt);

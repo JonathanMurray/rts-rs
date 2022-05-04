@@ -6,9 +6,12 @@ use ggez::input::keyboard::KeyCode;
 use ggez::{Context, GameResult};
 
 use crate::entities::{
-    Action, ActionConfig, AnimationState, CategoryConfig, ConstructionConfig, Direction, Entity,
-    EntityCategory, EntityConfig, EntityState, Team, TrainingConfig, NUM_ENTITY_ACTIONS,
+    Action, ActionConfig, ActivityConfig, ActivityTarget, AnimationState, CategoryConfig,
+    ConstructionConfig, Direction, Entity, EntityCategory, EntityConfig, EntityState, Team,
+    NUM_ENTITY_ACTIONS,
 };
+
+use crate::core::TeamResearchState;
 
 #[derive(Debug, PartialEq, Copy, Clone, Eq, Hash)]
 pub enum EntityType {
@@ -19,8 +22,25 @@ pub enum EntityType {
     TechLab,
 }
 
-pub fn create_entity(entity_type: EntityType, position: [u32; 2], team: Team) -> Entity {
-    let config = entity_config(entity_type);
+pub fn create_entity(
+    entity_type: EntityType,
+    position: [u32; 2],
+    team: Team,
+    research_state: TeamResearchState,
+) -> Entity {
+    let mut config = entity_config(entity_type);
+    // If team has finished research, it should not be available as an action
+    if research_state == TeamResearchState::Done {
+        for action in &mut config.actions {
+            if matches!(
+                action,
+                Some(ActionConfig::StartActivity(ActivityTarget::Research, _))
+            ) {
+                *action = None;
+            }
+        }
+    }
+
     Entity::new(entity_type, config, position, team)
 }
 
@@ -72,7 +92,7 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
                 Some(ActionConfig::Construct(
                     EntityType::TechLab,
                     ConstructionConfig {
-                        construction_time: Duration::from_secs_f32(15.0),
+                        construction_time: Duration::from_secs_f32(6.0),
                         cost: 4,
                     },
                 )),
@@ -82,9 +102,9 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             max_health: Some(20),
             category: CategoryConfig::StructureSize([3, 3]),
             actions: [
-                Some(ActionConfig::Train(
-                    EntityType::Enforcer,
-                    TrainingConfig {
+                Some(ActionConfig::StartActivity(
+                    ActivityTarget::Train(EntityType::Enforcer),
+                    ActivityConfig {
                         duration: Duration::from_secs(12),
                         cost: 2,
                     },
@@ -100,14 +120,20 @@ fn entity_config(entity_type: EntityType) -> EntityConfig {
             max_health: Some(30),
             category: CategoryConfig::StructureSize([3, 3]),
             actions: [
-                Some(ActionConfig::Train(
-                    EntityType::Engineer,
-                    TrainingConfig {
+                Some(ActionConfig::StartActivity(
+                    ActivityTarget::Train(EntityType::Engineer),
+                    ActivityConfig {
                         duration: Duration::from_secs(8),
                         cost: 1,
                     },
                 )),
-                None,
+                Some(ActionConfig::StartActivity(
+                    ActivityTarget::Research,
+                    ActivityConfig {
+                        duration: Duration::from_secs(4),
+                        cost: 3,
+                    },
+                )),
                 None,
                 None,
                 None,
@@ -188,7 +214,7 @@ impl HudAssets {
 
     pub fn action(&self, action: Action) -> ActionHudConfig {
         match action {
-            Action::Train(entity_type, training_config) => {
+            Action::StartActivity(ActivityTarget::Train(entity_type), activity_config) => {
                 let unit_config = self.entity(entity_type);
                 let keycode = match entity_type {
                     EntityType::Engineer => KeyCode::E,
@@ -199,11 +225,23 @@ impl HudAssets {
                     text: format!(
                         "Train {} ({} fuel, {}s)",
                         &unit_config.name,
-                        training_config.cost,
-                        training_config.duration.as_secs()
+                        activity_config.cost,
+                        activity_config.duration.as_secs()
                     ),
                     icon: unit_config.portrait.clone(),
                     keycode,
+                }
+            }
+            Action::StartActivity(ActivityTarget::Research, activity_config) => {
+                let attack_config = self.action(Action::Attack);
+                ActionHudConfig {
+                    text: format!(
+                        "Research ({} fuel, {}s)",
+                        activity_config.cost,
+                        activity_config.duration.as_secs()
+                    ),
+                    icon: attack_config.icon,
+                    keycode: KeyCode::R,
                 }
             }
             Action::Construct(structure_type, construction_config) => {
@@ -505,7 +543,7 @@ impl UnitTilesheets {
             // TODO gathering animation
             EntityState::GatheringResource(_) => &self.idle,
 
-            state @ EntityState::TrainingUnit(_) | state @ EntityState::UnderConstruction(_, _) => {
+            state @ EntityState::DoingActivity(..) | state @ EntityState::UnderConstruction(..) => {
                 panic!("No animation for state: {:?}", state)
             }
         };

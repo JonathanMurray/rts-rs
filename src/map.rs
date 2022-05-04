@@ -1,13 +1,14 @@
 use rand::Rng;
 
 use ggez::Context;
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::path::Path;
 
+use crate::core::TeamResearchState;
 use crate::data::{self, create_entity, EntityType};
 use crate::entities::{Entity, Team};
 use crate::grid::{CellRect, Grid};
-use std::fs::OpenOptions;
 
 #[derive(Debug, PartialEq)]
 pub enum MapType {
@@ -62,21 +63,26 @@ impl WorldInitData {
 
         let mut entities = vec![];
 
+        let research_state = TeamResearchState::NotStarted;
+
         if map_type != MapType::Spectator {
             entities.push(data::create_entity(
                 EntityType::Engineer,
                 [5, 1],
                 Team::Player,
+                research_state,
             ));
             entities.push(data::create_entity(
                 EntityType::Enforcer,
                 [8, 3],
                 Team::Player,
+                research_state,
             ));
             entities.push(data::create_entity(
                 EntityType::TechLab,
                 [1, 6],
                 Team::Player,
+                research_state,
             ));
         }
 
@@ -84,6 +90,7 @@ impl WorldInitData {
             EntityType::FuelRift,
             [6, 4],
             Team::Neutral,
+            research_state,
         ));
 
         match map_type {
@@ -94,26 +101,31 @@ impl WorldInitData {
                     EntityType::Engineer,
                     [5, 2],
                     Team::Enemy1,
+                    research_state,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [3, 0],
                     Team::Enemy1,
+                    research_state,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [0, 4],
                     Team::Enemy1,
+                    research_state,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [3, 4],
                     Team::Enemy1,
+                    research_state,
                 ));
                 entities.push(data::create_entity(
                     EntityType::TechLab,
                     [8, 4],
                     Team::Enemy1,
+                    research_state,
                 ));
             }
             MapType::LoadTest => {
@@ -131,7 +143,12 @@ impl WorldInitData {
                             } else {
                                 EntityType::Enforcer
                             };
-                            entities.push(data::create_entity(entity_type, [x, y], team));
+                            entities.push(data::create_entity(
+                                entity_type,
+                                [x, y],
+                                team,
+                                research_state,
+                            ));
                         }
                     }
                 }
@@ -141,11 +158,13 @@ impl WorldInitData {
                     EntityType::Engineer,
                     [3, 8],
                     Team::Enemy1,
+                    research_state,
                 ));
                 entities.push(data::create_entity(
                     EntityType::Engineer,
                     [11, 4],
                     Team::Enemy2,
+                    research_state,
                 ));
             }
         };
@@ -192,6 +211,7 @@ impl WorldInitData {
 
         let mut entities = Vec::new();
         let mut water_grid = Grid::new([w, h]);
+        let research_state = TeamResearchState::NotStarted;
 
         for x in 0..w {
             for y in 0..h {
@@ -201,13 +221,28 @@ impl WorldInitData {
                         water_grid.set([x as u32, y as u32], true);
                     }
                     '1' => {
-                        entities.push(create_entity(EntityType::TechLab, [x, y], Team::Player));
+                        entities.push(create_entity(
+                            EntityType::TechLab,
+                            [x, y],
+                            Team::Player,
+                            research_state,
+                        ));
                     }
                     '2' => {
-                        entities.push(create_entity(EntityType::TechLab, [x, y], Team::Enemy1));
+                        entities.push(create_entity(
+                            EntityType::TechLab,
+                            [x, y],
+                            Team::Enemy1,
+                            research_state,
+                        ));
                     }
                     'R' => {
-                        entities.push(create_entity(EntityType::FuelRift, [x, y], Team::Neutral));
+                        entities.push(create_entity(
+                            EntityType::FuelRift,
+                            [x, y],
+                            Team::Neutral,
+                            research_state,
+                        ));
                     }
                     _ => {}
                 }

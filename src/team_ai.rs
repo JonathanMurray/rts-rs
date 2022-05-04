@@ -4,10 +4,10 @@ use std::cell::{Ref, RefCell};
 use std::time::Duration;
 
 use crate::core::{
-    AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, TrainCommand,
+    AttackCommand, Command, ConstructCommand, Core, GatherResourceCommand, StartActivityCommand,
 };
 use crate::data::EntityType;
-use crate::entities::{EntityState, Team};
+use crate::entities::{ActivityTarget, EntityState, Team};
 
 use std::cmp;
 
@@ -35,17 +35,17 @@ impl TeamAi {
         dt: Duration,
         core: &'a Core,
         rng: &mut ThreadRng,
-    ) -> Vec<Command<'a>> {
+    ) -> Option<Command<'a>> {
         self.timer_s -= dt.as_secs_f32();
         if self.timer_s <= 0.0 {
             self.timer_s = 1.0;
             self.act(core, rng)
         } else {
-            vec![]
+            None
         }
     }
 
-    fn act<'a>(&mut self, core: &'a Core, rng: &mut ThreadRng) -> Vec<Command<'a>> {
+    fn act<'a>(&mut self, core: &'a Core, rng: &mut ThreadRng) -> Option<Command<'a>> {
         let entities = core.entities();
 
         let mut idle_workers = vec![];
@@ -86,8 +86,6 @@ impl TeamAi {
             }
         }
 
-        let mut commands = vec![];
-
         if !has_base {
             if let Some(worker) = idle_workers.pop() {
                 let worker = worker.borrow_mut();
@@ -95,7 +93,7 @@ impl TeamAi {
                 if let Some(pos) =
                     find_free_position_for_structure(core, worker.position, *structure_size, rng)
                 {
-                    commands.push(Command::Construct(ConstructCommand {
+                    return Some(Command::Construct(ConstructCommand {
                         builder: worker,
                         structure_position: pos,
                         structure_type: EntityType::TechLab,
@@ -111,7 +109,7 @@ impl TeamAi {
                 if let Some(pos) =
                     find_free_position_for_structure(core, worker.position, *structure_size, rng)
                 {
-                    commands.push(Command::Construct(ConstructCommand {
+                    return Some(Command::Construct(ConstructCommand {
                         builder: worker,
                         structure_position: pos,
                         structure_type: EntityType::BattleAcademy,
@@ -129,8 +127,8 @@ impl TeamAi {
                         _ => None,
                     })
             {
-                while let Some(worker) = idle_workers.pop() {
-                    commands.push(Command::GatherResource(GatherResourceCommand {
+                if let Some(worker) = idle_workers.pop() {
+                    return Some(Command::GatherResource(GatherResourceCommand {
                         gatherer: worker.borrow_mut(),
                         resource: Ref::clone(&resource),
                     }));
@@ -139,18 +137,18 @@ impl TeamAi {
         }
 
         if worker_count < 3 {
-            for base in idle_bases {
-                commands.push(Command::Train(TrainCommand {
-                    trainer: base.borrow_mut(),
-                    trained_unit_type: EntityType::Engineer,
+            if let Some(base) = idle_bases.into_iter().next() {
+                return Some(Command::StartActivity(StartActivityCommand {
+                    structure: base.borrow_mut(),
+                    target: ActivityTarget::Train(EntityType::Engineer),
                 }));
             }
         }
 
-        for military_building in idle_military_buildings {
-            commands.push(Command::Train(TrainCommand {
-                trainer: military_building.borrow_mut(),
-                trained_unit_type: EntityType::Enforcer,
+        if let Some(military_building) = idle_military_buildings.into_iter().next() {
+            return Some(Command::StartActivity(StartActivityCommand {
+                structure: military_building.borrow_mut(),
+                target: ActivityTarget::Train(EntityType::Enforcer),
             }));
         }
 
@@ -170,7 +168,7 @@ impl TeamAi {
 
             for fighter in idle_fighters {
                 if let Some(victim) = victims.pop() {
-                    commands.push(Command::Attack(AttackCommand {
+                    return Some(Command::Attack(AttackCommand {
                         attacker: fighter.borrow_mut(),
                         victim,
                     }));
@@ -178,7 +176,7 @@ impl TeamAi {
             }
         }
 
-        commands
+        None
     }
 }
 

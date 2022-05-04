@@ -7,8 +7,8 @@ use std::time::Duration;
 
 use crate::data::{self, EntityType};
 use crate::entities::{
-    Direction, Entity, EntityCategory, EntityId, EntityState, GatheringProgress, Team,
-    TrainingPerformStatus, TrainingUpdateStatus,
+    Action, ActionSlot, ActivityStatus, ActivityTarget, ActivityUpdateStatus, Direction, Entity,
+    EntityCategory, EntityId, EntityState, GatheringProgress, Team,
 };
 use crate::grid::{CellRect, ObstacleGrid};
 use crate::pathfind::{self, Destination};
@@ -29,7 +29,10 @@ impl Core {
         let mut teams: HashMap<Team, RefCell<TeamState>> = HashMap::new();
         for entity in &entities {
             if let Entry::Vacant(entry) = teams.entry(entity.team) {
-                entry.insert(RefCell::new(TeamState { resources: 15 }));
+                entry.insert(RefCell::new(TeamState {
+                    resources: 15,
+                    research_state: TeamResearchState::NotStarted,
+                }));
             }
         }
 
@@ -170,15 +173,17 @@ impl Core {
                             let victim_health =
                                 victim.health.as_mut().expect("victim without health");
                             let attacker_id = attacker.id;
-                            //TODO
+                            let has_completed_research = self
+                                .team_state_unchecked(&attacker.team)
+                                .borrow()
+                                .research_state
+                                == TeamResearchState::Done;
                             let attacker_unit = attacker.unit_mut();
-                            let damage_amount =
-                                attacker_unit.combat.as_mut().unwrap().damage_amount();
-                            victim_health.receive_damage(damage_amount);
-                            println!(
-                                "{:?} --[{} dmg]--> {:?}",
-                                attacker_id, damage_amount, victim_id
-                            );
+                            let bonus_damage = if has_completed_research { 1 } else { 0 };
+                            let damage = attacker_unit.combat.as_mut().unwrap().damage_amount()
+                                + bonus_damage;
+                            victim_health.receive_damage(damage);
+                            println!("{:?} --[{} dmg]--> {:?}", attacker_id, damage, victim_id);
 
                             if !attacker_unit.sub_cell_movement.is_between_cells() {
                                 attacker_unit.direction = direction;
@@ -364,6 +369,8 @@ impl Core {
             }
         }
 
+        let mut did_research_state_change = false;
+
         //-------------------------------
         //       ENTITY REMOVAL
         //-------------------------------
@@ -376,7 +383,11 @@ impl Core {
                 .map(|health| health.current == 0)
                 .unwrap_or(false);
             if is_dead {
-                Core::maybe_repay_construction_cost(&entity, &self.teams);
+                let was_research_interrupted =
+                    Core::maybe_handle_interrupted_construction_or_research(&entity, &self.teams);
+                if was_research_interrupted {
+                    did_research_state_change = true;
+                }
             }
             let is_transforming_into_structure = builders_to_remove.contains(entity_id);
             let is_used_up_resource = used_up_resources.contains(entity_id);
@@ -399,7 +410,7 @@ impl Core {
         //     START CONSTRUCTION
         //-------------------------------
         for (team, position, structure_type, construction_time) in structures_to_add {
-            let mut new_structure = data::create_entity(structure_type, position, team);
+            let mut new_structure = self.create_entity(structure_type, position, team);
             new_structure.state =
                 EntityState::UnderConstruction(construction_time, construction_time);
             self.entities
@@ -424,20 +435,30 @@ impl Core {
         }
 
         //-------------------------------
-        //          TRAINING
+        //     STRUCTURE ACTIVITY
         //-------------------------------
         let mut completed_trainings = Vec::new();
         for (_id, entity) in &self.entities {
             let mut entity = entity.borrow_mut();
-            if let EntityState::TrainingUnit(trained_entity_type) = entity.state {
-                let status = entity.training.as_mut().map(|training| training.update(dt));
-                if let Some(TrainingUpdateStatus::Done) = status {
+            if let EntityState::DoingActivity(activity_target) = entity.state {
+                let status = entity.activity.as_mut().map(|training| training.update(dt));
+                if let Some(ActivityUpdateStatus::Done) = status {
                     entity.state = EntityState::Idle;
-                    completed_trainings.push((
-                        trained_entity_type,
-                        entity.team,
-                        entity.cell_rect(),
-                    ));
+                    match activity_target {
+                        ActivityTarget::Train(trained_entity_type) => {
+                            completed_trainings.push((
+                                trained_entity_type,
+                                entity.team,
+                                entity.cell_rect(),
+                            ));
+                        }
+                        ActivityTarget::Research => {
+                            self.team_state_unchecked(&entity.team)
+                                .borrow_mut()
+                                .research_state = TeamResearchState::Done;
+                            did_research_state_change = true;
+                        }
+                    }
                 }
             }
         }
@@ -449,10 +470,34 @@ impl Core {
                 eprintln!("Failed to create entity around {:?}", source_rect);
             }
         }
+        if did_research_state_change {
+            self.on_research_state_changed();
+        }
 
         UpdateOutcome {
             removed_entities,
             finished_structures,
+            did_research_state_change,
+        }
+    }
+
+    fn on_research_state_changed(&self) {
+        // Research action should only be enabled if research hasn't been started for
+        // the team yet
+        for (_id, entity) in &self.entities {
+            let mut entity = entity.borrow_mut();
+            let team = entity.team;
+            for action in entity.action_slots.iter_mut().flatten() {
+                if let ActionSlot {
+                    action: Action::StartActivity(ActivityTarget::Research, _),
+                    enabled,
+                } = action
+                {
+                    let team_research_state =
+                        self.team_state_unchecked(&team).borrow().research_state;
+                    *enabled = team_research_state == TeamResearchState::NotStarted;
+                }
+            }
         }
     }
 
@@ -481,45 +526,82 @@ impl Core {
         can_fit
     }
 
-    fn maybe_repay_construction_cost(entity: &Entity, teams: &HashMap<Team, RefCell<TeamState>>) {
-        if let EntityState::MovingToConstruction(structure_type, ..) = entity.state {
-            let construction_options = entity.unit().construction_options.as_ref().unwrap();
-            let config = construction_options.get(&structure_type).unwrap();
-            let mut team_state = teams.get(&entity.team).unwrap().borrow_mut();
-            team_state.resources += config.cost;
-            println!(
-                "Repaying {} to {:?} due to cancelled construction",
-                config.cost, entity.team
-            );
+    fn maybe_handle_interrupted_construction_or_research(
+        entity: &Entity,
+        teams: &HashMap<Team, RefCell<TeamState>>,
+    ) -> bool {
+        match entity.state {
+            EntityState::MovingToConstruction(structure_type, _) => {
+                let construction_options = entity.unit().construction_options.as_ref().unwrap();
+                let config = construction_options.get(&structure_type).unwrap();
+                let mut team_state = teams.get(&entity.team).unwrap().borrow_mut();
+                team_state.resources += config.cost;
+                println!(
+                    "Repaying {} to {:?} due to cancelled construction",
+                    config.cost, entity.team
+                );
+            }
+            EntityState::DoingActivity(target @ ActivityTarget::Research) => {
+                let config = entity.activity.as_ref().unwrap().config(&target);
+                let mut team_state = teams.get(&entity.team).unwrap().borrow_mut();
+                team_state.resources += config.cost;
+                team_state.research_state = TeamResearchState::NotStarted;
+                println!(
+                    "Repaying {} to {:?} due to cancelled research",
+                    config.cost, entity.team
+                );
+                return true;
+            }
+            _ => {}
         }
+        false
     }
 
-    pub fn issue_command(&self, command: Command, issuing_team: Team) -> Option<CommandError> {
-        Core::maybe_repay_construction_cost(command.actor().deref(), &self.teams);
+    pub fn issue_command(
+        &self,
+        command: Command,
+        issuing_team: Team,
+    ) -> Result<CommandSuccess, CommandError> {
+        Core::maybe_handle_interrupted_construction_or_research(
+            command.actor().deref(),
+            &self.teams,
+        );
 
         match command {
-            Command::Train(TrainCommand {
-                mut trainer,
-                trained_unit_type,
+            Command::StartActivity(StartActivityCommand {
+                mut structure,
+                target: activity_target,
             }) => {
-                assert_eq!(trainer.team, issuing_team);
+                assert_eq!(structure.team, issuing_team);
                 let mut team_state = self.teams.get(&issuing_team).unwrap().borrow_mut();
-                let training = trainer
-                    .training
+                let activity = structure
+                    .activity
                     .as_mut()
-                    .expect("Training command was issued for entity that can't train");
+                    .expect("activity command was issued for incompatible entity");
 
-                let cost = training.config(&trained_unit_type).cost;
+                let cost = activity.config(&activity_target).cost;
 
                 if team_state.resources >= cost {
-                    if let TrainingPerformStatus::NewTrainingStarted =
-                        training.try_start(trained_unit_type)
-                    {
-                        trainer.state = EntityState::TrainingUnit(trained_unit_type);
-                        team_state.resources -= cost;
+                    match activity.try_start(activity_target) {
+                        ActivityStatus::NewActivityStarted => {
+                            structure.state = EntityState::DoingActivity(activity_target);
+                            team_state.resources -= cost;
+
+                            if matches!(activity_target, ActivityTarget::Research) {
+                                team_state.research_state = TeamResearchState::InProgress;
+                                drop(structure);
+                                drop(team_state);
+                                // References must be freed before calling the below
+                                self.on_research_state_changed();
+                                return Ok(CommandSuccess {
+                                    did_research_state_change: true,
+                                });
+                            }
+                        }
+                        ActivityStatus::AlreadyOngoing => return Err(CommandError::EntityIsBusy),
                     }
                 } else {
-                    return Some(CommandError::NotEnoughResources);
+                    return Err(CommandError::NotEnoughResources);
                 }
             }
 
@@ -540,12 +622,12 @@ impl Core {
                 let mut team_state = self.teams.get(&issuing_team).unwrap().borrow_mut();
 
                 if team_state.resources < cost {
-                    return Some(CommandError::NotEnoughResources);
+                    return Err(CommandError::NotEnoughResources);
                 }
 
                 let structure_size = self.structure_sizes.get(&structure_type).unwrap();
                 if !self.can_structure_fit(builder.position, structure_position, *structure_size) {
-                    return Some(CommandError::NotEnoughSpaceForStructure);
+                    return Err(CommandError::NotEnoughSpaceForStructure);
                 }
 
                 let structure_rect = CellRect {
@@ -562,7 +644,7 @@ impl Core {
                     builder.state =
                         EntityState::MovingToConstruction(structure_type, structure_position);
                 } else {
-                    return Some(CommandError::NoPathFound);
+                    return Err(CommandError::NoPathFound);
                 }
             }
 
@@ -587,7 +669,7 @@ impl Core {
                     mover.state = EntityState::Moving;
                     mover.unit_mut().movement_plan.set(plan);
                 } else {
-                    return Some(CommandError::NoPathFound);
+                    return Err(CommandError::NoPathFound);
                 }
             }
 
@@ -605,7 +687,7 @@ impl Core {
                     attacker.state = EntityState::Attacking(victim.id);
                     attacker.unit_mut().movement_plan.set(plan);
                 } else {
-                    return Some(CommandError::NoPathFound);
+                    return Err(CommandError::NoPathFound);
                 }
             }
 
@@ -632,7 +714,7 @@ impl Core {
                     gatherer.state = EntityState::MovingToResource(resource.id);
                     gatherer.unit_mut().movement_plan.set(plan);
                 } else {
-                    return Some(CommandError::NoPathFound);
+                    return Err(CommandError::NoPathFound);
                 }
             }
 
@@ -651,11 +733,13 @@ impl Core {
                     self.unit_return_resource(gatherer, structure);
                 } else {
                     // TODO improve UI so that no player input leads to this situation
-                    return Some(CommandError::NotCarryingResource);
+                    return Err(CommandError::NotCarryingResource);
                 }
             }
         }
-        None
+        Ok(CommandSuccess {
+            did_research_state_change: false,
+        })
     }
 
     fn unit_return_resource(&self, mut gatherer: RefMut<Entity>, structure: Option<Ref<Entity>>) {
@@ -744,9 +828,8 @@ impl Core {
                     .get(&[x, y])
                     .map_or(false, |obstacle| obstacle == ObstacleType::None);
                 if is_free {
-                    let new_unit = data::create_entity(entity_type, [x, y], team);
+                    let new_unit = self.create_entity(entity_type, [x, y], team);
                     let rect = new_unit.cell_rect();
-                    let team = new_unit.team;
                     self.entities.push((new_unit.id, RefCell::new(new_unit)));
                     self.obstacle_grid
                         .set_area(rect, ObstacleType::Entity(team));
@@ -755,6 +838,11 @@ impl Core {
             }
         }
         None
+    }
+
+    fn create_entity(&self, entity_type: EntityType, position: [u32; 2], team: Team) -> Entity {
+        let research_state = self.team_state_unchecked(&team).borrow().research_state;
+        data::create_entity(entity_type, position, team, research_state)
     }
 
     fn find_entity(&self, id: EntityId) -> Option<&RefCell<Entity>> {
@@ -801,7 +889,7 @@ fn square_distance(a: [u32; 2], b: [u32; 2]) -> u32 {
 
 #[derive(Debug)]
 pub enum Command<'a> {
-    Train(TrainCommand<'a>),
+    StartActivity(StartActivityCommand<'a>),
     Construct(ConstructCommand<'a>),
     Stop(StopCommand<'a>),
     Move(MoveCommand<'a>),
@@ -813,7 +901,7 @@ pub enum Command<'a> {
 impl<'a> Command<'a> {
     fn actor(&self) -> &RefMut<'a, Entity> {
         match self {
-            Command::Train(TrainCommand { trainer, .. }) => trainer,
+            Command::StartActivity(StartActivityCommand { structure, .. }) => structure,
             Command::Construct(ConstructCommand { builder, .. }) => builder,
             Command::Stop(StopCommand { entity }) => entity,
             Command::Move(MoveCommand { unit, .. }) => unit,
@@ -825,9 +913,9 @@ impl<'a> Command<'a> {
 }
 
 #[derive(Debug)]
-pub struct TrainCommand<'a> {
-    pub trainer: RefMut<'a, Entity>,
-    pub trained_unit_type: EntityType,
+pub struct StartActivityCommand<'a> {
+    pub structure: RefMut<'a, Entity>,
+    pub target: ActivityTarget,
 }
 
 #[derive(Debug)]
@@ -868,11 +956,25 @@ pub struct ReturnResourceCommand<'a> {
 
 pub struct TeamState {
     pub resources: u32,
+    // TODO: different kinds of research
+    research_state: TeamResearchState,
+}
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub enum TeamResearchState {
+    NotStarted,
+    InProgress,
+    Done,
+}
+
+pub struct CommandSuccess {
+    pub did_research_state_change: bool,
 }
 
 pub struct UpdateOutcome {
     pub removed_entities: Vec<EntityId>,
     pub finished_structures: Vec<EntityId>,
+    pub did_research_state_change: bool,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -894,4 +996,5 @@ pub enum CommandError {
     NoPathFound,
     NotCarryingResource,
     NotEnoughSpaceForStructure,
+    EntityIsBusy,
 }
